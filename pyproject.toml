@@ -1,0 +1,73 @@
+[project]
+name = "illustrator"
+version = "0.1.0"
+description = "A LangGraph application for analyzing manuscripts and generating illustrations using AI"
+authors = [
+    { name = "David James Lennon", email = "david@othertales.co" },
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=0.6.0,<0.7.0",
+    "langchain>=0.3.8",
+    "langchain-core>=0.3.8",
+    "langchain-openai>=0.2.1",
+    "langchain-anthropic>=0.2.1",
+    "python-dotenv>=1.0.1",
+    "langgraph-sdk>=0.1.32",
+    # NLP and text processing
+    "spacy>=3.7.0",
+    "textblob>=0.18.0",
+    "nltk>=3.8.1",
+    "transformers>=4.35.0",
+    # Image generation APIs
+    "openai>=1.0.0",
+    "google-cloud-aiplatform>=1.38.0",
+    "huggingface_hub>=0.19.0",
+    "requests>=2.31.0",
+    "aiohttp>=3.9.0",
+    # CLI and utilities
+    "click>=8.1.7",
+    "rich>=13.7.0",
+    "pydantic>=2.5.0",
+    "pillow>=10.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["mypy>=1.11.1", "ruff>=0.6.1", "pytest>=8.0.0", "pytest-asyncio>=0.21.0", "pytest-cov>=4.0.0"]
+
+[project.scripts]
+illustrator = "illustrator.cli:main"
+
+[build-system]
+requires = ["setuptools>=73.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["illustrator"]
+[tool.setuptools.package-dir]
+"illustrator" = "src/illustrator"
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+
+[tool.ruff]
+lint.select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "D",    # pydocstyle
+    "D401", # First line should be in imperative mood
+    "T201",
+    "UP",
+]
+lint.ignore = ["UP006", "UP007", "UP035", "D417", "E501"]
+include = ["*.py", "*.pyi", "*.ipynb"]
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "UP"]
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+ignore_errors = true
