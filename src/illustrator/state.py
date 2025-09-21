@@ -28,14 +28,16 @@ class ManuscriptState(TypedDict):
     # Processing state
     awaiting_chapter_input: bool
     processing_complete: bool
+    illustrations_generated: bool
 
     # Configuration
     image_provider: ImageProvider
     style_preferences: Dict[str, Any]
     analysis_depth: str  # "basic", "detailed", "comprehensive"
 
-    # Current analysis
+    # Current analysis and generated content
     current_analysis: ChapterAnalysis | None
+    generated_images: List[Dict[str, Any]]
 
     # Error handling
     error_message: str | None

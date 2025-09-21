@@ -278,6 +278,8 @@ All images have been saved and are ready for download.
 
         return {
             "messages": [AIMessage(content=response_content)],
+            "illustrations_generated": True,
+            "generated_images": generated_images,
             "error_message": None,
             "retry_count": 0,
         }
@@ -297,13 +299,17 @@ async def complete_chapter(state: ManuscriptState, runtime: Runtime[ManuscriptCo
         completed_chapters = list(state.get("chapters_completed", []))
         completed_chapters.append(state["current_analysis"])
 
+        # Count generated images
+        generated_images = state.get("generated_images", [])
+        image_count = len(generated_images)
+
         response_content = f"""
 ✅ **Chapter {state['current_analysis'].chapter.number} Processing Complete!**
 
 You now have:
 - Detailed emotional analysis
 - {len(state['current_analysis'].illustration_prompts)} optimized illustration prompts
-- Generated images (if requested)
+- {image_count} generated images
 
 Ready for your next chapter! Please share the next chapter content, or let me know if you're finished.
 """
@@ -313,6 +319,7 @@ Ready for your next chapter! Please share the next chapter content, or let me kn
             "chapters_completed": completed_chapters,
             "current_chapter": None,
             "current_analysis": None,
+            "generated_images": generated_images,  # Pass through generated images
             "awaiting_chapter_input": True,
             "error_message": None,
         }
@@ -367,10 +374,12 @@ def route_next_step(state: ManuscriptState) -> str:
     if state.get("current_chapter") and not state.get("current_analysis"):
         return "analyze_chapter"
 
-    # If we have analysis, we can generate illustrations or complete the chapter
-    if state.get("current_analysis"):
-        # Check if user wants illustrations generated
-        # For now, we'll just complete the chapter
+    # If we have analysis but no generated images, generate illustrations
+    if state.get("current_analysis") and not state.get("illustrations_generated", False):
+        return "generate_illustrations"
+
+    # If we have analysis and illustrations, complete the chapter
+    if state.get("current_analysis") and state.get("illustrations_generated", False):
         return "complete_chapter"
 
     return END
@@ -437,7 +446,7 @@ builder.add_edge("initialize_session", END)
 builder.add_conditional_edges(
     "analyze_chapter",
     route_next_step,
-    ["complete_chapter", "handle_error", END]
+    ["generate_illustrations", "complete_chapter", "handle_error", END]
 )
 
 builder.add_conditional_edges(

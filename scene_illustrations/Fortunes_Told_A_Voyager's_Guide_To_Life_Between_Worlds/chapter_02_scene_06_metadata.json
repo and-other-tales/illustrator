@@ -1,0 +1,23 @@
+{
+  "chapter_number": 2,
+  "chapter_title": "Portobello Road",
+  "scene_number": 6,
+  "prompt": "His rigid posture melted into welcoming warmth, and a practised smile spread across his face, though it didn’t quite reach his eyes. “This Art Nouveau vase would look splendid in your sitting room.. Context: Visually compelling scene with narrative significance. Story context: Chapter 2: Portobello Road. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T10:36:40.293984",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_02_scene_06.png"
+}

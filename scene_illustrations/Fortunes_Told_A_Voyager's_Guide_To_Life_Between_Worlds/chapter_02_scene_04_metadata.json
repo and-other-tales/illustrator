@@ -1,0 +1,23 @@
+{
+  "chapter_number": 2,
+  "chapter_title": "Portobello Road",
+  "scene_number": 4,
+  "prompt": "When he looked back, Cassandra’s Emporium appeared exactly as it had before—narrow, easy to miss, its windows reflecting the market crowds rather than revealing the treasures within.. Context: Visually compelling scene with narrative significance. Story context: Chapter 2: Portobello Road. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T10:36:07.232493",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_02_scene_04.png"
+}

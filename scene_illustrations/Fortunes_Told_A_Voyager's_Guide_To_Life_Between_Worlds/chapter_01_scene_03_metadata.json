@@ -1,0 +1,23 @@
+{
+  "chapter_number": 1,
+  "chapter_title": "A City Wakes",
+  "scene_number": 3,
+  "prompt": "hour light streaming through the windows bent at angles that defied explanation, casting shadows that couldn’t possibly match the furniture creating them. Patterson’s eyes held a glint of something deeper than simple understanding.. Context: Visually compelling scene with narrative significance. Story context: Chapter 1: A City Wakes. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T10:29:21.239584",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_01_scene_03.png"
+}

@@ -194,8 +194,36 @@ class ManuscriptCLI:
 
         console.print(f"\n[bold cyan]🔄 Processing {len(self.chapters)} chapters...[/bold cyan]")
 
-        # Here we would integrate with the LangGraph workflow
-        # For now, we'll simulate the processing
+        # Import necessary components
+        from illustrator.graph import graph
+        from illustrator.context import ManuscriptContext
+        from illustrator.state import ManuscriptState
+        from illustrator.models import ImageProvider
+        from langgraph.runtime import Runtime
+        from langgraph.store.memory import MemoryStore
+        import os
+        import uuid
+
+        # Create runtime context
+        context = ManuscriptContext(
+            user_id=str(uuid.uuid4()),
+            image_provider=ImageProvider(style_preferences["image_provider"]),
+            default_art_style=style_preferences.get("art_style", "digital painting"),
+            color_palette=style_preferences.get("color_palette"),
+            artistic_influences=style_preferences.get("artistic_influences"),
+            openai_api_key=os.getenv('OPENAI_API_KEY'),
+            anthropic_api_key=os.getenv('ANTHROPIC_API_KEY'),
+            google_credentials=os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
+            huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),
+        )
+
+        # Create runtime with memory store
+        store = MemoryStore()
+        runtime = Runtime(
+            graph=graph,
+            context=context,
+            store=store,
+        )
 
         with Progress(
             SpinnerColumn(),
@@ -209,12 +237,111 @@ class ManuscriptCLI:
                     total=None
                 )
 
-                # Simulate processing time
-                await asyncio.sleep(2)
+                try:
+                    # Create initial state for this chapter
+                    initial_state = {
+                        "messages": [],
+                        "manuscript_metadata": self.manuscript_metadata,
+                        "current_chapter": chapter,
+                        "chapters_completed": self.completed_analyses,
+                        "awaiting_chapter_input": False,
+                        "processing_complete": False,
+                        "illustrations_generated": False,
+                        "image_provider": context.image_provider,
+                        "style_preferences": style_preferences,
+                        "analysis_depth": "detailed",
+                        "current_analysis": None,
+                        "generated_images": [],
+                        "error_message": None,
+                        "retry_count": 0,
+                    }
 
-                progress.update(task, description=f"✅ Chapter {i}: Analysis complete")
+                    # Process the chapter through the graph
+                    result = await runtime.ainvoke(input=initial_state, config={"thread_id": f"chapter_{i}"})
+
+                    # Extract the analysis from the result
+                    if result.get("current_analysis"):
+                        analysis = result["current_analysis"]
+                        self.completed_analyses.append(analysis)
+
+                        # Save generated images if they exist
+                        if result.get("generated_images"):
+                            await self._save_generated_images(result["generated_images"], chapter, i)
+
+                        generated_count = len(result.get("generated_images", []))
+                        progress.update(task, description=f"✅ Chapter {i}: Analysis complete, {generated_count} images generated")
+                    elif result.get("error_message"):
+                        console.print(f"\n[yellow]⚠️ Chapter {i} analysis had issues: {result['error_message']}[/yellow]")
+                        progress.update(task, description=f"⚠️ Chapter {i}: Completed with warnings")
+                    else:
+                        progress.update(task, description=f"✅ Chapter {i}: Processing complete")
+
+                except Exception as e:
+                    console.print(f"\n[red]❌ Error processing Chapter {i}: {e}[/red]")
+                    progress.update(task, description=f"❌ Chapter {i}: Error occurred")
 
         console.print(f"\n[bold green]✨ Processing complete! Analyzed {len(self.chapters)} chapters.[/bold green]")
+
+    async def _save_generated_images(self, generated_images: List[Dict[str, Any]], chapter: Chapter, chapter_num: int):
+        """Save generated images to files."""
+        if not generated_images or not self.manuscript_metadata:
+            return
+
+        # Create images directory
+        output_dir = Path("illustrator_output") / self.manuscript_metadata.title.replace(" ", "_")
+        images_dir = output_dir / "generated_images" / f"chapter_{chapter_num:02d}"
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        for i, img_data in enumerate(generated_images, 1):
+            try:
+                # Extract image data
+                if 'image_data' in img_data:
+                    image_content = img_data['image_data']
+
+                    # Handle different image data formats
+                    if isinstance(image_content, str):
+                        # Base64 encoded image
+                        import base64
+                        if image_content.startswith('data:image/'):
+                            # Remove data URL prefix
+                            image_content = image_content.split(',')[1]
+                        image_bytes = base64.b64decode(image_content)
+                    elif isinstance(image_content, bytes):
+                        # Raw image bytes
+                        image_bytes = image_content
+                    else:
+                        console.print(f"[yellow]Warning: Unsupported image format for Chapter {chapter_num}, Image {i}[/yellow]")
+                        continue
+
+                    # Determine file extension (default to PNG)
+                    file_ext = "png"
+                    if 'metadata' in img_data and 'format' in img_data['metadata']:
+                        file_ext = img_data['metadata']['format'].lower()
+
+                    # Create filename
+                    safe_title = "".join(c for c in chapter.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                    filename = f"ch{chapter_num:02d}_img{i:02d}_{safe_title[:20]}.{file_ext}"
+
+                    # Save image file
+                    image_path = images_dir / filename
+                    with open(image_path, 'wb') as f:
+                        f.write(image_bytes)
+
+                    console.print(f"[green]📷 Saved image: {image_path}[/green]")
+
+                    # Save prompt/metadata file
+                    metadata_file = images_dir / f"{filename}.txt"
+                    with open(metadata_file, 'w', encoding='utf-8') as f:
+                        f.write(f"Chapter: {chapter.title}\n")
+                        f.write(f"Emotional Moment: {img_data.get('emotional_moment', 'N/A')}\n")
+                        f.write(f"Generated: {datetime.now().isoformat()}\n\n")
+                        if 'metadata' in img_data:
+                            f.write("Generation Metadata:\n")
+                            for key, value in img_data['metadata'].items():
+                                f.write(f"  {key}: {value}\n")
+
+            except Exception as e:
+                console.print(f"[red]❌ Error saving image {i} for Chapter {chapter_num}: {e}[/red]")
 
     def display_results_summary(self):
         """Display a summary of the processing results."""
@@ -225,21 +352,73 @@ class ManuscriptCLI:
         table.add_column("Chapter", style="cyan", width=8)
         table.add_column("Title", style="white")
         table.add_column("Words", justify="right", style="green")
+        table.add_column("Moments", justify="right", style="yellow")
+        table.add_column("Prompts", justify="right", style="blue")
         table.add_column("Status", style="green")
 
+        # Create a lookup for analyses by chapter number
+        analysis_lookup = {}
+        for analysis in self.completed_analyses:
+            if hasattr(analysis, 'chapter'):
+                analysis_lookup[analysis.chapter.number] = analysis
+            elif isinstance(analysis, dict) and 'chapter' in analysis:
+                analysis_lookup[analysis['chapter']['number']] = analysis
+
         for chapter in self.chapters:
+            analysis = analysis_lookup.get(chapter.number)
+
+            if analysis:
+                if hasattr(analysis, 'emotional_moments'):
+                    moments_count = len(analysis.emotional_moments)
+                    prompts_count = len(analysis.illustration_prompts)
+                elif isinstance(analysis, dict):
+                    moments_count = len(analysis.get('emotional_moments', []))
+                    prompts_count = len(analysis.get('illustration_prompts', []))
+                else:
+                    moments_count = 0
+                    prompts_count = 0
+
+                status = "✅ Analyzed"
+            else:
+                moments_count = 0
+                prompts_count = 0
+                status = "❌ Failed"
+
             table.add_row(
                 str(chapter.number),
                 chapter.title,
                 f"{chapter.word_count:,}",
-                "✅ Analyzed"
+                str(moments_count),
+                str(prompts_count),
+                status
             )
 
         console.print(f"\n{table}")
 
         # Summary stats
         total_words = sum(ch.word_count for ch in self.chapters)
+        total_moments = sum(len(analysis.emotional_moments) if hasattr(analysis, 'emotional_moments')
+                          else len(analysis.get('emotional_moments', [])) if isinstance(analysis, dict)
+                          else 0 for analysis in self.completed_analyses)
+        total_prompts = sum(len(analysis.illustration_prompts) if hasattr(analysis, 'illustration_prompts')
+                          else len(analysis.get('illustration_prompts', [])) if isinstance(analysis, dict)
+                          else 0 for analysis in self.completed_analyses)
+
+        # Count generated images (check if output directory exists)
+        total_images = 0
+        if self.manuscript_metadata:
+            output_dir = Path("illustrator_output") / self.manuscript_metadata.title.replace(" ", "_")
+            images_dir = output_dir / "generated_images"
+            if images_dir.exists():
+                # Count image files (not txt files)
+                image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'}
+                for chapter_dir in images_dir.iterdir():
+                    if chapter_dir.is_dir():
+                        total_images += len([f for f in chapter_dir.iterdir()
+                                           if f.suffix.lower() in image_extensions])
+
         console.print(f"\n[bold cyan]Total manuscript: {len(self.chapters)} chapters, {total_words:,} words[/bold cyan]")
+        console.print(f"[bold cyan]Generated: {total_moments} emotional moments, {total_prompts} illustration prompts, {total_images} images[/bold cyan]")
 
     def save_results(self):
         """Save processing results to files."""
@@ -250,11 +429,31 @@ class ManuscriptCLI:
         output_dir = Path("illustrator_output") / self.manuscript_metadata.title.replace(" ", "_")
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Prepare analyses for serialization
+        serialized_analyses = []
+        for analysis in self.completed_analyses:
+            if hasattr(analysis, 'dict'):
+                # Pydantic model
+                serialized_analyses.append(analysis.dict())
+            elif hasattr(analysis, 'model_dump'):
+                # Pydantic v2 model
+                serialized_analyses.append(analysis.model_dump())
+            elif isinstance(analysis, dict):
+                # Already a dictionary
+                serialized_analyses.append(analysis)
+            else:
+                # Convert to dict manually
+                try:
+                    serialized_analyses.append(analysis.__dict__)
+                except:
+                    # Skip this analysis if we can't serialize it
+                    console.print(f"[yellow]Warning: Could not serialize one analysis result[/yellow]")
+
         # Save manuscript data
         manuscript_data = {
-            "metadata": self.manuscript_metadata.dict(),
-            "chapters": [ch.dict() for ch in self.chapters],
-            "completed_analyses": [analysis.dict() for analysis in self.completed_analyses],
+            "metadata": self.manuscript_metadata.dict() if hasattr(self.manuscript_metadata, 'dict') else self.manuscript_metadata.model_dump(),
+            "chapters": [ch.dict() if hasattr(ch, 'dict') else ch.model_dump() for ch in self.chapters],
+            "completed_analyses": serialized_analyses,
             "processing_date": datetime.now().isoformat(),
         }
 
@@ -263,6 +462,28 @@ class ManuscriptCLI:
             json.dump(manuscript_data, f, indent=2, ensure_ascii=False)
 
         console.print(f"\n[green]📁 Results saved to: {output_file}[/green]")
+
+        # Also save individual prompt files for easy access
+        if serialized_analyses:
+            prompts_dir = output_dir / "illustration_prompts"
+            prompts_dir.mkdir(exist_ok=True)
+
+            for i, analysis in enumerate(serialized_analyses, 1):
+                if 'illustration_prompts' in analysis and analysis['illustration_prompts']:
+                    chapter_title = analysis.get('chapter', {}).get('title', f'Chapter_{i}')
+                    safe_title = "".join(c for c in chapter_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+
+                    prompt_file = prompts_dir / f"chapter_{i:02d}_{safe_title}.txt"
+                    with open(prompt_file, 'w', encoding='utf-8') as f:
+                        f.write(f"Chapter {i}: {chapter_title}\n")
+                        f.write("="*50 + "\n\n")
+
+                        for j, prompt in enumerate(analysis['illustration_prompts'], 1):
+                            f.write(f"Illustration Prompt {j}:\n")
+                            f.write("-"*25 + "\n")
+                            f.write(f"{prompt}\n\n")
+
+            console.print(f"[green]📝 Individual prompt files saved to: {prompts_dir}[/green]")
 
 
 @click.command()
