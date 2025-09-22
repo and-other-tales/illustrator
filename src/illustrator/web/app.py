@@ -230,21 +230,24 @@ async def run_processing_workflow(
             prompts = []
             for idx, moment in enumerate(emotional_moments[:max_emotional_moments], 1):
                 primary_tone = moment.emotional_tones[0] if moment.emotional_tones else "neutral"
-                prompt_text = generator.create_detailed_prompt(
-                    moment.text_excerpt,
-                    primary_tone,
-                    chapter.title,
-                    style_config.get("art_style", "digital painting")
+
+                # Use advanced AI-powered prompt engineering
+                prompt_text = await generator.create_advanced_prompt(
+                    emotional_moment=moment,
+                    provider=provider,
+                    style_config=style_config,
+                    chapter=chapter
                 )
                 prompts.append(prompt_text)
 
-                # Log detailed prompt generation
+                # Log detailed prompt generation with AI analysis
                 excerpt_preview = moment.text_excerpt[:80] + "..." if len(moment.text_excerpt) > 80 else moment.text_excerpt
+                prompt_preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
                 await connection_manager.send_personal_message(
                     json.dumps({
                         "type": "log",
                         "level": "info",
-                        "message": f"      Prompt {idx}: [{primary_tone}] \"{excerpt_preview}\" → {style_config.get('art_style', 'digital painting')} illustration"
+                        "message": f"      🤖 AI Prompt {idx}: [{primary_tone}] \"{excerpt_preview}\" → \"{prompt_preview}\""
                     }),
                     session_id
                 )
@@ -498,9 +501,47 @@ class WebSocketIllustrationGenerator:
         self.llm = init_chat_model(model="claude-sonnet-4-20250514", model_provider="anthropic")
         self.prompt_engineer = PromptEngineer(self.llm)
 
-    def create_detailed_prompt(self, description, tone, chapter_title, art_style):
-        """Create a detailed prompt for image generation."""
-        # Create a comprehensive prompt based on the emotional moment
+    async def create_advanced_prompt(self, emotional_moment, provider, style_config, chapter):
+        """Create an advanced AI-analyzed prompt for image generation."""
+        try:
+            # Use the advanced prompt engineering system
+            illustration_prompt = await self.prompt_engineer.engineer_prompt(
+                emotional_moment=emotional_moment,
+                provider=provider,
+                style_preferences=style_config,
+                chapter_context=chapter,
+                previous_scenes=[]  # Could be enhanced to track previous scenes
+            )
+
+            await self.connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "info",
+                    "message": f"📝 Advanced AI analysis: Generated {len(illustration_prompt.prompt.split())} word prompt"
+                }),
+                self.session_id
+            )
+
+            return illustration_prompt.prompt
+
+        except Exception as e:
+            # Fallback to simple prompt generation
+            await self.connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "warning",
+                    "message": f"⚠️ AI prompt generation failed, using fallback: {str(e)}"
+                }),
+                self.session_id
+            )
+
+            return self._create_fallback_prompt(emotional_moment.text_excerpt,
+                                              emotional_moment.emotional_tones[0] if emotional_moment.emotional_tones else EmotionalTone.NEUTRAL,
+                                              chapter.title,
+                                              style_config.get("art_style", "digital painting"))
+
+    def _create_fallback_prompt(self, description, tone, chapter_title, art_style):
+        """Fallback prompt generation method."""
         tone_description = {
             EmotionalTone.JOY: "bright, uplifting, warm colors",
             EmotionalTone.MELANCHOLY: "soft, muted tones, contemplative mood",
@@ -515,17 +556,7 @@ class WebSocketIllustrationGenerator:
             EmotionalTone.ADVENTURE: "epic, cinematic lighting, heroic composition"
         }.get(tone, "balanced lighting and composition")
 
-        prompt = f"""
-        {art_style} illustration of: {description}
-
-        Scene from: {chapter_title}
-        Mood: {tone_description}
-
-        Style: High-quality {art_style}, detailed, cinematic composition, professional illustration
-        Technical: Sharp focus, vibrant colors, masterpiece quality, 8K resolution
-        """.strip()
-
-        return prompt
+        return f"{art_style} illustration: {description[:100]}... Scene mood: {tone_description}, high-quality {art_style}"
 
     async def generate_images(self, prompts, chapter):
         """Generate images with WebSocket progress updates."""
