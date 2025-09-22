@@ -338,41 +338,32 @@ class Imagen4Provider(ImageGenerationProvider):
         **kwargs
     ) -> Dict[str, Any]:
         """Generate image using Imagen4 API."""
-        # Note: This is a placeholder implementation
-        # In production, you'd use the Google Cloud AI Platform client
         try:
-            from google.cloud import aiplatform
-            from google.cloud.aiplatform.gapic.schema import predict
+            import vertexai
+            from vertexai.preview.vision_models import ImageGenerationModel
 
-            # Initialize the client (requires proper authentication)
-            client_options = {"api_endpoint": f"{self.project_id}-aiplatform.googleapis.com"}
-            client = aiplatform.gapic.PredictionServiceClient(client_options=client_options)
+            # Initialize Vertex AI
+            vertexai.init(project=self.project_id)
 
-            # Prepare the request
-            instance = predict.instance.ImageGenerationInstance(
+            # Get the model
+            model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
+
+            # Generate image
+            images = model.generate_images(
                 prompt=prompt.prompt,
                 negative_prompt=prompt.negative_prompt,
+                number_of_images=1,
+                aspect_ratio=prompt.technical_params.get("aspect_ratio", "1:1"),
+                safety_filter_level=prompt.technical_params.get("safety_filter_level", "block_most"),
+                seed=prompt.technical_params.get("seed")
             )
 
-            instances = [instance]
-            parameters = predict.params.ImageGenerationParameters(
-                **prompt.technical_params
-            )
+            # Convert to base64 using the proper API method
+            image_b64 = images[0]._as_base64_string()
 
-            endpoint = f"projects/{self.project_id}/locations/us-central1/publishers/google/models/imagen-3.0-generate-001"
-
-            # Make the prediction
-            response = await client.predict(
-                endpoint=endpoint,
-                instances=instances,
-                parameters=parameters,
-            )
-
-            # Process response
-            prediction = response.predictions[0]
             return {
                 'success': True,
-                'image_data': prediction.bytes_base64_encoded,
+                'image_data': image_b64,
                 'format': 'base64',
                 'metadata': {
                     'provider': 'imagen4',
