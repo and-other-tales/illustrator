@@ -487,9 +487,16 @@ class WebSocketIllustrationGenerator:
     def __init__(self, connection_manager, session_id, provider, output_dir):
         # Import here to avoid circular imports
         from generate_scene_illustrations import IllustrationGenerator
+        from illustrator.prompt_engineering import PromptEngineer
+        from langchain.chat_models import init_chat_model
+
         self.generator = IllustrationGenerator(provider, output_dir)
         self.connection_manager = connection_manager
         self.session_id = session_id
+
+        # Initialize the advanced prompt engineering system
+        self.llm = init_chat_model(model="claude-sonnet-4-20250514", model_provider="anthropic")
+        self.prompt_engineer = PromptEngineer(self.llm)
 
     def create_detailed_prompt(self, description, tone, chapter_title, art_style):
         """Create a detailed prompt for image generation."""
@@ -580,7 +587,7 @@ class WebSocketIllustrationGenerator:
                     result_info = {
                         'success': True,
                         'file_path': str(file_path),
-                        'prompt': prompt.detailed_prompt if hasattr(prompt, 'detailed_prompt') else str(prompt),
+                        'prompt': str(prompt),
                         'chapter_number': chapter.number,
                         'scene_number': i + 1,
                         'provider': str(self.generator.provider),

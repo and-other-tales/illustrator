@@ -21,8 +21,9 @@
     <div class="col-lg-8">
         <div class="card shadow">
             <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-palette me-2"></i>Configure Illustration Style
+                <h5 class="mb-0 d-flex align-items-center">
+                    <span class="material-icons-outlined me-2">palette</span>
+                    Configure Illustration Style
                 </h5>
             </div>
             <div class="card-body">
@@ -31,8 +32,9 @@
                         <div class="col-md-6">
                             <!-- Image Provider Selection -->
                             <div class="mb-4">
-                                <label for="imageProvider" class="form-label fw-semibold">
-                                    <i class="bi bi-cpu me-2"></i>Image Provider
+                                <label for="imageProvider" class="form-label fw-semibold d-flex align-items-center">
+                                    <span class="material-icons-outlined me-2">smart_toy</span>
+                                    Image Provider
                                 </label>
                                 <select class="form-select" id="imageProvider" name="image_provider" required>
                                     <option value="">Select Provider...</option>
@@ -45,8 +47,9 @@
 
                             <!-- Art Style -->
                             <div class="mb-4">
-                                <label for="artStyle" class="form-label fw-semibold">
-                                    <i class="bi bi-brush me-2"></i>Art Style
+                                <label for="artStyle" class="form-label fw-semibold d-flex align-items-center">
+                                    <span class="material-icons-outlined me-2">brush</span>
+                                    Art Style
                                 </label>
                                 <select class="form-select" id="artStyle" name="art_style" required>
                                     <option value="digital painting" selected>Digital Painting</option>
@@ -69,8 +72,9 @@
                         <div class="col-md-6">
                             <!-- Color Palette -->
                             <div class="mb-4">
-                                <label for="colorPalette" class="form-label fw-semibold">
-                                    <i class="bi bi-palette-fill me-2"></i>Color Palette
+                                <label for="colorPalette" class="form-label fw-semibold d-flex align-items-center">
+                                    <span class="material-icons-outlined me-2">color_lens</span>
+                                    Color Palette
                                 </label>
                                 <input type="text"
                                        class="form-control"
@@ -82,8 +86,9 @@
 
                             <!-- Artistic Influences -->
                             <div class="mb-4">
-                                <label for="artisticInfluences" class="form-label fw-semibold">
-                                    <i class="bi bi-person-hearts me-2"></i>Artistic Influences
+                                <label for="artisticInfluences" class="form-label fw-semibold d-flex align-items-center">
+                                    <span class="material-icons-outlined me-2">auto_awesome</span>
+                                    Artistic Influences
                                 </label>
                                 <input type="text"
                                        class="form-control"
@@ -97,8 +102,9 @@
 
                     <!-- Style Configuration File Path -->
                     <div class="mb-4">
-                        <label for="styleConfigPath" class="form-label fw-semibold">
-                            <i class="bi bi-file-earmark-text me-2"></i>Style Configuration File
+                        <label for="styleConfigPath" class="form-label fw-semibold d-flex align-items-center">
+                            <span class="material-icons-outlined me-2">description</span>
+                            Style Configuration File
                         </label>
                         <input type="text"
                                class="form-control"
@@ -110,8 +116,9 @@
 
                     <!-- Processing Options -->
                     <div class="mb-4">
-                        <label for="maxEmotionalMoments" class="form-label fw-semibold">
-                            <i class="bi bi-heart me-2"></i>Max Emotional Moments
+                        <label for="maxEmotionalMoments" class="form-label fw-semibold d-flex align-items-center">
+                            <span class="material-icons-outlined me-2">favorite</span>
+                            Max Emotional Moments
                         </label>
                         <input type="number"
                                class="form-control"
@@ -126,19 +133,23 @@
 
                     <!-- Action Buttons -->
                     <div class="d-flex justify-content-between mt-4">
-                        <a href="/manuscript/{{ manuscript_id }}" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left me-2"></i>Back to Manuscript
+                        <a href="/manuscript/{{ manuscript_id }}" class="btn btn-secondary d-flex align-items-center">
+                            <span class="material-icons-outlined me-2">arrow_back</span>
+                            Back to Manuscript
                         </a>
 
                         <div>
-                            <button type="button" class="btn btn-outline-secondary me-2" onclick="saveStyleConfig()">
-                                <i class="bi bi-floppy me-2"></i>Save Style
+                            <button type="button" class="btn btn-outline-secondary me-2 d-flex align-items-center" onclick="saveStyleConfig()">
+                                <span class="material-icons-outlined me-2">save</span>
+                                Save Style
                             </button>
-                            <button type="button" class="btn btn-outline-primary me-2" onclick="previewStyle()">
-                                <i class="bi bi-eye me-2"></i>Preview Style
+                            <button type="button" class="btn btn-outline-primary me-2 d-flex align-items-center" onclick="previewStyle()">
+                                <span class="material-icons-outlined me-2">preview</span>
+                                Preview Style
                             </button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-play-fill me-2"></i>Start Processing
+                            <button type="submit" class="btn btn-primary d-flex align-items-center">
+                                <span class="material-icons-outlined me-2">play_arrow</span>
+                                Start Processing
                             </button>
                         </div>
                     </div>
@@ -149,8 +160,9 @@
         <!-- Style Preview Card -->
         <div class="card shadow mt-4" id="previewCard" style="display: none;">
             <div class="card-header">
-                <h6 class="mb-0">
-                    <i class="bi bi-eye me-2"></i>Style Preview
+                <h6 class="mb-0 d-flex align-items-center">
+                    <span class="material-icons-outlined me-2">preview</span>
+                    Style Preview
                 </h6>
             </div>
             <div class="card-body">

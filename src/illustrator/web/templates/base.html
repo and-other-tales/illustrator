@@ -7,13 +7,14 @@
 
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
 
     <!-- Material Design Icons -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Google+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Custom CSS -->
     <link href="{{ url_for('static', path='/css/custom.css') }}" rel="stylesheet">
@@ -22,41 +23,47 @@
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+    <nav class="navbar navbar-expand-lg navbar-dark shadow-sm" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="/">
-                <i class="bi bi-book"></i> Manuscript Illustrator
+            <a class="navbar-brand fw-bold d-flex align-items-center" href="/">
+                <span class="material-icons-outlined me-2">auto_stories</span>
+                Manuscript Illustrator
             </a>
 
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="material-icons-outlined">menu</span>
             </button>
 
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/">
-                            <i class="bi bi-house"></i> Dashboard
+                        <a class="nav-link d-flex align-items-center" href="/">
+                            <span class="material-icons-outlined me-1">dashboard</span>
+                            Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/manuscript/new">
-                            <i class="bi bi-plus-circle"></i> New Manuscript
+                        <a class="nav-link d-flex align-items-center" href="/manuscript/new">
+                            <span class="material-icons-outlined me-1">add_circle</span>
+                            New Manuscript
                         </a>
                     </li>
                 </ul>
 
                 <ul class="navbar-nav">
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-gear"></i> Settings
+                        <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown">
+                            <span class="material-icons-outlined me-1">settings</span>
+                            Settings
                         </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#apiKeysModal">
-                                <i class="bi bi-key"></i> API Keys
+                        <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
+                            <li><a class="dropdown-item d-flex align-items-center" href="#" data-bs-toggle="modal" data-bs-target="#apiKeysModal">
+                                <span class="material-icons-outlined me-2">key</span>
+                                API Keys
                             </a></li>
-                            <li><a class="dropdown-item" href="#" id="themeToggle">
-                                <i class="bi bi-palette"></i> Toggle Theme
+                            <li><a class="dropdown-item d-flex align-items-center" href="#" id="themeToggle">
+                                <span class="material-icons-outlined me-2">palette</span>
+                                Toggle Theme
                             </a></li>
                         </ul>
                     </li>
@@ -92,9 +99,10 @@
     <div class="modal fade" id="apiKeysModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="bi bi-key"></i> API Configuration
+                <div class="modal-header border-0">
+                    <h5 class="modal-title d-flex align-items-center">
+                        <span class="material-icons-outlined me-2">vpn_key</span>
+                        API Configuration
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
@@ -105,7 +113,7 @@
                             <div class="input-group">
                                 <input type="password" class="form-control" id="anthropicApiKey" placeholder="sk-ant-...">
                                 <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('anthropicApiKey')">
-                                    <i class="bi bi-eye"></i>
+                                    <span class="material-icons-outlined">visibility</span>
                                 </button>
                             </div>
                             <div class="form-text">Required for advanced analysis and prompt engineering</div>
@@ -116,7 +124,7 @@
                             <div class="input-group">
                                 <input type="password" class="form-control" id="openaiApiKey" placeholder="sk-...">
                                 <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('openaiApiKey')">
-                                    <i class="bi bi-eye"></i>
+                                    <span class="material-icons-outlined">visibility</span>
                                 </button>
                             </div>
                             <div class="form-text">Required for DALL-E image generation</div>
@@ -127,7 +135,7 @@
                             <div class="input-group">
                                 <input type="password" class="form-control" id="huggingfaceApiKey" placeholder="hf_...">
                                 <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('huggingfaceApiKey')">
-                                    <i class="bi bi-eye"></i>
+                                    <span class="material-icons-outlined">visibility</span>
                                 </button>
                             </div>
                             <div class="form-text">Required for Flux image generation</div>
