@@ -1,0 +1,23 @@
+{
+  "chapter_number": 14,
+  "chapter_title": "Fortunes Told",
+  "scene_number": 8,
+  "prompt": "He watched the sunlight catch on windows across the street, turning ordinary glass into portals of possibility. He took a sip – Did it taste of starlight and midnight storms, of unfathomable journeys and venerable magic.. Context: Visually compelling scene with narrative significance. Story context: Chapter 14: Fortunes Told. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T11:48:41.843514",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_14_scene_08.png"
+}

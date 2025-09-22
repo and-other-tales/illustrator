@@ -17,6 +17,7 @@ from illustrator.models import (
     EmotionalMoment,
 )
 from illustrator.providers import ProviderFactory
+from illustrator.quality_feedback import FeedbackSystem
 from illustrator.state import ManuscriptState
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,7 @@ Return your analysis in JSON format with these fields:
                 google_credentials=context.google_credentials,
                 google_project_id=runtime.context.user_id,  # Use user_id as project_id fallback
                 huggingface_api_key=context.huggingface_api_key,
+                anthropic_api_key=context.anthropic_api_key,
             )
 
             # Create style preferences dict
@@ -157,11 +159,35 @@ Return your analysis in JSON format with these fields:
                 'artistic_influences': context.artistic_influences,
             }
 
+            # Store previous scenes for continuity (if available)
+            previous_scenes = []
+            if hasattr(runtime, 'store') and runtime.store:
+                try:
+                    # Try to get previous chapter analyses for context
+                    from langgraph.store.base import BaseStore
+                    store = cast(BaseStore, runtime.store)
+
+                    # Get analyses from previous chapters
+                    for i in range(max(1, chapter.number - 2), chapter.number):
+                        try:
+                            prev_analysis = await store.aget(
+                                ("chapter_analyses", runtime.context.user_id),
+                                f"chapter_{i}"
+                            )
+                            if prev_analysis:
+                                previous_scenes.append(prev_analysis)
+                        except Exception:
+                            pass  # Continue if we can't get previous analysis
+                except Exception:
+                    pass  # Continue without previous scenes if store access fails
+
             for moment in emotional_moments:
                 prompt = await provider.generate_prompt(
                     emotional_moment=moment,
                     style_preferences=style_preferences,
                     context=setting_description,
+                    chapter_context=chapter,
+                    previous_scenes=previous_scenes,
                 )
                 illustration_prompts.append(prompt)
 
@@ -236,19 +262,62 @@ async def generate_illustrations(state: ManuscriptState, runtime: Runtime[Manusc
             google_credentials=context.google_credentials,
             google_project_id=runtime.context.user_id,
             huggingface_api_key=context.huggingface_api_key,
+            anthropic_api_key=context.anthropic_api_key,
         )
 
+        # Initialize quality feedback system
+        feedback_system = None
+        if context.anthropic_api_key:
+            try:
+                llm = init_chat_model(
+                    model="anthropic/claude-3-5-sonnet-20241022",
+                    api_key=context.anthropic_api_key
+                )
+                feedback_system = FeedbackSystem(llm)
+            except Exception:
+                pass  # Continue without feedback system
+
         generated_images = []
+        quality_assessments = []
 
         # Generate images for each illustration prompt
         for i, prompt in enumerate(analysis.illustration_prompts):
             try:
                 result = await provider.generate_image(prompt)
 
+                # Add timestamp for quality tracking
+                if 'metadata' not in result:
+                    result['metadata'] = {}
+                result['metadata']['timestamp'] = datetime.now().isoformat()
+
+                # Process quality feedback if available
+                if feedback_system and i < len(analysis.emotional_moments):
+                    emotional_moment = analysis.emotional_moments[i]
+                    feedback_result = await feedback_system.process_generation_feedback(
+                        prompt,
+                        result,
+                        emotional_moment,
+                        enable_iteration=True
+                    )
+
+                    quality_assessments.append(feedback_result['quality_assessment'])
+
+                    # If we have an improved prompt and the original failed, try again
+                    if (not result.get('success') and
+                        feedback_result.get('improved_prompt') and
+                        feedback_result.get('feedback_applied')):
+
+                        logger.info(f"Retrying generation {i} with improved prompt")
+                        improved_result = await provider.generate_image(feedback_result['improved_prompt'])
+
+                        if improved_result.get('success'):
+                            result = improved_result
+                            logger.info(f"Improved prompt succeeded for generation {i}")
+
                 if result.get('success'):
                     generated_images.append({
                         'prompt_index': i,
-                        'emotional_moment': analysis.emotional_moments[i].text_excerpt,
+                        'emotional_moment': analysis.emotional_moments[i].text_excerpt if i < len(analysis.emotional_moments) else 'Scene',
                         'image_data': result['image_data'],
                         'metadata': result['metadata'],
                     })
@@ -258,7 +327,7 @@ async def generate_illustrations(state: ManuscriptState, runtime: Runtime[Manusc
             except Exception as e:
                 logger.error(f"Error generating image {i}: {e}")
 
-        # Store generated images
+        # Store generated images and quality assessments
         if generated_images:
             await cast(BaseStore, runtime.store).aput(
                 ("generated_images", runtime.context.user_id),
@@ -266,12 +335,43 @@ async def generate_illustrations(state: ManuscriptState, runtime: Runtime[Manusc
                 generated_images,
             )
 
+        if quality_assessments:
+            await cast(BaseStore, runtime.store).aput(
+                ("quality_assessments", runtime.context.user_id),
+                f"chapter_{analysis.chapter.number}_quality",
+                [
+                    {
+                        "prompt_id": qa.prompt_id,
+                        "generation_success": qa.generation_success,
+                        "quality_scores": {k.value: v for k, v in qa.quality_scores.items()},
+                        "feedback_notes": qa.feedback_notes,
+                        "improvement_suggestions": qa.improvement_suggestions,
+                        "provider": qa.provider.value,
+                        "timestamp": qa.timestamp
+                    }
+                    for qa in quality_assessments
+                ]
+            )
+
+        # Calculate quality summary
+        quality_summary = ""
+        if quality_assessments:
+            avg_scores = {}
+            from illustrator.quality_feedback import QualityMetric
+            for metric in QualityMetric:
+                scores = [qa.quality_scores.get(metric, 0.0) for qa in quality_assessments]
+                avg_scores[metric.value] = sum(scores) / len(scores) if scores else 0.0
+
+            overall_quality = sum(avg_scores.values()) / len(avg_scores)
+            quality_rating = "Excellent" if overall_quality >= 0.8 else "Good" if overall_quality >= 0.6 else "Fair"
+            quality_summary = f"\n🎯 **Quality Assessment**: {quality_rating} (avg: {overall_quality:.2f})"
+
         response_content = f"""
 🎨 **Illustration Generation Complete**
 
 Generated **{len(generated_images)}** illustrations for Chapter {analysis.chapter.number}
 
-{_format_generation_results(generated_images)}
+{_format_generation_results(generated_images)}{quality_summary}
 
 All images have been saved and are ready for download.
 """
@@ -280,6 +380,7 @@ All images have been saved and are ready for download.
             "messages": [AIMessage(content=response_content)],
             "illustrations_generated": True,
             "generated_images": generated_images,
+            "quality_assessments": quality_assessments,
             "error_message": None,
             "retry_count": 0,
         }

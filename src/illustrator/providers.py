@@ -5,25 +5,72 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
 import aiohttp
+from langchain.chat_models import init_chat_model
 
 from illustrator.models import (
     EmotionalMoment,
     IllustrationPrompt,
     ImageProvider,
+    Chapter,
 )
+from illustrator.prompt_engineering import PromptEngineer
 
 
 class ImageGenerationProvider(ABC):
     """Abstract base class for image generation providers."""
 
-    @abstractmethod
+    def __init__(self, anthropic_api_key: str = None):
+        """Initialize provider with optional LLM for advanced prompt engineering."""
+        self.prompt_engineer = None
+        if anthropic_api_key:
+            try:
+                llm = init_chat_model(
+                    model="anthropic/claude-3-5-sonnet-20241022",
+                    api_key=anthropic_api_key
+                )
+                self.prompt_engineer = PromptEngineer(llm)
+            except Exception:
+                pass  # Fall back to legacy prompt generation
+
     async def generate_prompt(
         self,
         emotional_moment: EmotionalMoment,
         style_preferences: Dict[str, Any],
         context: str = "",
+        chapter_context: Chapter = None,
+        previous_scenes: List[Dict] = None
     ) -> IllustrationPrompt:
         """Generate an optimized prompt for this provider."""
+        if self.prompt_engineer and chapter_context:
+            # Use advanced prompt engineering
+            return await self.prompt_engineer.engineer_prompt(
+                emotional_moment,
+                self.get_provider_type(),
+                style_preferences,
+                chapter_context,
+                previous_scenes or []
+            )
+        else:
+            # Fall back to legacy prompt generation
+            return await self._legacy_generate_prompt(
+                emotional_moment,
+                style_preferences,
+                context
+            )
+
+    @abstractmethod
+    async def _legacy_generate_prompt(
+        self,
+        emotional_moment: EmotionalMoment,
+        style_preferences: Dict[str, Any],
+        context: str = "",
+    ) -> IllustrationPrompt:
+        """Legacy prompt generation method."""
+        pass
+
+    @abstractmethod
+    def get_provider_type(self) -> ImageProvider:
+        """Return the provider type."""
         pass
 
     @abstractmethod
@@ -39,12 +86,17 @@ class ImageGenerationProvider(ABC):
 class DalleProvider(ImageGenerationProvider):
     """OpenAI DALL-E image generation provider."""
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, anthropic_api_key: str = None):
         """Initialize DALL-E provider."""
+        super().__init__(anthropic_api_key)
         self.api_key = api_key
         self.base_url = "https://api.openai.com/v1/images/generations"
 
-    async def generate_prompt(
+    def get_provider_type(self) -> ImageProvider:
+        """Return DALL-E provider type."""
+        return ImageProvider.DALLE
+
+    async def _legacy_generate_prompt(
         self,
         emotional_moment: EmotionalMoment,
         style_preferences: Dict[str, Any],
@@ -54,21 +106,37 @@ class DalleProvider(ImageGenerationProvider):
         # DALL-E specific style modifiers
         style_modifiers = []
 
-        # Base style
-        art_style = style_preferences.get('art_style', 'digital painting')
-        style_modifiers.append(art_style)
+        # Check if we have a full style configuration
+        if 'style_config' in style_preferences and style_preferences['style_config']:
+            config = style_preferences['style_config']
 
-        # Quality and detail modifiers for DALL-E
-        style_modifiers.extend([
-            "highly detailed",
-            "professional illustration",
-            "dramatic lighting",
-        ])
+            # Use base prompt modifiers from config
+            base_modifiers = config.get('base_prompt_modifiers', [])
+            style_modifiers.extend(base_modifiers)
 
-        # Color palette
-        color_palette = style_preferences.get('color_palette')
-        if color_palette:
-            style_modifiers.append(f"{color_palette} color palette")
+            # Get art style from config or preferences
+            art_style = config.get('style_name', style_preferences.get('art_style', 'digital painting'))
+            if art_style not in style_modifiers:
+                style_modifiers.append(art_style)
+
+        else:
+            # Standard style handling
+            # Base style
+            art_style = style_preferences.get('art_style', 'digital painting')
+            style_modifiers.append(art_style)
+
+            # Quality and detail modifiers for DALL-E
+            style_modifiers.extend([
+                "highly detailed",
+                "professional illustration",
+                "dramatic lighting",
+            ])
+
+        # Color palette (only if not using style config)
+        if not ('style_config' in style_preferences and style_preferences['style_config']):
+            color_palette = style_preferences.get('color_palette')
+            if color_palette:
+                style_modifiers.append(f"{color_palette} color palette")
 
         # Emotional tone modifiers
         tone_modifiers = {
@@ -99,18 +167,34 @@ class DalleProvider(ImageGenerationProvider):
         main_prompt = ". ".join(prompt_parts)
 
         # Technical parameters for DALL-E
-        technical_params = {
-            "model": "dall-e-3",
-            "size": "1024x1024",
-            "quality": "hd",
-            "style": "vivid" if any(tone.value in ['joy', 'excitement', 'adventure'] for tone in emotional_moment.emotional_tones) else "natural"
-        }
+        if 'style_config' in style_preferences and style_preferences['style_config']:
+            config = style_preferences['style_config']
+            technical_params = config.get('technical_params', {
+                "model": "dall-e-3",
+                "size": "1024x1024",
+                "quality": "hd",
+                "style": "natural"
+            })
+        else:
+            technical_params = {
+                "model": "dall-e-3",
+                "size": "1024x1024",
+                "quality": "hd",
+                "style": "vivid" if any(tone.value in ['joy', 'excitement', 'adventure'] for tone in emotional_moment.emotional_tones) else "natural"
+            }
+
+        # Handle negative prompt from config
+        negative_prompt = None
+        if 'style_config' in style_preferences and style_preferences['style_config']:
+            config = style_preferences['style_config']
+            if config.get('negative_prompt'):
+                negative_prompt = ', '.join(config['negative_prompt'])
 
         return IllustrationPrompt(
             provider=ImageProvider.DALLE,
             prompt=f"{main_prompt}. {', '.join(style_modifiers)}",
             style_modifiers=style_modifiers,
-            negative_prompt=None,  # DALL-E doesn't support negative prompts
+            negative_prompt=negative_prompt,  # Note: DALL-E doesn't use negative prompts, but stored for compatibility
             technical_params=technical_params,
         )
 
@@ -165,13 +249,18 @@ class DalleProvider(ImageGenerationProvider):
 class Imagen4Provider(ImageGenerationProvider):
     """Google Cloud Imagen4 image generation provider."""
 
-    def __init__(self, credentials_path: str, project_id: str):
+    def __init__(self, credentials_path: str, project_id: str, anthropic_api_key: str = None):
         """Initialize Imagen4 provider."""
+        super().__init__(anthropic_api_key)
         self.credentials_path = credentials_path
         self.project_id = project_id
         # Note: In production, you'd use the Google Cloud AI Platform client library
 
-    async def generate_prompt(
+    def get_provider_type(self) -> ImageProvider:
+        """Return Imagen4 provider type."""
+        return ImageProvider.IMAGEN4
+
+    async def _legacy_generate_prompt(
         self,
         emotional_moment: EmotionalMoment,
         style_preferences: Dict[str, Any],
@@ -303,12 +392,17 @@ class Imagen4Provider(ImageGenerationProvider):
 class FluxProvider(ImageGenerationProvider):
     """HuggingFace Flux 1.1 Pro image generation provider."""
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, anthropic_api_key: str = None):
         """Initialize Flux provider."""
+        super().__init__(anthropic_api_key)
         self.api_key = api_key
         self.base_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro"
 
-    async def generate_prompt(
+    def get_provider_type(self) -> ImageProvider:
+        """Return Flux provider type."""
+        return ImageProvider.FLUX
+
+    async def _legacy_generate_prompt(
         self,
         emotional_moment: EmotionalMoment,
         style_preferences: Dict[str, Any],
@@ -449,24 +543,26 @@ class ProviderFactory:
         **credentials
     ) -> ImageGenerationProvider:
         """Create a provider instance based on type."""
+        anthropic_key = credentials.get('anthropic_api_key')
+
         if provider_type == ImageProvider.DALLE:
             api_key = credentials.get('openai_api_key')
             if not api_key:
                 raise ValueError("OpenAI API key required for DALL-E provider")
-            return DalleProvider(api_key)
+            return DalleProvider(api_key, anthropic_key)
 
         elif provider_type == ImageProvider.IMAGEN4:
             credentials_path = credentials.get('google_credentials')
             project_id = credentials.get('google_project_id')
             if not credentials_path or not project_id:
                 raise ValueError("Google credentials and project ID required for Imagen4")
-            return Imagen4Provider(credentials_path, project_id)
+            return Imagen4Provider(credentials_path, project_id, anthropic_key)
 
         elif provider_type == ImageProvider.FLUX:
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
                 raise ValueError("HuggingFace API key required for Flux provider")
-            return FluxProvider(api_key)
+            return FluxProvider(api_key, anthropic_key)
 
         else:
             raise ValueError(f"Unsupported provider type: {provider_type}")

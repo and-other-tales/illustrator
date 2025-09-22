@@ -22,6 +22,7 @@ from illustrator.models import (
     Chapter,
     ChapterAnalysis,
     ManuscriptMetadata,
+    SavedManuscript,
 )
 
 console = Console()
@@ -96,9 +97,60 @@ class ManuscriptCLI:
             created_at=datetime.now().isoformat(),
         )
 
-    def get_user_preferences(self) -> Dict[str, Any]:
+    def load_style_config(self, config_path: str) -> Dict[str, Any]:
+        """Load style configuration from JSON file."""
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+
+            # Convert config to expected format
+            style_prefs = {
+                "image_provider": "dalle",  # default
+                "art_style": config.get("style_name", "digital painting"),
+                "color_palette": None,
+                "artistic_influences": None,
+                "style_config": config  # Store full config for later use
+            }
+
+            console.print(f"[green]✅ Loaded style config: {config.get('style_name', 'Unknown')}[/green]")
+            return style_prefs
+
+        except Exception as e:
+            console.print(f"[red]❌ Error loading style config: {e}[/red]")
+            raise
+
+    def get_user_preferences(self, style_config_path: str | None = None) -> Dict[str, Any]:
         """Collect user preferences for image generation."""
+        if style_config_path:
+            return self.load_style_config(style_config_path)
+
         console.print("\n[bold cyan]🎨 Style Preferences[/bold cyan]")
+
+        # Check for predefined style configurations
+        predefined_styles = []
+        if Path("advanced_eh_shepard_config.json").exists():
+            predefined_styles.append(("advanced_eh_shepard", "E.H. Shepard Enhanced Pencil Illustration", "advanced_eh_shepard_config.json"))
+        if Path("eh_shepard_pencil_config.json").exists():
+            predefined_styles.append(("eh_shepard", "E.H. Shepard Pencil Sketch", "eh_shepard_pencil_config.json"))
+
+        if predefined_styles:
+            console.print("\n[green]Available predefined styles:[/green]")
+            console.print("  0. Custom style (configure manually)")
+            for i, (key, name, _) in enumerate(predefined_styles, 1):
+                console.print(f"  {i}. {name}")
+
+            while True:
+                try:
+                    style_choice = int(Prompt.ask("\nSelect style option", default="0"))
+                    if style_choice == 0:
+                        break  # Continue with manual configuration
+                    elif 1 <= style_choice <= len(predefined_styles):
+                        _, _, config_file = predefined_styles[style_choice - 1]
+                        return self.load_style_config(config_file)
+                    else:
+                        console.print(f"[red]Invalid choice. Please select 0-{len(predefined_styles)}.[/red]")
+                except ValueError:
+                    console.print("[red]Please enter a number.[/red]")
 
         # Image provider selection
         providers = [
@@ -199,8 +251,7 @@ class ManuscriptCLI:
         from illustrator.context import ManuscriptContext
         from illustrator.state import ManuscriptState
         from illustrator.models import ImageProvider
-        from langgraph.runtime import Runtime
-        from langgraph.store.memory import MemoryStore
+        from langgraph.store.memory import InMemoryStore
         import os
         import uuid
 
@@ -217,13 +268,9 @@ class ManuscriptCLI:
             huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),
         )
 
-        # Create runtime with memory store
-        store = MemoryStore()
-        runtime = Runtime(
-            graph=graph,
-            context=context,
-            store=store,
-        )
+        # Create store and compile graph
+        store = InMemoryStore()
+        compiled_graph = graph.compile(store=store)
 
         with Progress(
             SpinnerColumn(),
@@ -257,7 +304,15 @@ class ManuscriptCLI:
                     }
 
                     # Process the chapter through the graph
-                    result = await runtime.ainvoke(input=initial_state, config={"thread_id": f"chapter_{i}"})
+                    result = await compiled_graph.ainvoke(
+                        input=initial_state,
+                        config={
+                            "thread_id": f"chapter_{i}",
+                            "configurable": {
+                                "context": context
+                            }
+                        }
+                    )
 
                     # Extract the analysis from the result
                     if result.get("current_analysis"):
@@ -485,8 +540,136 @@ class ManuscriptCLI:
 
             console.print(f"[green]📝 Individual prompt files saved to: {prompts_dir}[/green]")
 
+    def save_manuscript_draft(self, name: str | None = None) -> str:
+        """Save the current manuscript draft to file."""
+        if not self.manuscript_metadata or not self.chapters:
+            raise ValueError("No manuscript data to save")
 
-@click.command()
+        # Create saved manuscripts directory
+        saved_dir = Path("saved_manuscripts")
+        saved_dir.mkdir(exist_ok=True)
+
+        # Generate filename if not provided
+        if not name:
+            safe_title = "".join(c for c in self.manuscript_metadata.title if c.isalnum() or c in (' ', '-', '_')).strip()
+            name = f"{safe_title}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        file_path = saved_dir / f"{name}.json"
+
+        # Create saved manuscript object
+        saved_manuscript = SavedManuscript(
+            metadata=self.manuscript_metadata,
+            chapters=self.chapters,
+            saved_at=datetime.now().isoformat(),
+            file_path=str(file_path)
+        )
+
+        # Save to file
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(saved_manuscript.model_dump(), f, indent=2, ensure_ascii=False)
+
+        console.print(f"[green]💾 Manuscript draft saved: {file_path}[/green]")
+        return str(file_path)
+
+    def list_saved_manuscripts(self) -> List[SavedManuscript]:
+        """List all saved manuscript drafts."""
+        saved_dir = Path("saved_manuscripts")
+        if not saved_dir.exists():
+            return []
+
+        manuscripts = []
+        for file_path in saved_dir.glob("*.json"):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                manuscript = SavedManuscript(**data)
+                manuscripts.append(manuscript)
+            except Exception as e:
+                console.print(f"[yellow]Warning: Could not load {file_path}: {e}[/yellow]")
+
+        # Sort by saved date (newest first)
+        manuscripts.sort(key=lambda m: m.saved_at, reverse=True)
+        return manuscripts
+
+    def load_manuscript_draft(self, file_path: str) -> bool:
+        """Load a saved manuscript draft."""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            saved_manuscript = SavedManuscript(**data)
+
+            # Load into current CLI instance
+            self.manuscript_metadata = saved_manuscript.metadata
+            self.chapters = saved_manuscript.chapters
+            self.completed_analyses = []  # Reset analyses when loading draft
+
+            console.print(f"[green]📖 Loaded manuscript: {self.manuscript_metadata.title}[/green]")
+            console.print(f"[cyan]Chapters loaded: {len(self.chapters)}[/cyan]")
+            return True
+
+        except Exception as e:
+            console.print(f"[red]❌ Error loading manuscript: {e}[/red]")
+            return False
+
+    def display_saved_manuscripts_menu(self) -> str | None:
+        """Display menu of saved manuscripts and let user choose one."""
+        manuscripts = self.list_saved_manuscripts()
+
+        if not manuscripts:
+            console.print("[yellow]No saved manuscripts found.[/yellow]")
+            return None
+
+        console.print("\n[bold cyan]📚 Saved Manuscripts[/bold cyan]")
+
+        table = Table()
+        table.add_column("#", width=3)
+        table.add_column("Title", style="white")
+        table.add_column("Chapters", justify="right", style="green")
+        table.add_column("Saved", style="dim")
+
+        for i, manuscript in enumerate(manuscripts, 1):
+            # Format saved date
+            try:
+                saved_date = datetime.fromisoformat(manuscript.saved_at)
+                date_str = saved_date.strftime("%Y-%m-%d %H:%M")
+            except:
+                date_str = manuscript.saved_at
+
+            table.add_row(
+                str(i),
+                manuscript.metadata.title,
+                str(len(manuscript.chapters)),
+                date_str
+            )
+
+        console.print(table)
+
+        while True:
+            try:
+                choice = Prompt.ask(f"\nSelect manuscript to load (1-{len(manuscripts)}, or 'q' to quit)")
+
+                if choice.lower() == 'q':
+                    return None
+
+                choice_num = int(choice)
+                if 1 <= choice_num <= len(manuscripts):
+                    return manuscripts[choice_num - 1].file_path
+                else:
+                    console.print(f"[red]Invalid choice. Please select 1-{len(manuscripts)}.[/red]")
+
+            except ValueError:
+                console.print("[red]Please enter a number or 'q' to quit.[/red]")
+
+
+@click.group()
+def cli():
+    """Manuscript Illustrator - Analyze chapters and generate AI illustrations."""
+    pass
+
+
+@cli.command()
 @click.option(
     '--interactive/--batch',
     default=True,
@@ -497,34 +680,150 @@ class ManuscriptCLI:
     type=click.Path(exists=True),
     help='Path to configuration file'
 )
-def main(interactive: bool, config_file: str | None):
-    """Manuscript Illustrator - Analyze chapters and generate AI illustrations."""
+@click.option(
+    '--style-config',
+    type=click.Path(exists=True),
+    help='Path to JSON style configuration file (e.g., eh_shepard_pencil_config.json)'
+)
+@click.option(
+    '--load',
+    type=click.Path(exists=True),
+    help='Load a previously saved manuscript draft'
+)
+@click.option(
+    '--list-saved',
+    is_flag=True,
+    help='List all saved manuscript drafts'
+)
+def analyze(interactive: bool, config_file: str | None, style_config: str | None, load: str | None, list_saved: bool):
+    """Run CLI analysis (original functionality)."""
     cli = ManuscriptCLI()
 
     try:
         # Setup
         cli.setup_environment()
 
+        # Handle list-saved flag
+        if list_saved:
+            manuscripts = cli.list_saved_manuscripts()
+            if manuscripts:
+                console.print("\n[bold cyan]📚 Saved Manuscripts[/bold cyan]")
+                for i, manuscript in enumerate(manuscripts, 1):
+                    try:
+                        saved_date = datetime.fromisoformat(manuscript.saved_at)
+                        date_str = saved_date.strftime("%Y-%m-%d %H:%M")
+                    except:
+                        date_str = manuscript.saved_at
+
+                    console.print(f"  {i}. {manuscript.metadata.title} ({len(manuscript.chapters)} chapters, saved {date_str})")
+                    console.print(f"     File: {manuscript.file_path}")
+            else:
+                console.print("[yellow]No saved manuscripts found.[/yellow]")
+            return
+
+        # Handle load flag
+        if load:
+            if cli.load_manuscript_draft(load):
+                console.print("[green]Manuscript loaded successfully. You can now process it or add more chapters.[/green]")
+            else:
+                sys.exit(1)
+
         if interactive:
             # Interactive mode
             cli.display_welcome()
 
-            # Get manuscript metadata
-            cli.manuscript_metadata = cli.get_manuscript_metadata()
+            # Check if we already loaded a manuscript
+            if not cli.manuscript_metadata:
+                # Offer to load existing manuscript or create new
+                console.print("\n[bold cyan]📖 Manuscript Options[/bold cyan]")
+                console.print("  1. Create new manuscript")
+                console.print("  2. Load saved manuscript")
+
+                while True:
+                    try:
+                        choice = int(Prompt.ask("\nSelect option", default="1"))
+                        if choice == 1:
+                            # Create new manuscript
+                            cli.manuscript_metadata = cli.get_manuscript_metadata()
+                            break
+                        elif choice == 2:
+                            # Load existing manuscript
+                            manuscript_path = cli.display_saved_manuscripts_menu()
+                            if manuscript_path:
+                                if cli.load_manuscript_draft(manuscript_path):
+                                    break
+                                else:
+                                    continue
+                            else:
+                                # User cancelled, create new
+                                cli.manuscript_metadata = cli.get_manuscript_metadata()
+                                break
+                        else:
+                            console.print("[red]Invalid choice. Please select 1 or 2.[/red]")
+                    except ValueError:
+                        console.print("[red]Please enter a number.[/red]")
 
             # Get user preferences
-            style_preferences = cli.get_user_preferences()
+            style_preferences = cli.get_user_preferences(style_config)
 
-            # Collect chapters
-            chapter_number = 1
-            while True:
-                chapter = cli.input_chapter(chapter_number)
-                if chapter:
-                    cli.chapters.append(chapter)
-                    chapter_number += 1
+            # Collect chapters (continue from existing if loaded)
+            if cli.chapters:
+                console.print(f"\n[green]📚 Current manuscript has {len(cli.chapters)} chapters[/green]")
+                add_more = Confirm.ask("Add more chapters?", default=False)
+            else:
+                add_more = True
 
-                if not cli.confirm_continue():
-                    break
+            if add_more:
+                chapter_number = len(cli.chapters) + 1
+                while True:
+                    chapter = cli.input_chapter(chapter_number)
+                    if chapter:
+                        cli.chapters.append(chapter)
+                        chapter_number += 1
+
+                    # Ask to save draft or continue
+                    console.print("\n[cyan]Options:[/cyan]")
+                    console.print("  1. Add another chapter")
+                    console.print("  2. Save draft and continue adding")
+                    console.print("  3. Save draft and process")
+                    console.print("  4. Process without saving")
+
+                    while True:
+                        try:
+                            option = int(Prompt.ask("Select option", default="1"))
+                            if option == 1:
+                                break  # Continue loop to add another chapter
+                            elif option == 2:
+                                try:
+                                    cli.save_manuscript_draft()
+                                    break  # Continue loop to add another chapter
+                                except Exception as e:
+                                    console.print(f"[red]❌ Error saving draft: {e}[/red]")
+                                    continue
+                            elif option == 3:
+                                try:
+                                    cli.save_manuscript_draft()
+                                except Exception as e:
+                                    console.print(f"[red]❌ Error saving draft: {e}[/red]")
+                                # Exit chapter collection loop
+                                chapter_number = None
+                                break
+                            elif option == 4:
+                                # Exit chapter collection loop
+                                chapter_number = None
+                                break
+                            else:
+                                console.print("[red]Invalid choice. Please select 1-4.[/red]")
+                        except ValueError:
+                            console.print("[red]Please enter a number.[/red]")
+
+                    if chapter_number is None:
+                        break  # Exit main chapter collection loop
+            elif cli.chapters and Confirm.ask("Save current draft?", default=True):
+                try:
+                    cli.save_manuscript_draft()
+                except Exception as e:
+                    console.print(f"[red]❌ Error saving draft: {e}[/red]")
 
             if cli.chapters:
                 # Update total chapters in metadata
@@ -553,6 +852,78 @@ def main(interactive: bool, config_file: str | None):
     except Exception as e:
         console.print(f"\n[red]❌ Error: {e}[/red]")
         sys.exit(1)
+
+
+@cli.command()
+@click.option(
+    '--host',
+    default='127.0.0.1',
+    help='Host to bind to (default: 127.0.0.1)'
+)
+@click.option(
+    '--port',
+    default=8000,
+    type=int,
+    help='Port to bind to (default: 8000)'
+)
+@click.option(
+    '--reload',
+    is_flag=True,
+    help='Enable auto-reload for development'
+)
+@click.option(
+    '--open-browser',
+    is_flag=True,
+    default=True,
+    help='Automatically open browser (default: True)'
+)
+def start(host: str, port: int, reload: bool, open_browser: bool):
+    """Start the web interface."""
+    try:
+        import webbrowser
+        import threading
+        import time
+        from illustrator.web.app import run_server
+
+        console.print(Panel.fit(
+            f"[bold blue]🚀 Starting Manuscript Illustrator Web Interface[/bold blue]\n\n"
+            f"[green]• Server: http://{host}:{port}[/green]\n"
+            f"[green]• Environment: {'Development' if reload else 'Production'}[/green]\n"
+            f"[green]• Auto-reload: {'Enabled' if reload else 'Disabled'}[/green]",
+            title="Web Server",
+            border_style="blue"
+        ))
+
+        # Open browser in a separate thread after a short delay
+        if open_browser:
+            def open_browser_delayed():
+                time.sleep(2)  # Give server time to start
+                try:
+                    webbrowser.open(f"http://{host}:{port}")
+                    console.print(f"[green]🌐 Opened browser at http://{host}:{port}[/green]")
+                except Exception:
+                    console.print(f"[yellow]Could not open browser automatically. Please visit: http://{host}:{port}[/yellow]")
+
+            threading.Thread(target=open_browser_delayed, daemon=True).start()
+
+        # Start the server
+        run_server(host=host, port=port, reload=reload)
+
+    except ImportError:
+        console.print("[red]❌ Web dependencies not installed. Please install with:[/red]")
+        console.print("[yellow]pip install 'illustrator[web]'[/yellow]")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]🛑 Web server stopped.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]❌ Failed to start web server: {e}[/red]")
+        sys.exit(1)
+
+
+# Set main command to the group
+def main():
+    """Main entry point for the CLI."""
+    cli()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Manuscript Illustrator{% endblock %}
+
+{% block page_icon %}<i class="bi bi-house me-2"></i>{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <a href="/manuscript/new" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> New Manuscript
+    </a>
+    <button type="button" class="btn btn-outline-primary" onclick="refreshDashboard()">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-1">Manuscripts</h5>
+                        <h2 class="mb-0" id="totalManuscripts">-</h2>
+                    </div>
+                    <i class="bi bi-book fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-1">Chapters</h5>
+                        <h2 class="mb-0" id="totalChapters">-</h2>
+                    </div>
+                    <i class="bi bi-file-text fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-1">Images</h5>
+                        <h2 class="mb-0" id="totalImages">-</h2>
+                    </div>
+                    <i class="bi bi-image fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-1">Processing</h5>
+                        <h2 class="mb-0" id="processingCount">-</h2>
+                    </div>
+                    <i class="bi bi-gear fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Manuscripts -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock-history me-2"></i>Recent Manuscripts
+                </h5>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary" onclick="setManuscriptView('grid')" id="gridViewBtn">
+                        <i class="bi bi-grid"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary active" onclick="setManuscriptView('list')" id="listViewBtn">
+                        <i class="bi bi-list"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Loading State -->
+                <div id="manuscriptsLoading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading manuscripts...</span>
+                    </div>
+                    <div class="mt-2">Loading manuscripts...</div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="manuscriptsEmpty" class="text-center py-5 d-none">
+                    <i class="bi bi-book text-muted" style="font-size: 4rem;"></i>
+                    <h4 class="text-muted mt-3">No Manuscripts Yet</h4>
+                    <p class="text-muted">Create your first manuscript to get started with AI-powered illustrations.</p>
+                    <a href="/manuscript/new" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Create First Manuscript
+                    </a>
+                </div>
+
+                <!-- List View -->
+                <div id="manuscriptsList" class="d-none">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Author</th>
+                                    <th>Chapters</th>
+                                    <th>Images</th>
+                                    <th>Status</th>
+                                    <th>Updated</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="manuscriptsTableBody">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Grid View -->
+                <div id="manuscriptsGrid" class="row d-none">
+                    <!-- Dynamic content -->
+                </div>
+
+                <!-- Pagination -->
+                <nav aria-label="Manuscripts pagination" id="manuscriptsPagination" class="d-none">
+                    <ul class="pagination justify-content-center">
+                        <!-- Dynamic pagination -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions Modal -->
+<div class="modal fade" id="quickActionsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick Actions</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-grid gap-2">
+                    <a href="/manuscript/new" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Create New Manuscript
+                    </a>
+                    <button type="button" class="btn btn-outline-primary" onclick="loadSavedManuscripts()">
+                        <i class="bi bi-folder-open"></i> Load Saved Manuscript
+                    </button>
+                    <button type="button" class="btn btn-outline-success" onclick="importManuscript()">
+                        <i class="bi bi-upload"></i> Import Manuscript File
+                    </button>
+                    <hr>
+                    <button type="button" class="btn btn-outline-info" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#apiKeysModal">
+                        <i class="bi bi-key"></i> Configure API Keys
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Dashboard initialization
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+
+    // Auto-refresh every 30 seconds
+    setInterval(refreshDashboard, 30000);
+});
+
+async function loadDashboardData() {
+    try {
+        showLoading('manuscriptsLoading');
+
+        const response = await fetch('/api/manuscripts/stats');
+        const data = await response.json();
+
+        // Update stats
+        document.getElementById('totalManuscripts').textContent = data.total_manuscripts;
+        document.getElementById('totalChapters').textContent = data.total_chapters;
+        document.getElementById('totalImages').textContent = data.total_images;
+        document.getElementById('processingCount').textContent = data.processing_count;
+
+        // Load manuscripts
+        if (data.recent_manuscripts && data.recent_manuscripts.length > 0) {
+            renderManuscripts(data.recent_manuscripts);
+        } else {
+            showEmpty('manuscriptsEmpty');
+        }
+
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        showError('Failed to load dashboard data');
+    }
+}
+
+function renderManuscripts(manuscripts) {
+    const isGridView = document.getElementById('gridViewBtn').classList.contains('active');
+
+    if (isGridView) {
+        renderManuscriptsGrid(manuscripts);
+    } else {
+        renderManuscriptsList(manuscripts);
+    }
+
+    hideLoading();
+}
+
+function renderManuscriptsList(manuscripts) {
+    const tbody = document.getElementById('manuscriptsTableBody');
+    tbody.innerHTML = manuscripts.map(manuscript => `
+        <tr>
+            <td>
+                <div class="fw-bold">${escapeHtml(manuscript.metadata.title)}</div>
+                <small class="text-muted">${escapeHtml(manuscript.metadata.genre || 'No genre')}</small>
+            </td>
+            <td>${escapeHtml(manuscript.metadata.author || 'Anonymous')}</td>
+            <td>${manuscript.chapters.length}</td>
+            <td>${manuscript.total_images}</td>
+            <td>
+                <span class="badge ${getStatusBadgeClass(manuscript.processing_status)}">
+                    ${manuscript.processing_status}
+                </span>
+            </td>
+            <td>${formatDate(manuscript.updated_at)}</td>
+            <td>
+                <div class="btn-group btn-group-sm" role="group">
+                    <a href="/manuscript/${manuscript.id}" class="btn btn-outline-primary" title="View">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                    <a href="/manuscript/${manuscript.id}/edit" class="btn btn-outline-secondary" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    <a href="/manuscript/${manuscript.id}/gallery" class="btn btn-outline-success" title="Gallery">
+                        <i class="bi bi-images"></i>
+                    </a>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+
+    document.getElementById('manuscriptsList').classList.remove('d-none');
+    document.getElementById('manuscriptsGrid').classList.add('d-none');
+}
+
+function renderManuscriptsGrid(manuscripts) {
+    const grid = document.getElementById('manuscriptsGrid');
+    grid.innerHTML = manuscripts.map(manuscript => `
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">${escapeHtml(manuscript.metadata.title)}</h5>
+                    <p class="card-text text-muted">${escapeHtml(manuscript.metadata.author || 'Anonymous')}</p>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted">${manuscript.chapters.length} chapters</small>
+                        <span class="badge ${getStatusBadgeClass(manuscript.processing_status)}">
+                            ${manuscript.processing_status}
+                        </span>
+                    </div>
+                    ${manuscript.total_images > 0 ? `<small class="text-success">${manuscript.total_images} images generated</small>` : ''}
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="btn-group w-100" role="group">
+                        <a href="/manuscript/${manuscript.id}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-eye"></i> View
+                        </a>
+                        <a href="/manuscript/${manuscript.id}/gallery" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-images"></i> Gallery
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    document.getElementById('manuscriptsGrid').classList.remove('d-none');
+    document.getElementById('manuscriptsList').classList.add('d-none');
+}
+
+function setManuscriptView(viewType) {
+    const gridBtn = document.getElementById('gridViewBtn');
+    const listBtn = document.getElementById('listViewBtn');
+
+    if (viewType === 'grid') {
+        gridBtn.classList.add('active');
+        listBtn.classList.remove('active');
+    } else {
+        listBtn.classList.add('active');
+        gridBtn.classList.remove('active');
+    }
+
+    // Re-render if we have data
+    const tbody = document.getElementById('manuscriptsTableBody');
+    if (tbody.children.length > 0) {
+        // Re-fetch and render with new view
+        loadDashboardData();
+    }
+}
+
+function refreshDashboard() {
+    loadDashboardData();
+}
+
+function getStatusBadgeClass(status) {
+    switch(status) {
+        case 'completed': return 'bg-success';
+        case 'processing': return 'bg-warning';
+        case 'error': return 'bg-danger';
+        default: return 'bg-secondary';
+    }
+}
+</script>
+{% endblock %}

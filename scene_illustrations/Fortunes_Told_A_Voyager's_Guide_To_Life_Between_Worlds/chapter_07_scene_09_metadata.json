@@ -1,0 +1,23 @@
+{
+  "chapter_number": 7,
+  "chapter_title": "Court of Revelations",
+  "scene_number": 9,
+  "prompt": "spoke of Arcanum’s distorted streets, of familiar faces transformed, of encounters with The Fool, the deceptively helpful stranger who had revealed himself as the Devil, whom Cassandra called Peter, and finally The Magician.. Context: Visually compelling scene with narrative significance. Story context: Chapter 7: Court of Revelations. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T11:07:57.725630",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_07_scene_09.png"
+}

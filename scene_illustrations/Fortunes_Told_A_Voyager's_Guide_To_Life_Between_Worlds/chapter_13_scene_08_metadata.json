@@ -1,0 +1,23 @@
+{
+  "chapter_number": 13,
+  "chapter_title": "The Sun Rises",
+  "scene_number": 8,
+  "prompt": "Lukas stared at it in wonder, noticing how it continued to glow faintly with Arcanum’s peculiar light. The morning light cast long shadows across the square, but these shadows behaved properly for the first time since he’d entered this realm.. Context: Visually compelling scene with narrative significance. Story context: Chapter 13: The Sun Rises. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T11:41:27.514586",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_13_scene_08.png"
+}

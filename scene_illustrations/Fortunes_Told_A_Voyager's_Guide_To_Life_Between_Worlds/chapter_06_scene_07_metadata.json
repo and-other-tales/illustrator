@@ -1,0 +1,23 @@
+{
+  "chapter_number": 6,
+  "chapter_title": "The Magician's Trap",
+  "scene_number": 7,
+  "prompt": "Buildings twisted at angles defying comprehension, windows reflecting the unnatural glow of gas lamps burning with cold fire. labyrinth of shadows and distorted perspectives. The tortoise blinked up at him with eyes that held centuries of wisdom.. Context: Visually compelling scene with narrative significance. Story context: Chapter 6: The Magician's Trap. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T10:59:53.215284",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_06_scene_07.png"
+}

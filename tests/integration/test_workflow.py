@@ -230,12 +230,23 @@ class TestWorkflowIntegration:
 
     def test_route_next_step_complete_chapter(self):
         """Test routing to complete chapter."""
+        # Test routing to generate_illustrations when analysis exists but no illustrations yet
         state = {
             'current_analysis': Mock(),
             'awaiting_chapter_input': False,
             'error_message': None
         }
         result = route_next_step(state)
+        assert result == "generate_illustrations"
+
+        # Test routing to complete_chapter when analysis and illustrations both exist
+        state_with_illustrations = {
+            'current_analysis': Mock(),
+            'awaiting_chapter_input': False,
+            'error_message': None,
+            'illustrations_generated': True
+        }
+        result = route_next_step(state_with_illustrations)
         assert result == "complete_chapter"
 
 
@@ -323,4 +334,9 @@ class TestEndToEndWorkflow:
         # Test routing for each state
         assert route_next_step(initial_state) == "__end__"
         assert route_next_step(with_chapter) == "analyze_chapter"
-        assert route_next_step(with_analysis) == "complete_chapter"
+        assert route_next_step(with_analysis) == "generate_illustrations"
+
+        # Test with illustrations generated
+        with_illustrations = with_analysis.copy()
+        with_illustrations['illustrations_generated'] = True
+        assert route_next_step(with_illustrations) == "complete_chapter"

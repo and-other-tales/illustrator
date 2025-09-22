@@ -1,0 +1,23 @@
+{
+  "chapter_number": 6,
+  "chapter_title": "The Magician's Trap",
+  "scene_number": 6,
+  "prompt": "In another, Lukas stood before architectural structures defying comprehension that displayed his images as light flowed through them, transforming viewers into something more than human.. Context: Visually compelling scene with narrative significance. Story context: Chapter 6: The Magician's Trap. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T10:59:37.580822",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_06_scene_06.png"
+}

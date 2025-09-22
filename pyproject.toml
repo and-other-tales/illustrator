@@ -21,6 +21,8 @@ dependencies = [
     "textblob>=0.18.0",
     "nltk>=3.8.1",
     "transformers>=4.35.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
     # Image generation APIs
     "openai>=1.0.0",
     "google-cloud-aiplatform>=1.38.0",
@@ -32,10 +34,16 @@ dependencies = [
     "rich>=13.7.0",
     "pydantic>=2.5.0",
     "pillow>=10.1.0",
+    # Web application
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "jinja2>=3.1.2",
+    "python-multipart>=0.0.6",
+    "websockets>=12.0",
 ]
 
 [project.optional-dependencies]
-dev = ["mypy>=1.11.1", "ruff>=0.6.1", "pytest>=8.0.0", "pytest-asyncio>=0.21.0", "pytest-cov>=4.0.0"]
+dev = ["mypy>=1.11.1", "ruff>=0.6.1", "pytest>=8.0.0", "pytest-asyncio>=0.21.0", "pytest-cov>=4.0.0", "selenium>=4.0.0", "beautifulsoup4>=4.12.0"]
 
 [project.scripts]
 illustrator = "illustrator.cli:main"

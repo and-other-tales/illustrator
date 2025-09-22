@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if chapter_id %}Edit Chapter{% else %}New Chapter{% endif %} - Manuscript Illustrator
+{% endblock %}
+
+{% block page_icon %}
+{% if chapter_id %}
+<i class="bi bi-pencil me-2"></i>
+{% else %}
+<i class="bi bi-file-text-fill me-2"></i>
+{% endif %}
+{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+        {% if manuscript_id %}
+        <li class="breadcrumb-item"><a href="/manuscript/{{ manuscript_id }}">Manuscript</a></li>
+        {% endif %}
+        <li class="breadcrumb-item active">
+            {% if chapter_id %}Edit Chapter{% else %}New Chapter{% endif %}
+        </li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-body">
+                <form id="chapterForm" class="needs-validation" novalidate>
+                    <div class="mb-4">
+                        <label for="title" class="form-label fw-bold">
+                            <i class="bi bi-file-text me-1"></i> Chapter Title *
+                        </label>
+                        <input
+                            type="text"
+                            class="form-control form-control-lg"
+                            id="title"
+                            name="title"
+                            placeholder="Enter chapter title..."
+                            required
+                            maxlength="200"
+                        >
+                        <div class="invalid-feedback">
+                            Please provide a chapter title.
+                        </div>
+                        <div class="form-text">
+                            Give your chapter a descriptive title.
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="content" class="form-label fw-bold">
+                            <i class="bi bi-file-earmark-text me-1"></i> Chapter Content *
+                        </label>
+                        <textarea
+                            class="form-control"
+                            id="content"
+                            name="content"
+                            rows="20"
+                            placeholder="Write your chapter content here...
+
+Tip: Paste your entire chapter text here. The AI will analyze it for emotional moments and generate illustration prompts automatically."
+                            required
+                            minlength="100"
+                        ></textarea>
+                        <div class="invalid-feedback">
+                            Please provide chapter content (minimum 100 characters).
+                        </div>
+                        <div class="form-text d-flex justify-content-between">
+                            <span>Write or paste your chapter content. Rich emotional content works best for illustrations.</span>
+                            <span class="text-muted" id="wordCount">0 words</span>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <a href="{% if manuscript_id %}/manuscript/{{ manuscript_id }}{% else %}/{% endif %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </a>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button type="submit" class="btn btn-primary" data-action="save">
+                                <i class="bi bi-check-circle"></i>
+                                {% if chapter_id %}Update Chapter{% else %}Save Chapter{% endif %}
+                            </button>
+                            {% if not chapter_id %}
+                            <button type="submit" class="btn btn-success" data-action="save-and-add">
+                                <i class="bi bi-plus-circle"></i> Save & Add Another
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Writing Tips -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="bi bi-lightbulb text-warning"></i> Writing Tips for AI Illustrations
+                </h6>
+                <ul class="mb-0 small">
+                    <li><strong>Emotional Scenes:</strong> Include moments of high emotion - joy, fear, wonder, sadness</li>
+                    <li><strong>Visual Details:</strong> Describe settings, character appearances, and actions</li>
+                    <li><strong>Sensory Language:</strong> Use words that evoke sight, sound, smell, touch</li>
+                    <li><strong>Dialogue Context:</strong> Include body language and facial expressions</li>
+                    <li><strong>Scene Setting:</strong> Paint the environment and atmosphere</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Chapter Stats -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="bi bi-bar-chart text-primary"></i> Chapter Statistics
+                </h6>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="h4 mb-0 text-primary" id="wordCountLarge">0</div>
+                        <small class="text-muted">Words</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="h4 mb-0 text-success" id="characterCount">0</div>
+                        <small class="text-muted">Characters</small>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">Reading time: <span id="readingTime">0 min</span></small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto-save Status -->
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="bi bi-cloud text-info"></i> Auto-save
+                </h6>
+                <div id="autoSaveStatus" class="text-muted small">
+                    Start typing to enable auto-save
+                </div>
+                <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="manualSave()">
+                        <i class="bi bi-cloud-upload"></i> Save Now
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAutoSave()" id="autoSaveToggle">
+                        <i class="bi bi-pause"></i> Pause Auto-save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let autoSaveEnabled = true;
+let autoSaveTimeout;
+let lastSaveTime = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const manuscriptId = '{{ manuscript_id or "" }}';
+    const chapterId = '{{ chapter_id or "" }}';
+    const form = document.getElementById('chapterForm');
+    const contentTextarea = document.getElementById('content');
+
+    // Load chapter data if editing
+    if (chapterId) {
+        loadChapterData(chapterId);
+    }
+
+    // Update stats as user types
+    contentTextarea.addEventListener('input', function() {
+        updateStats();
+        scheduleAutoSave();
+    });
+
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        if (!form.checkValidity()) {
+            e.stopPropagation();
+            form.classList.add('was-validated');
+            return;
+        }
+
+        const submitButton = e.submitter;
+        const action = submitButton.getAttribute('data-action');
+
+        await saveChapter(action);
+    });
+
+    // Initial stats update
+    updateStats();
+
+    // Auto-save every 30 seconds if there are changes
+    setInterval(() => {
+        if (autoSaveEnabled && contentTextarea.value.trim()) {
+            autoSave();
+        }
+    }, 30000);
+});
+
+async function loadChapterData(chapterId) {
+    try {
+        showLoadingOverlay('Loading chapter data...');
+
+        const response = await fetch(`/api/chapters/detail/${chapterId}`);
+        if (!response.ok) {
+            throw new Error('Failed to load chapter');
+        }
+
+        const chapterData = await response.json();
+
+        // Populate form
+        document.getElementById('title').value = chapterData.chapter.title || '';
+        document.getElementById('content').value = chapterData.chapter.content || '';
+
+        updateStats();
+        hideLoadingOverlay();
+    } catch (error) {
+        hideLoadingOverlay();
+        showError('Failed to load chapter data: ' + error.message);
+    }
+}
+
+function updateStats() {
+    const content = document.getElementById('content').value;
+    const words = content.trim() ? content.trim().split(/\s+/).length : 0;
+    const characters = content.length;
+    const readingTime = Math.max(1, Math.ceil(words / 200)); // Average reading speed
+
+    document.getElementById('wordCount').textContent = `${words} words`;
+    document.getElementById('wordCountLarge').textContent = words.toLocaleString();
+    document.getElementById('characterCount').textContent = characters.toLocaleString();
+    document.getElementById('readingTime').textContent = `${readingTime} min`;
+}
+
+function scheduleAutoSave() {
+    if (!autoSaveEnabled) return;
+
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(autoSave, 5000); // Auto-save after 5 seconds of inactivity
+}
+
+async function autoSave() {
+    const content = document.getElementById('content').value.trim();
+    if (!content || content.length < 10) return;
+
+    try {
+        // Simple auto-save - just store in localStorage for now
+        const chapterData = {
+            title: document.getElementById('title').value,
+            content: content,
+            timestamp: Date.now()
+        };
+
+        localStorage.setItem('chapter_autosave', JSON.stringify(chapterData));
+
+        lastSaveTime = new Date();
+        updateAutoSaveStatus('Auto-saved at ' + lastSaveTime.toLocaleTimeString());
+    } catch (error) {
+        updateAutoSaveStatus('Auto-save failed');
+    }
+}
+
+function updateAutoSaveStatus(message) {
+    document.getElementById('autoSaveStatus').textContent = message;
+}
+
+async function manualSave() {
+    const form = document.getElementById('chapterForm');
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        return;
+    }
+
+    await saveChapter('save-draft');
+}
+
+function toggleAutoSave() {
+    autoSaveEnabled = !autoSaveEnabled;
+    const toggle = document.getElementById('autoSaveToggle');
+
+    if (autoSaveEnabled) {
+        toggle.innerHTML = '<i class="bi bi-pause"></i> Pause Auto-save';
+        updateAutoSaveStatus('Auto-save enabled');
+    } else {
+        toggle.innerHTML = '<i class="bi bi-play"></i> Enable Auto-save';
+        updateAutoSaveStatus('Auto-save disabled');
+    }
+}
+
+async function saveChapter(action) {
+    try {
+        showLoadingOverlay('Saving chapter...');
+
+        const formData = new FormData(document.getElementById('chapterForm'));
+        const manuscriptId = '{{ manuscript_id or "" }}';
+        const chapterId = '{{ chapter_id or "" }}';
+
+        const chapterData = {
+            title: formData.get('title').trim(),
+            content: formData.get('content').trim(),
+            manuscript_id: manuscriptId
+        };
+
+        const url = chapterId ? `/api/chapters/${chapterId}` : `/api/chapters/${manuscriptId}`;
+        const method = chapterId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(chapterData)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to save chapter');
+        }
+
+        const savedChapter = await response.json();
+        hideLoadingOverlay();
+
+        showSuccess(chapterId ? 'Chapter updated successfully!' : 'Chapter saved successfully!');
+
+        // Clear auto-save data
+        localStorage.removeItem('chapter_autosave');
+
+        // Redirect based on action
+        setTimeout(() => {
+            if (action === 'save-and-add') {
+                window.location.href = `/manuscript/${manuscriptId}/chapter/new`;
+            } else if (action === 'save') {
+                window.location.href = `/manuscript/${manuscriptId}`;
+            }
+        }, 1500);
+
+    } catch (error) {
+        hideLoadingOverlay();
+        showError('Failed to save chapter: ' + error.message);
+    }
+}
+
+// Load auto-saved content on page load
+window.addEventListener('load', function() {
+    const chapterId = '{{ chapter_id or "" }}';
+    if (!chapterId) { // Only for new chapters
+        const autoSaved = localStorage.getItem('chapter_autosave');
+        if (autoSaved) {
+            try {
+                const data = JSON.parse(autoSaved);
+                const title = document.getElementById('title');
+                const content = document.getElementById('content');
+
+                if (!title.value && data.title) {
+                    title.value = data.title;
+                }
+                if (!content.value && data.content) {
+                    content.value = data.content;
+                    updateStats();
+                }
+
+                updateAutoSaveStatus('Restored auto-saved content');
+            } catch (error) {
+                localStorage.removeItem('chapter_autosave');
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

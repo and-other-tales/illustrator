@@ -1,0 +1,23 @@
+{
+  "chapter_number": 13,
+  "chapter_title": "The Sun Rises",
+  "scene_number": 3,
+  "prompt": "” Peter materialised before him, his form shifting between states—one moment a being of shadow and fractured light with obsidian wings that stretched across the width of the street, the next a gaunt man with hollow eyes and ink-stained fingers.. Context: Visually compelling scene with narrative significance. Story context: Chapter 13: The Sun Rises. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T11:39:47.877718",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_13_scene_03.png"
+}

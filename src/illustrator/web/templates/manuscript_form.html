@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if manuscript_id %}Edit Manuscript{% else %}New Manuscript{% endif %} - Manuscript Illustrator
+{% endblock %}
+
+{% block page_icon %}
+{% if manuscript_id %}
+<i class="bi bi-pencil me-2"></i>
+{% else %}
+<i class="bi bi-plus-circle me-2"></i>
+{% endif %}
+{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+        <li class="breadcrumb-item active">
+            {% if manuscript_id %}Edit Manuscript{% else %}New Manuscript{% endif %}
+        </li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-body">
+                <form id="manuscriptForm" class="needs-validation" novalidate>
+                    <div class="mb-4">
+                        <label for="title" class="form-label fw-bold">
+                            <i class="bi bi-book me-1"></i> Manuscript Title *
+                        </label>
+                        <input
+                            type="text"
+                            class="form-control form-control-lg"
+                            id="title"
+                            name="title"
+                            placeholder="Enter your manuscript title..."
+                            required
+                            maxlength="200"
+                        >
+                        <div class="invalid-feedback">
+                            Please provide a manuscript title.
+                        </div>
+                        <div class="form-text">
+                            Give your manuscript a compelling title that reflects its essence.
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-4">
+                                <label for="author" class="form-label fw-bold">
+                                    <i class="bi bi-person me-1"></i> Author
+                                </label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="author"
+                                    name="author"
+                                    placeholder="Author name..."
+                                    maxlength="100"
+                                >
+                                <div class="form-text">
+                                    Optional: Your name or pen name.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="mb-4">
+                                <label for="genre" class="form-label fw-bold">
+                                    <i class="bi bi-tags me-1"></i> Genre
+                                </label>
+                                <select class="form-select" id="genre" name="genre">
+                                    <option value="">Select genre...</option>
+                                    <option value="Fantasy">Fantasy</option>
+                                    <option value="Science Fiction">Science Fiction</option>
+                                    <option value="Romance">Romance</option>
+                                    <option value="Mystery">Mystery</option>
+                                    <option value="Thriller">Thriller</option>
+                                    <option value="Horror">Horror</option>
+                                    <option value="Historical Fiction">Historical Fiction</option>
+                                    <option value="Literary Fiction">Literary Fiction</option>
+                                    <option value="Young Adult">Young Adult</option>
+                                    <option value="Children's">Children's</option>
+                                    <option value="Biography">Biography</option>
+                                    <option value="Non-fiction">Non-fiction</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                                <div class="form-text">
+                                    Optional: Helps with style recommendations.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Genre Input -->
+                    <div class="mb-4 d-none" id="customGenreDiv">
+                        <label for="customGenre" class="form-label fw-bold">
+                            <i class="bi bi-pencil me-1"></i> Custom Genre
+                        </label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="customGenre"
+                            name="customGenre"
+                            placeholder="Enter custom genre..."
+                            maxlength="50"
+                        >
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <a href="/" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </a>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button type="submit" class="btn btn-primary" data-action="save">
+                                <i class="bi bi-check-circle"></i>
+                                {% if manuscript_id %}Update Manuscript{% else %}Create Manuscript{% endif %}
+                            </button>
+                            {% if not manuscript_id %}
+                            <button type="submit" class="btn btn-success" data-action="save-and-continue">
+                                <i class="bi bi-plus-circle"></i> Create & Add Chapters
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tips Card -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="bi bi-lightbulb text-warning"></i> Tips for Success
+                </h6>
+                <ul class="mb-0 small">
+                    <li><strong>Descriptive Titles:</strong> Choose titles that evoke emotion or intrigue</li>
+                    <li><strong>Genre Selection:</strong> Helps the AI understand your story's style and themes</li>
+                    <li><strong>Next Steps:</strong> After creation, you'll add chapters and configure illustration styles</li>
+                    <li><strong>Save Often:</strong> Your work is automatically saved as you build your manuscript</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const manuscriptId = '{{ manuscript_id or "" }}';
+    const form = document.getElementById('manuscriptForm');
+    const genreSelect = document.getElementById('genre');
+    const customGenreDiv = document.getElementById('customGenreDiv');
+
+    // Load manuscript data if editing
+    if (manuscriptId) {
+        loadManuscriptData(manuscriptId);
+    }
+
+    // Handle custom genre display
+    genreSelect.addEventListener('change', function() {
+        if (this.value === 'Other') {
+            customGenreDiv.classList.remove('d-none');
+            document.getElementById('customGenre').required = true;
+        } else {
+            customGenreDiv.classList.add('d-none');
+            document.getElementById('customGenre').required = false;
+        }
+    });
+
+    // Form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        if (!form.checkValidity()) {
+            e.stopPropagation();
+            form.classList.add('was-validated');
+            return;
+        }
+
+        const submitButton = e.submitter;
+        const action = submitButton.getAttribute('data-action');
+
+        await saveManuscript(action);
+    });
+});
+
+async function loadManuscriptData(manuscriptId) {
+    try {
+        showLoadingOverlay('Loading manuscript data...');
+
+        const response = await fetch(`/api/manuscripts/${manuscriptId}`);
+        if (!response.ok) {
+            throw new Error('Failed to load manuscript');
+        }
+
+        const manuscript = await response.json();
+
+        // Populate form
+        document.getElementById('title').value = manuscript.metadata.title || '';
+        document.getElementById('author').value = manuscript.metadata.author || '';
+
+        const genre = manuscript.metadata.genre || '';
+        const genreSelect = document.getElementById('genre');
+
+        // Check if genre exists in options
+        const genreOption = Array.from(genreSelect.options).find(option => option.value === genre);
+        if (genreOption) {
+            genreSelect.value = genre;
+        } else if (genre) {
+            // Custom genre
+            genreSelect.value = 'Other';
+            document.getElementById('customGenreDiv').classList.remove('d-none');
+            document.getElementById('customGenre').value = genre;
+            document.getElementById('customGenre').required = true;
+        }
+
+        hideLoadingOverlay();
+    } catch (error) {
+        hideLoadingOverlay();
+        showError('Failed to load manuscript data: ' + error.message);
+    }
+}
+
+async function saveManuscript(action) {
+    try {
+        showLoadingOverlay('Saving manuscript...');
+
+        const formData = new FormData(document.getElementById('manuscriptForm'));
+
+        // Handle custom genre
+        let genre = formData.get('genre');
+        if (genre === 'Other') {
+            genre = formData.get('customGenre');
+        }
+
+        const manuscriptData = {
+            title: formData.get('title').trim(),
+            author: formData.get('author').trim() || null,
+            genre: genre || null
+        };
+
+        const manuscriptId = '{{ manuscript_id or "" }}';
+        const url = manuscriptId ? `/api/manuscripts/${manuscriptId}` : '/api/manuscripts/';
+        const method = manuscriptId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(manuscriptData)
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to save manuscript');
+        }
+
+        const savedManuscript = await response.json();
+        hideLoadingOverlay();
+
+        showSuccess(manuscriptId ? 'Manuscript updated successfully!' : 'Manuscript created successfully!');
+
+        // Redirect based on action
+        setTimeout(() => {
+            if (action === 'save-and-continue') {
+                window.location.href = `/manuscript/${savedManuscript.id}`;
+            } else if (action === 'save') {
+                window.location.href = manuscriptId ? `/manuscript/${savedManuscript.id}` : '/';
+            }
+        }, 1500);
+
+    } catch (error) {
+        hideLoadingOverlay();
+        showError('Failed to save manuscript: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

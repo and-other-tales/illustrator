@@ -1,0 +1,23 @@
+{
+  "chapter_number": 13,
+  "chapter_title": "The Sun Rises",
+  "scene_number": 10,
+  "prompt": "” His voice cracked slightly. ” With those words, he dissolved completely into the golden light of dawn, not vanquished but transformed, finally releasing his desperate grip on both his illusion and reality.. Context: Visually compelling scene with narrative significance. Story context: Chapter 13: The Sun Rises. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T11:42:00.536080",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_13_scene_10.png"
+}

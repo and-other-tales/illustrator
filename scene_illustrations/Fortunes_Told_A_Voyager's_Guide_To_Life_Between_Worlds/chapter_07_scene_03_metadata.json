@@ -1,0 +1,23 @@
+{
+  "chapter_number": 7,
+  "chapter_title": "Court of Revelations",
+  "scene_number": 3,
+  "prompt": "Stained glass windows depicted scenes that shifted and changed with each passing moment – one instant showing familiar biblical scenes, the next offering clear views of cosmic truths that made Lukas’s eyes water.. Context: Visually compelling scene with narrative significance. Story context: Chapter 7: Court of Revelations. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T11:06:14.626271",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_07_scene_03.png"
+}

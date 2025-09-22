@@ -1,0 +1,52 @@
+{
+  "style_name": "E.H. Shepard Winnie the Pooh Pencil Sketch",
+  "description": "Classic pencil sketch style reminiscent of E.H. Shepard's original Winnie the Pooh illustrations",
+  "base_prompt_modifiers": [
+    "pencil sketch",
+    "E.H. Shepard style",
+    "classic children's book illustration",
+    "soft pencil strokes",
+    "gentle cross-hatching",
+    "minimal detail",
+    "whimsical and charming",
+    "hand-drawn quality",
+    "simple line work",
+    "traditional illustration"
+  ],
+  "negative_prompt": [
+    "photographic",
+    "digital art",
+    "color",
+    "painted",
+    "overly detailed",
+    "modern style",
+    "realistic",
+    "3D render",
+    "anime",
+    "cartoon style"
+  ],
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "composition_guidelines": {
+    "background": "minimal, sparse environmental details",
+    "characters": "simple, expressive, rounded forms",
+    "linework": "soft, organic pencil strokes",
+    "shading": "subtle cross-hatching and tone variations",
+    "whitespace": "generous use of negative space",
+    "detail_level": "focused on essential elements only"
+  },
+  "character_traits": {
+    "pooh": "rotund, simple features, gentle expression",
+    "piglet": "small, timid posture, delicate lines",
+    "general": "anthropomorphic animals with childlike innocence"
+  },
+  "environment_style": {
+    "hundred_acre_wood": "sparse trees, simple grass tufts, minimal background detail",
+    "interior_scenes": "basic furniture outlines, cozy domestic settings",
+    "landscapes": "rolling hills, simple horizon lines, pastoral simplicity"
+  }
+}

@@ -76,3 +76,11 @@ class ManuscriptMetadata(BaseModel):
     genre: str | None = Field(default=None, description="Literary genre")
     total_chapters: int = Field(description="Total number of chapters")
     created_at: str = Field(description="When processing started")
+
+
+class SavedManuscript(BaseModel):
+    """Represents a saved manuscript draft."""
+    metadata: ManuscriptMetadata = Field(description="Manuscript metadata")
+    chapters: List[Chapter] = Field(description="List of chapters")
+    saved_at: str = Field(description="When the manuscript was saved")
+    file_path: str = Field(description="Path to the saved file")

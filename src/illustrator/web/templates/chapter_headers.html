@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}Chapter Header Options - Manuscript Illustrator{% endblock %}
+
+{% block page_icon %}
+<i class="bi bi-image me-2"></i>
+{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="/manuscript/{{ manuscript_id }}">Manuscript</a></li>
+        <li class="breadcrumb-item active">Chapter Header Options</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-palette me-2"></i>Chapter Header Illustration Options
+                </h4>
+                <p class="mb-0 mt-2">Choose from 4 AI-generated header illustration concepts</p>
+            </div>
+
+            <div class="card-body">
+                <div class="mb-4">
+                    <h5 class="text-primary" id="chapterTitle">Loading chapter...</h5>
+                    <p class="text-muted">Select your preferred header illustration style below.</p>
+                </div>
+
+                <!-- Header Options Grid -->
+                <div class="row" id="headerOptionsContainer">
+                    <!-- Options will be loaded here -->
+                    <div class="col-12 text-center py-5" id="loadingMessage">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Generating header options...</p>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="row mt-4" id="actionButtons" style="display: none;">
+                    <div class="col-12">
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <a href="/manuscript/{{ manuscript_id }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left"></i> Back to Manuscript
+                                </a>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-success" onclick="generateImages()" id="generateBtn" disabled>
+                                    <i class="bi bi-magic"></i> Generate Selected Headers
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" onclick="regenerateOptions()">
+                                    <i class="bi bi-arrow-clockwise"></i> Regenerate Options
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Header Option Card Template -->
+<template id="headerOptionTemplate">
+    <div class="col-md-6 col-lg-3 mb-4">
+        <div class="card header-option-card" data-option="">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 option-title">Option Title</h6>
+                    <div class="form-check">
+                        <input class="form-check-input option-checkbox" type="checkbox" value="">
+                        <label class="form-check-label">Select</label>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <span class="badge bg-primary artistic-style">Style</span>
+                </div>
+                <p class="small text-muted option-description">Description</p>
+                <div class="mb-3">
+                    <strong class="small">Visual Focus:</strong>
+                    <span class="small visual-focus">Focus</span>
+                </div>
+                <div class="mb-3">
+                    <strong class="small">Composition:</strong>
+                    <span class="small composition-notes">Notes</span>
+                </div>
+
+                <!-- Prompt Preview -->
+                <div class="collapse prompt-preview" id="">
+                    <div class="card bg-light">
+                        <div class="card-body p-2">
+                            <small class="text-muted">
+                                <strong>Generated Prompt:</strong><br>
+                                <span class="prompt-text"></span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-sm btn-outline-info w-100 mt-2" type="button" onclick="togglePromptPreview(this)">
+                    <i class="bi bi-eye"></i> View Prompt
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentChapterId = '{{ chapter_id or "" }}';
+let headerOptions = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (currentChapterId) {
+        loadChapterHeaders();
+    } else {
+        showError('No chapter ID provided');
+    }
+});
+
+async function loadChapterHeaders() {
+    try {
+        showLoadingOverlay('Generating chapter header options...');
+
+        const response = await fetch(`/api/chapters/${currentChapterId}/headers`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                // Style config can be added here
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to generate header options');
+        }
+
+        const data = await response.json();
+        headerOptions = data.header_options;
+
+        // Update page title
+        document.getElementById('chapterTitle').textContent = `Chapter Headers: ${data.chapter_title}`;
+
+        // Display header options
+        displayHeaderOptions(headerOptions);
+
+        hideLoadingOverlay();
+
+    } catch (error) {
+        hideLoadingOverlay();
+        showError('Failed to load chapter headers: ' + error.message);
+        document.getElementById('loadingMessage').innerHTML = `
+            <div class="text-danger">
+                <i class="bi bi-exclamation-triangle fs-1"></i>
+                <p class="mt-3">Failed to generate header options</p>
+                <button class="btn btn-primary" onclick="loadChapterHeaders()">Try Again</button>
+            </div>
+        `;
+    }
+}
+
+function displayHeaderOptions(options) {
+    const container = document.getElementById('headerOptionsContainer');
+    const template = document.getElementById('headerOptionTemplate');
+    const loadingMessage = document.getElementById('loadingMessage');
+
+    // Clear loading message
+    loadingMessage.style.display = 'none';
+
+    // Clear existing options
+    container.innerHTML = '';
+
+    options.forEach(option => {
+        const optionElement = template.content.cloneNode(true);
+
+        // Set data attributes and content
+        const card = optionElement.querySelector('.header-option-card');
+        card.setAttribute('data-option', option.option_number);
+
+        optionElement.querySelector('.option-title').textContent = option.title;
+        optionElement.querySelector('.artistic-style').textContent = option.artistic_style;
+        optionElement.querySelector('.option-description').textContent = option.description;
+        optionElement.querySelector('.visual-focus').textContent = option.visual_focus;
+        optionElement.querySelector('.composition-notes').textContent = option.composition_notes;
+        optionElement.querySelector('.prompt-text').textContent = option.prompt.prompt || option.prompt.base_prompt;
+
+        const checkbox = optionElement.querySelector('.option-checkbox');
+        checkbox.value = option.option_number;
+        checkbox.id = `option_${option.option_number}`;
+        checkbox.addEventListener('change', updateGenerateButton);
+
+        const promptCollapse = optionElement.querySelector('.prompt-preview');
+        promptCollapse.id = `prompt_${option.option_number}`;
+
+        container.appendChild(optionElement);
+    });
+
+    // Show action buttons
+    document.getElementById('actionButtons').style.display = 'block';
+}
+
+function togglePromptPreview(button) {
+    const card = button.closest('.header-option-card');
+    const optionNumber = card.getAttribute('data-option');
+    const collapse = document.getElementById(`prompt_${optionNumber}`);
+    const bsCollapse = new bootstrap.Collapse(collapse, { toggle: true });
+
+    const icon = button.querySelector('i');
+    if (collapse.classList.contains('show')) {
+        icon.className = 'bi bi-eye';
+        button.innerHTML = '<i class="bi bi-eye"></i> View Prompt';
+    } else {
+        icon.className = 'bi bi-eye-slash';
+        button.innerHTML = '<i class="bi bi-eye-slash"></i> Hide Prompt';
+    }
+}
+
+function updateGenerateButton() {
+    const checkedOptions = document.querySelectorAll('.option-checkbox:checked');
+    const generateBtn = document.getElementById('generateBtn');
+
+    generateBtn.disabled = checkedOptions.length === 0;
+
+    if (checkedOptions.length > 0) {
+        generateBtn.innerHTML = `<i class="bi bi-magic"></i> Generate ${checkedOptions.length} Header${checkedOptions.length > 1 ? 's' : ''}`;
+    } else {
+        generateBtn.innerHTML = '<i class="bi bi-magic"></i> Generate Selected Headers';
+    }
+}
+
+async function generateImages() {
+    const checkedOptions = document.querySelectorAll('.option-checkbox:checked');
+
+    if (checkedOptions.length === 0) {
+        showWarning('Please select at least one header option to generate');
+        return;
+    }
+
+    const selectedOptions = Array.from(checkedOptions).map(cb => parseInt(cb.value));
+
+    try {
+        showLoadingOverlay('Starting image generation...');
+
+        // This would integrate with your existing processing system
+        showSuccess(`Starting generation of ${selectedOptions.length} chapter header(s)`);
+
+        // For now, just show success - in full implementation this would:
+        // 1. Create a processing session
+        // 2. Queue the selected headers for generation
+        // 3. Redirect to processing dashboard
+
+        setTimeout(() => {
+            hideLoadingOverlay();
+            // window.location.href = `/processing/${sessionId}`;
+        }, 2000);
+
+    } catch (error) {
+        hideLoadingOverlay();
+        showError('Failed to start header generation: ' + error.message);
+    }
+}
+
+async function regenerateOptions() {
+    const confirmRegenerate = confirm('This will generate new header options. Continue?');
+
+    if (confirmRegenerate) {
+        // Clear selections
+        document.querySelectorAll('.option-checkbox:checked').forEach(cb => cb.checked = false);
+        updateGenerateButton();
+
+        // Reload options
+        loadChapterHeaders();
+    }
+}
+
+// Add visual feedback for card selection
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('option-checkbox')) {
+        const card = e.target.closest('.header-option-card');
+        if (e.target.checked) {
+            card.classList.add('border-primary', 'bg-light');
+        } else {
+            card.classList.remove('border-primary', 'bg-light');
+        }
+    }
+});
+</script>
+
+<style>
+.header-option-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.header-option-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.header-option-card.border-primary {
+    border-width: 2px !important;
+}
+
+.artistic-style {
+    font-size: 0.75rem;
+}
+</style>
+{% endblock %}

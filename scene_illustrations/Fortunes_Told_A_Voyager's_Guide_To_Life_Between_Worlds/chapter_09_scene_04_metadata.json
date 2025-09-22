@@ -1,0 +1,23 @@
+{
+  "chapter_number": 9,
+  "chapter_title": "Wheel of Fortunes",
+  "scene_number": 4,
+  "prompt": "The twisted spires of Westminster conveyed straightening slightly, the unfathomable angles of the bridge stabilised beneath his feet. “Peter’s agents will anticipate caution,” Strength said, her lion’s eyes gleaming with tactical insight.. Context: Visually compelling scene with narrative significance. Story context: Chapter 9: Wheel of Fortunes. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T11:11:14.985113",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_09_scene_04.png"
+}

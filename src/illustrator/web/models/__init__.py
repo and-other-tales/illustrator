@@ -1,0 +1,1 @@
+"""Web-specific data models."""

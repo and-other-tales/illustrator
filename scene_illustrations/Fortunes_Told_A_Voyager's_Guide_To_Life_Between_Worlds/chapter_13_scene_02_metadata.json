@@ -1,0 +1,23 @@
+{
+  "chapter_number": 13,
+  "chapter_title": "The Sun Rises",
+  "scene_number": 2,
+  "prompt": "” As the sun broke fully over the horizon, bathing the street in golden light, Peter’s form appeared to come to a decision. Peter’s magnificent form began to dissolve, wings turning to mist in the morning light.. Context: Visually compelling scene with narrative significance. Story context: Chapter 13: The Sun Rises. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T11:39:32.720759",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_13_scene_02.png"
+}

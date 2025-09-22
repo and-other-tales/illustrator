@@ -1,0 +1,23 @@
+{
+  "chapter_number": 4,
+  "chapter_title": "A Storm Breaks",
+  "scene_number": 3,
+  "prompt": "A pool of light shone across the room, but the shadows in one corner gathered more densely than elsewhere. he paused and looked back, his eyes holding depths that seemed to stretch back through centuries.. Context: Visually compelling scene with narrative significance. Story context: Chapter 4: A Storm Breaks. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T10:45:47.886394",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_04_scene_03.png"
+}

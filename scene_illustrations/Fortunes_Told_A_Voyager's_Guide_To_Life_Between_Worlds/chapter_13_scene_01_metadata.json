@@ -1,0 +1,23 @@
+{
+  "chapter_number": 13,
+  "chapter_title": "The Sun Rises",
+  "scene_number": 1,
+  "prompt": "His timeless eyes, filled with centuries of wisdom, softened with acceptance that it was time to part, and the configurations on his shell, which had always appeared to shift and change unlike other living things, began to pulse with newfound intensi. Context: Visually compelling scene with narrative significance. Story context: Chapter 13: The Sun Rises. cinematic digital painting, highly detailed, professional illustration, dramatic lighting, rich and atmospheric color palette",
+  "style_modifiers": [
+    "cinematic digital painting",
+    "highly detailed",
+    "professional illustration",
+    "dramatic lighting",
+    "rich and atmospheric color palette"
+  ],
+  "negative_prompt": null,
+  "technical_params": {
+    "model": "dall-e-3",
+    "size": "1024x1024",
+    "quality": "hd",
+    "style": "natural"
+  },
+  "generated_at": "2025-09-21T11:39:13.839272",
+  "provider": "dalle",
+  "file_path": "scene_illustrations/Fortunes_Told_A_Voyager's_Guide_To_Life_Between_Worlds/chapter_13_scene_01.png"
+}
