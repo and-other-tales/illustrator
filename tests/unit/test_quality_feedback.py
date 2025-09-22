@@ -14,7 +14,13 @@ from illustrator.models import (
 from illustrator.quality_feedback import (
     QualityMetric,
     QualityAssessment,
-    PromptPerformance
+    PromptPerformance,
+    IterationReason,
+    PromptIteration,
+    QualityReport,
+    QualityAnalyzer,
+    PromptIterator,
+    FeedbackSystem
 )
 
 

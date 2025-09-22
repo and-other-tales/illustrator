@@ -16,7 +16,7 @@ from rich.console import Console
 
 from illustrator.web.routes import manuscripts, chapters
 from illustrator.web.models.web_models import ConnectionManager
-from illustrator.models import EmotionalTone
+from illustrator.models import EmotionalTone, IllustrationPrompt
 
 console = Console()
 
@@ -242,12 +242,20 @@ async def run_processing_workflow(
 
                 # Log detailed prompt generation with AI analysis
                 excerpt_preview = moment.text_excerpt[:80] + "..." if len(moment.text_excerpt) > 80 else moment.text_excerpt
-                prompt_preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
+                prompt_preview = prompt_text[:120] + "..." if len(prompt_text) > 120 else prompt_text
                 await connection_manager.send_personal_message(
                     json.dumps({
                         "type": "log",
                         "level": "info",
-                        "message": f"      🤖 AI Prompt {idx}: [{primary_tone}] \"{excerpt_preview}\" → \"{prompt_preview}\""
+                        "message": f"      🤖 AI-Enhanced Prompt {idx}: [{primary_tone}] \"{excerpt_preview}\""
+                    }),
+                    session_id
+                )
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "info",
+                        "message": f"         Generated: \"{prompt_preview}\""
                     }),
                     session_id
                 )
@@ -517,10 +525,21 @@ class WebSocketIllustrationGenerator:
                 json.dumps({
                     "type": "log",
                     "level": "info",
-                    "message": f"📝 Advanced AI analysis: Generated {len(illustration_prompt.prompt.split())} word prompt"
+                    "message": f"🧠 AI Scene Analysis: Generated {len(illustration_prompt.prompt.split())}-word prompt with visual composition analysis"
                 }),
                 self.session_id
             )
+
+            # Log additional AI analysis details
+            if hasattr(illustration_prompt, 'style_modifiers') and illustration_prompt.style_modifiers:
+                await self.connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "info",
+                        "message": f"   🎨 Style modifiers: {', '.join(illustration_prompt.style_modifiers[:3])}..."
+                    }),
+                    self.session_id
+                )
 
             return illustration_prompt.prompt
 
@@ -587,7 +606,19 @@ class WebSocketIllustrationGenerator:
                     self.session_id
                 )
 
-                result = await self.generator.image_provider.generate_image(prompt)
+                # Convert string prompt to IllustrationPrompt object if necessary
+                if isinstance(prompt, str):
+                    prompt_obj = IllustrationPrompt(
+                        provider=self.generator.provider,
+                        prompt=prompt,
+                        style_modifiers=[],
+                        negative_prompt="",
+                        technical_params={}
+                    )
+                else:
+                    prompt_obj = prompt
+
+                result = await self.generator.image_provider.generate_image(prompt_obj)
 
                 if result.get('success'):
                     # Save the image

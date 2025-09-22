@@ -331,10 +331,13 @@ Recommend the optimal composition for maximum visual and emotional impact.""")
 
 
 class StyleTranslator:
-    """Translates artistic styles and preferences into model-specific prompts."""
+    """Translates artistic styles and preferences into model-specific prompts with rich configuration support."""
 
     def __init__(self):
-        # Model-specific style vocabularies
+        # Load rich style configurations
+        self.rich_style_configs = self._load_rich_style_configs()
+
+        # Model-specific style vocabularies (fallback)
         self.dalle_vocabulary = {
             "artistic_styles": {
                 "digital_painting": "digital painting, concept art, trending on artstation",
@@ -389,22 +392,133 @@ class StyleTranslator:
             ]
         }
 
+    def _load_rich_style_configs(self) -> Dict[str, Any]:
+        """Load rich style configuration files like E.H. Shepard configs."""
+        import json
+        from pathlib import Path
+
+        configs = {}
+
+        # Load available rich style configurations
+        config_files = [
+            ("advanced_eh_shepard", "advanced_eh_shepard_config.json"),
+            ("eh_shepard", "eh_shepard_pencil_config.json"),
+        ]
+
+        for config_name, file_path in config_files:
+            config_path = Path(file_path)
+            if config_path.exists():
+                try:
+                    with open(config_path, 'r') as f:
+                        configs[config_name] = json.load(f)
+                except Exception as e:
+                    logger.warning(f"Failed to load config {file_path}: {e}")
+
+        return configs
+
+    def _get_emotional_style_modifiers(self, style_config: Dict[str, Any], emotional_tones: List[str]) -> List[str]:
+        """Extract emotional style modifiers from rich configuration."""
+        modifiers = []
+
+        # Check if we have emotional adaptations in the config
+        if "emotional_adaptations" in style_config:
+            adaptations = style_config["emotional_adaptations"]
+
+            for tone in emotional_tones:
+                tone_lower = tone.lower()
+                if tone_lower in adaptations:
+                    adaptation = adaptations[tone_lower]
+                    modifiers.extend(adaptation.get("style_modifiers", []))
+
+        return modifiers
+
+    def _get_provider_optimizations(self, style_config: Dict[str, Any], provider: ImageProvider) -> Dict[str, Any]:
+        """Get provider-specific optimizations from rich configuration."""
+        provider_opts = {}
+
+        if "provider_optimizations" in style_config:
+            provider_key = provider.value.lower()
+            if provider_key in style_config["provider_optimizations"]:
+                provider_opts = style_config["provider_optimizations"][provider_key]
+
+        return provider_opts
+
     def translate_style_config(
         self,
         style_config: Dict[str, Any],
         provider: ImageProvider,
         scene_composition: SceneComposition
     ) -> Dict[str, Any]:
-        """Translate style configuration for specific provider."""
+        """Translate style configuration for specific provider with rich config support."""
 
-        if provider == ImageProvider.DALLE:
-            return self._translate_for_dalle(style_config, scene_composition)
-        elif provider == ImageProvider.IMAGEN4:
-            return self._translate_for_imagen4(style_config, scene_composition)
-        elif provider == ImageProvider.FLUX:
-            return self._translate_for_flux(style_config, scene_composition)
+        # Check if this is a rich configuration (has detailed style data)
+        rich_config = self._detect_rich_configuration(style_config)
+
+        if rich_config:
+            return self._translate_rich_config(rich_config, style_config, provider, scene_composition)
         else:
-            return self._generic_translation(style_config)
+            # Use standard translation
+            if provider == ImageProvider.DALLE:
+                return self._translate_for_dalle(style_config, scene_composition)
+            elif provider == ImageProvider.IMAGEN4:
+                return self._translate_for_imagen4(style_config, scene_composition)
+            elif provider == ImageProvider.FLUX:
+                return self._translate_for_flux(style_config, scene_composition)
+            else:
+                return self._generic_translation(style_config)
+
+    def _detect_rich_configuration(self, style_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Detect if style config refers to a rich configuration."""
+
+        # Check for explicit rich config references
+        art_style = style_config.get("art_style", "").lower()
+        style_name = style_config.get("style_name", "").lower()
+
+        # Look for E.H. Shepard references
+        if "shepard" in art_style or "shepard" in style_name or "pencil sketch" in art_style:
+            if "advanced_eh_shepard" in self.rich_style_configs:
+                return self.rich_style_configs["advanced_eh_shepard"]
+            elif "eh_shepard" in self.rich_style_configs:
+                return self.rich_style_configs["eh_shepard"]
+
+        # Check if the style_config itself is already a rich configuration
+        if "emotional_adaptations" in style_config and "base_prompt_modifiers" in style_config:
+            return style_config
+
+        return None
+
+    def _translate_rich_config(
+        self,
+        rich_config: Dict[str, Any],
+        style_config: Dict[str, Any],
+        provider: ImageProvider,
+        scene_composition: SceneComposition
+    ) -> Dict[str, Any]:
+        """Translate using rich configuration data."""
+
+        # Start with base modifiers from rich config
+        style_modifiers = rich_config.get("base_prompt_modifiers", []).copy()
+
+        # Add emotional adaptations if available
+        if hasattr(scene_composition, 'emotional_tones'):
+            emotional_modifiers = self._get_emotional_style_modifiers(
+                rich_config,
+                scene_composition.emotional_tones
+            )
+            style_modifiers.extend(emotional_modifiers)
+
+        # Get provider-specific optimizations
+        provider_opts = self._get_provider_optimizations(rich_config, provider)
+
+        # Build translation result
+        translation = {
+            "style_modifiers": style_modifiers,
+            "negative_prompt": rich_config.get("negative_prompt", []),
+            "technical_params": rich_config.get("technical_params", {}),
+            "provider_optimizations": provider_opts
+        }
+
+        return translation
 
     def _translate_for_dalle(
         self,
@@ -1016,28 +1130,106 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         visual_elements: List[VisualElement],
         scene_composition: SceneComposition
     ) -> str:
-        """Enhance scene description with visual details."""
+        """Enhance scene description with comprehensive visual and artistic details."""
+        enhancement_prompt = f"""
+        Transform this literary text into a detailed visual scene description for classic book illustration generation.
 
-        # Extract key visual elements
-        key_elements = [elem for elem in visual_elements if elem.importance > 0.6]
+        Original text: "{original_text}"
+        Visual elements: {[f"{elem.element_type}: {elem.description}" for elem in visual_elements]}
+        Scene focus: {scene_composition.focal_point}
+        Composition: {scene_composition.composition_type.value}
+        Atmosphere: {getattr(scene_composition, 'atmosphere', 'natural')}
 
-        # Build enhanced description
-        enhanced_parts = [original_text]
+        Create a comprehensive scene description that includes:
 
-        # Add visual enhancement based on composition
-        if scene_composition.focal_point:
-            enhanced_parts.append(f"Focus on {scene_composition.focal_point}")
+        1. SETTING & ENVIRONMENT:
+        - Specific location details (interior/exterior, architectural elements, furniture, landscape)
+        - Background elements and spatial relationships
+        - Environmental atmosphere and mood
 
-        # Add important visual elements that aren't already mentioned
-        element_descriptions = []
-        for element in key_elements:
-            if element.description not in original_text.lower():
-                element_descriptions.append(element.description)
+        2. CHARACTER DETAILS:
+        - Precise positioning and postures of all characters
+        - Facial expressions with specific emotional details (wide eyes, frozen smile, etc.)
+        - Body language that conveys psychological state
+        - How characters relate spatially to each other and the environment
 
-        if element_descriptions:
-            enhanced_parts.append(f"Visual elements: {', '.join(element_descriptions)}")
+        3. ARTISTIC COMPOSITION:
+        - Camera angle/viewpoint (close-up, medium shot, wide shot)
+        - What's in foreground vs background
+        - Visual flow and focal points
+        - How elements are arranged for maximum emotional impact
 
-        return ". ".join(enhanced_parts)
+        4. EMOTIONAL ATMOSPHERE:
+        - Specific mood descriptors (tension, unease, mystery, etc.)
+        - How the environment reinforces the emotional state
+        - Psychological elements visible through visual cues
+
+        Example output: "Interior coffee shop scene with young man at ordering counter while female barista behind register displays shocked, fearful expression with widened eyes and artificial smile frozen on her face. The barista's body language suggests she's recoiling slightly from the customer. Coffee shop ambiance with espresso machine, displayed pastries, hanging menu boards. Captures moment of psychological tension - customer appears relaxed and normal, barista visibly disturbed and frightened."
+
+        Return only the enhanced scene description with specific visual and emotional details.
+        """
+
+        try:
+            response = await self.llm.ainvoke([
+                SystemMessage(content="You are an expert visual artist who creates detailed scene descriptions for classic book illustrations, specializing in capturing both visual elements and emotional nuance."),
+                HumanMessage(content=enhancement_prompt)
+            ])
+            enhanced_description = response.content.strip()
+
+            # Ensure we have a substantive description
+            if len(enhanced_description) < 50:
+                # Use enhanced fallback if AI response is too brief
+                return self._create_detailed_fallback_description(original_text, visual_elements, scene_composition)
+
+            return enhanced_description
+
+        except Exception as e:
+            logger.warning(f"Scene description enhancement failed: {e}")
+            return self._create_detailed_fallback_description(original_text, visual_elements, scene_composition)
+
+    def _create_detailed_fallback_description(
+        self,
+        original_text: str,
+        visual_elements: List[VisualElement],
+        scene_composition: SceneComposition
+    ) -> str:
+        """Create a detailed fallback description when AI enhancement fails."""
+        parts = []
+
+        # Determine scene type and setting
+        character_elements = [elem for elem in visual_elements if elem.element_type == "character"]
+        environment_elements = [elem for elem in visual_elements if elem.element_type == "environment"]
+        atmosphere_elements = [elem for elem in visual_elements if elem.element_type == "atmosphere"]
+
+        # Build detailed description
+        if environment_elements:
+            setting = environment_elements[0].description
+            parts.append(f"Scene set in {setting}")
+
+        if character_elements:
+            char_descriptions = []
+            for char in character_elements:
+                # Add emotional context from attributes if available
+                emotion_details = char.attributes.get('emotional_significance', '') if hasattr(char, 'attributes') and char.attributes else ''
+                if emotion_details:
+                    char_descriptions.append(f"{char.description} ({emotion_details})")
+                else:
+                    char_descriptions.append(char.description)
+            parts.append(f"featuring {', '.join(char_descriptions)}")
+
+        # Add composition details
+        parts.append(f"{scene_composition.composition_type.value} composition focusing on {scene_composition.focal_point}")
+
+        # Add atmospheric details
+        if atmosphere_elements:
+            parts.append(f"with {atmosphere_elements[0].description}")
+        elif hasattr(scene_composition, 'atmosphere') and scene_composition.atmosphere:
+            parts.append(f"creating {scene_composition.atmosphere} atmosphere")
+
+        # Add the original emotional context
+        parts.append(f"Captures the moment: {original_text}")
+
+        return ". ".join(parts)
 
     def _build_composition_guidance(self, scene_composition: SceneComposition) -> str:
         """Build composition and framing guidance."""
@@ -1131,34 +1323,89 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         self,
         prompt: str,
         provider: ImageProvider,
-        optimizations: Dict[str, bool]
+        optimizations: Dict[str, Any]
     ) -> str:
-        """Final provider-specific prompt optimization."""
+        """Final provider-specific prompt optimization with rich artistic detail."""
 
-        # Provider-specific optimizations
+        # Load artistic technique specifications
+        artistic_techniques = {
+            "pencil_sketch": {
+                "techniques": ["fine crosshatching", "soft graphite shading", "delicate line work", "expressive facial features"],
+                "quality_terms": ["detailed linework", "classic book illustration aesthetic", "gentle flowing lines", "soft pencil textures"]
+            },
+            "digital_painting": {
+                "techniques": ["rich brush strokes", "atmospheric lighting", "detailed texturing", "cinematic composition"],
+                "quality_terms": ["high resolution", "professional digital art", "masterful technique", "artistic excellence"]
+            }
+        }
+
+        # Provider-specific enhancements with artistic detail
         if provider == ImageProvider.DALLE:
-            # DALL-E prefers clear, narrative descriptions
-            if optimizations.get('narrative_focus'):
-                prompt = f"A compelling narrative illustration: {prompt}"
+            enhanced_parts = []
+
+            # Add artistic style prefix based on configuration
+            if "pencil sketch" in prompt.lower() or "shepard" in prompt.lower():
+                style_prefix = "A pencil sketch illustration in the style of E.H. Shepard showing"
+                enhanced_parts.append(style_prefix)
+                enhanced_parts.append(prompt)
+                enhanced_parts.extend([
+                    "Delicate line work, expressive faces, gentle shading, whimsical yet unsettling atmosphere",
+                    "Classic book illustration style with fine crosshatching and soft pencil textures"
+                ])
+            else:
+                enhanced_parts = [f"A masterfully crafted illustration: {prompt}"]
+                enhanced_parts.append("Professional illustration quality")
 
         elif provider == ImageProvider.IMAGEN4:
-            # Imagen4 excels with cinematic language
-            if optimizations.get('cinematic_quality'):
-                prompt = f"Cinematic scene: {prompt}"
+            enhanced_parts = []
+
+            if "pencil sketch" in prompt.lower() or "shepard" in prompt.lower():
+                style_prefix = "E.H. Shepard style pencil drawing:"
+                enhanced_parts.append(style_prefix)
+                enhanced_parts.append(prompt)
+                enhanced_parts.extend([
+                    "Detailed linework showing environmental elements and character interactions",
+                    "Soft graphite shading, crosshatching techniques, illustration book quality",
+                    "Classic British illustration aesthetic with gentle, flowing lines"
+                ])
+            else:
+                enhanced_parts = [f"Cinematic artistic scene: {prompt}"]
+                enhanced_parts.append("Professional artistic rendering")
 
         elif provider == ImageProvider.FLUX:
-            # Flux responds well to artistic technique emphasis
-            if optimizations.get('artistic_flexibility'):
-                prompt = f"Masterful artistic interpretation: {prompt}"
+            enhanced_parts = []
 
-        # Ensure prompt length is appropriate
+            if "pencil sketch" in prompt.lower() or "shepard" in prompt.lower():
+                style_prefix = "Detailed pencil sketch in E.H. Shepard's illustration style:"
+                enhanced_parts.append(style_prefix)
+                enhanced_parts.append(prompt)
+                enhanced_parts.extend([
+                    "Fine line art with crosshatching, soft graphite shading, expressive character work",
+                    "Classic children's book illustration aesthetic, delicate linework, emotive facial features"
+                ])
+            else:
+                enhanced_parts = [f"Masterful artistic interpretation: {prompt}"]
+                enhanced_parts.append("Superior artistic technique")
+
+        else:
+            enhanced_parts = [prompt]
+
+        # Combine all parts
+        enhanced_prompt = " ".join(enhanced_parts)
+
+        # Ensure optimal length while preserving detail
         max_length = {
             ImageProvider.DALLE: 400,
             ImageProvider.IMAGEN4: 500,
             ImageProvider.FLUX: 600
         }.get(provider, 400)
 
-        if len(prompt) > max_length:
-            prompt = prompt[:max_length-3] + "..."
+        if len(enhanced_prompt) > max_length:
+            # Truncate while preserving essential artistic elements
+            essential_parts = enhanced_parts[0]  # Keep the style prefix and main description
+            if len(essential_parts) <= max_length:
+                enhanced_prompt = essential_parts
+            else:
+                enhanced_prompt = essential_parts[:max_length-3] + "..."
 
-        return prompt
+        return enhanced_prompt

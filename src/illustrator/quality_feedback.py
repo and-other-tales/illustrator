@@ -27,6 +27,16 @@ class QualityMetric(str, Enum):
     NARRATIVE_RELEVANCE = "narrative_relevance"
 
 
+class IterationReason(str, Enum):
+    """Reasons for prompt iteration."""
+    LOW_OVERALL_QUALITY = "low_overall_quality"
+    POOR_ACCURACY = "poor_accuracy"
+    WEAK_TECHNICAL_QUALITY = "weak_technical_quality"
+    INSUFFICIENT_DETAIL = "insufficient_detail"
+    WEAK_EMOTIONAL_RESONANCE = "weak_emotional_resonance"
+    INCONSISTENT_STYLE = "inconsistent_style"
+
+
 @dataclass
 class QualityAssessment:
     """Quality assessment for a generated image."""
@@ -48,6 +58,31 @@ class PromptPerformance:
     avg_quality_scores: Dict[QualityMetric, float]
     usage_count: int
     last_updated: str
+
+
+@dataclass
+class PromptIteration:
+    """Represents a single prompt improvement iteration."""
+    iteration_number: int
+    original_prompt: IllustrationPrompt
+    improved_prompt: IllustrationPrompt
+    quality_assessment: QualityAssessment
+    iteration_reasons: List[IterationReason]
+    improvements_made: List[str]
+    timestamp: str
+
+
+@dataclass
+class QualityReport:
+    """Comprehensive quality report for a prompt improvement session."""
+    session_id: str
+    initial_prompt: IllustrationPrompt
+    final_prompt: IllustrationPrompt
+    iterations: List[PromptIteration]
+    total_improvements: int
+    final_quality_score: float
+    processing_time: float
+    success: bool
 
 
 class QualityAnalyzer:
