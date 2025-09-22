@@ -302,10 +302,15 @@ function handleWebSocketMessage(data) {
         updateProcessingStatus(data);
     }
 
+    // Handle new images
+    if (data.type === 'image' && data.image_url) {
+        displayGeneratedImage(data.image_url, data.prompt || '');
+    }
+
     // Handle completion
-    if (data.status === 'completed') {
+    if (data.status === 'completed' || data.type === 'complete') {
         window.illustratorApp.processing = false;
-        showSuccess('Processing completed successfully!');
+        showSuccess(`Processing completed successfully! Generated ${data.images_count || 0} images.`);
 
         // Redirect to gallery if available
         if (data.manuscript_id) {
@@ -316,9 +321,24 @@ function handleWebSocketMessage(data) {
     }
 
     // Handle errors
-    if (data.status === 'error') {
+    if (data.status === 'error' || data.type === 'error') {
         window.illustratorApp.processing = false;
         showError(`Processing error: ${data.error || 'Unknown error'}`);
+    }
+
+    // Handle progress updates
+    if (data.type === 'progress' && data.progress !== undefined) {
+        updateProgress(data.progress, data.message);
+    }
+
+    // Handle log messages
+    if (data.type === 'log') {
+        displayLogMessage(data);
+    }
+
+    // Handle step updates
+    if (data.type === 'step') {
+        updateStep(data.step, data.status);
     }
 }
 
@@ -340,6 +360,99 @@ function updateProcessingStatus(data) {
     const chapterEl = document.getElementById('currentChapter');
     if (chapterEl && data.current_chapter) {
         chapterEl.textContent = `Chapter ${data.current_chapter} of ${data.total_chapters}`;
+    }
+}
+
+function displayGeneratedImage(imageUrl, prompt) {
+    // Find or create images container
+    let imagesContainer = document.getElementById('generatedImages');
+    if (!imagesContainer) {
+        // Create container if it doesn't exist
+        const processingContainer = document.querySelector('.processing-container') || document.body;
+        imagesContainer = document.createElement('div');
+        imagesContainer.id = 'generatedImages';
+        imagesContainer.className = 'generated-images-container mt-4';
+        imagesContainer.innerHTML = '<h5>Generated Images</h5><div class="row" id="imageRow"></div>';
+        processingContainer.appendChild(imagesContainer);
+    }
+
+    // Add new image to container
+    const imageRow = document.getElementById('imageRow');
+    if (imageRow) {
+        const imageCol = document.createElement('div');
+        imageCol.className = 'col-md-4 mb-3';
+        imageCol.innerHTML = `
+            <div class="card">
+                <img src="${imageUrl}" class="card-img-top" alt="Generated Image"
+                     onclick="openLightbox('${imageUrl}', '${escapeHtml(prompt)}')"
+                     style="cursor: pointer; height: 200px; object-fit: cover;">
+                <div class="card-body">
+                    <p class="card-text small text-muted">${escapeHtml(prompt.substring(0, 100))}${prompt.length > 100 ? '...' : ''}</p>
+                </div>
+            </div>
+        `;
+        imageRow.appendChild(imageCol);
+
+        // Show success message for image generation
+        showSuccess('New image generated!', 3000);
+    }
+}
+
+function updateProgress(progress, message) {
+    // Update progress bar
+    const progressBar = document.querySelector('.progress-bar');
+    if (progressBar) {
+        progressBar.style.width = `${progress}%`;
+        progressBar.textContent = `${progress}%`;
+        progressBar.setAttribute('aria-valuenow', progress);
+    }
+
+    // Update status message
+    const statusEl = document.getElementById('processingStatus');
+    if (statusEl && message) {
+        statusEl.textContent = message;
+    }
+}
+
+function displayLogMessage(logData) {
+    // Find or create log container
+    let logContainer = document.getElementById('processingLog');
+    if (!logContainer) {
+        const processingContainer = document.querySelector('.processing-container') || document.body;
+        logContainer = document.createElement('div');
+        logContainer.id = 'processingLog';
+        logContainer.className = 'processing-log mt-3';
+        logContainer.innerHTML = '<h6>Processing Log</h6><div class="log-messages" style="height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px;"></div>';
+        processingContainer.appendChild(logContainer);
+    }
+
+    const logMessages = document.querySelector('.log-messages');
+    if (logMessages && logData.message) {
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry text-${logData.level === 'error' ? 'danger' : logData.level === 'warning' ? 'warning' : logData.level === 'success' ? 'success' : 'muted'}`;
+        logEntry.innerHTML = `<small>[${new Date().toLocaleTimeString()}] ${escapeHtml(logData.message)}</small>`;
+        logMessages.appendChild(logEntry);
+
+        // Auto-scroll to bottom
+        logMessages.scrollTop = logMessages.scrollHeight;
+    }
+}
+
+function updateStep(stepNumber, status) {
+    // Update processing steps if they exist
+    const stepEl = document.getElementById(`step-${stepNumber}`);
+    if (stepEl) {
+        stepEl.className = `step-item step-${status}`;
+        const icon = stepEl.querySelector('.step-icon');
+        if (icon) {
+            if (status === 'completed') {
+                icon.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i>';
+            } else if (status === 'processing') {
+                icon.innerHTML = '<i class="bi bi-arrow-repeat text-primary"></i>';
+            } else {
+                icon.innerHTML = '<i class="bi bi-circle text-muted"></i>';
+            }
+        }
     }
 }
 

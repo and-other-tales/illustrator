@@ -51,6 +51,11 @@ app.add_middleware(
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# Mount generated images directory
+GENERATED_IMAGES_DIR = Path("illustrator_output") / "generated_images"
+GENERATED_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/generated", StaticFiles(directory=str(GENERATED_IMAGES_DIR)), name="generated")
+
 # Templates
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -295,7 +300,7 @@ async def run_processing_workflow(
             for result in results:
                 if result.get("success") and result.get("file_path"):
                     # Convert file path to web-accessible URL
-                    image_url = f"/static/generated/{Path(result['file_path']).name}"
+                    image_url = f"/generated/{Path(result['file_path']).name}"
                     await connection_manager.send_personal_message(
                         json.dumps({
                             "type": "image",
