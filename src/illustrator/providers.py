@@ -16,6 +16,18 @@ from illustrator.models import (
 from illustrator.prompt_engineering import PromptEngineer
 
 
+def _format_style_modifiers(style_modifiers: List[Any]) -> str:
+    """Helper function to safely format style modifiers, handling tuples."""
+    formatted = []
+    for m in style_modifiers:
+        if isinstance(m, tuple):
+            # For tuples, join the elements with spaces
+            formatted.append(" ".join(str(elem) for elem in m))
+        else:
+            formatted.append(str(m))
+    return ", ".join(formatted)
+
+
 class ImageGenerationProvider(ABC):
     """Abstract base class for image generation providers."""
 
@@ -192,7 +204,7 @@ class DalleProvider(ImageGenerationProvider):
 
         return IllustrationPrompt(
             provider=ImageProvider.DALLE,
-            prompt=f"{main_prompt}. {', '.join(str(m) for m in style_modifiers)}",
+            prompt=f"{main_prompt}. {_format_style_modifiers(style_modifiers)}",
             style_modifiers=style_modifiers,
             negative_prompt=negative_prompt,  # Note: DALL-E doesn't use negative prompts, but stored for compatibility
             technical_params=technical_params,
@@ -326,7 +338,7 @@ class Imagen4Provider(ImageGenerationProvider):
 
         return IllustrationPrompt(
             provider=ImageProvider.IMAGEN4,
-            prompt=f"{main_prompt}. {', '.join(str(m) for m in style_modifiers)}",
+            prompt=f"{main_prompt}. {_format_style_modifiers(style_modifiers)}",
             style_modifiers=style_modifiers,
             negative_prompt=negative_prompt,
             technical_params=technical_params,
@@ -466,7 +478,7 @@ class FluxProvider(ImageGenerationProvider):
 
         return IllustrationPrompt(
             provider=ImageProvider.FLUX,
-            prompt=f"{main_prompt}. {', '.join(str(m) for m in style_modifiers)}",
+            prompt=f"{main_prompt}. {_format_style_modifiers(style_modifiers)}",
             style_modifiers=style_modifiers,
             negative_prompt=negative_prompt,
             technical_params=technical_params,

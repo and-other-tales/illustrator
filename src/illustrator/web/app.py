@@ -619,7 +619,8 @@ class WebSocketIllustrationGenerator:
                 style_modifiers_str = []
                 for modifier in illustration_prompt.style_modifiers[:3]:
                     if isinstance(modifier, tuple):
-                        style_modifiers_str.append(str(modifier))
+                        # For tuples, join the tuple elements with spaces
+                        style_modifiers_str.append(" ".join(str(elem) for elem in modifier))
                     else:
                         style_modifiers_str.append(str(modifier))
 
@@ -726,28 +727,49 @@ class WebSocketIllustrationGenerator:
                         with open(file_path, 'wb') as f:
                             f.write(image_data)
                     elif 'url' in result:
-                        # For URL-based results, we'd need to download
-                        # For now, just log the URL
-                        await self.connection_manager.send_personal_message(
-                            json.dumps({
-                                "type": "log",
-                                "level": "info",
-                                "message": f"✅ Generated image {i+1}: {result['url']}"
-                            }),
-                            self.session_id
-                        )
+                        # Download the image from URL
+                        try:
+                            import aiohttp
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get(result['url']) as response:
+                                    if response.status == 200:
+                                        image_data = await response.read()
+                                        with open(file_path, 'wb') as f:
+                                            f.write(image_data)
+                                        await self.connection_manager.send_personal_message(
+                                            json.dumps({
+                                                "type": "log",
+                                                "level": "info",
+                                                "message": f"✅ Downloaded and saved image {i+1}"
+                                            }),
+                                            self.session_id
+                                        )
+                                    else:
+                                        raise Exception(f"Failed to download image: HTTP {response.status}")
+                        except Exception as download_error:
+                            await self.connection_manager.send_personal_message(
+                                json.dumps({
+                                    "type": "log",
+                                    "level": "warning",
+                                    "message": f"⚠️ Failed to download image {i+1}: {download_error}. URL: {result['url']}"
+                                }),
+                                self.session_id
+                            )
+                            # Set file_path to None to indicate no file was saved
+                            file_path = None
 
-                    result_info = {
-                        'success': True,
-                        'file_path': str(file_path),
-                        'prompt': str(prompt),
-                        'chapter_number': chapter.number,
-                        'scene_number': i + 1,
-                        'provider': str(self.generator.provider),
-                        'generated_at': timestamp
-                    }
-
-                    generated_images.append(result_info)
+                    # Only add to results if we successfully saved a file
+                    if file_path is not None:
+                        result_info = {
+                            'success': True,
+                            'file_path': str(file_path),
+                            'prompt': str(prompt),
+                            'chapter_number': chapter.number,
+                            'scene_number': i + 1,
+                            'provider': str(self.generator.provider),
+                            'generated_at': timestamp
+                        }
+                        generated_images.append(result_info)
 
                     await self.connection_manager.send_personal_message(
                         json.dumps({

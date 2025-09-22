@@ -175,7 +175,7 @@ Return JSON with scores for each metric."""
 Prompt to analyze: {prompt.prompt}
 
 Provider: {prompt.provider.value}
-Style modifiers: {', '.join(str(m) for m in prompt.style_modifiers)}
+Style modifiers: {', '.join(str(m) if not isinstance(m, tuple) else ' '.join(str(elem) for elem in m) for m in prompt.style_modifiers)}
 Technical params: {json.dumps(prompt.technical_params, indent=2)}
 
 Original scene text: {emotional_moment.text_excerpt}
@@ -371,7 +371,7 @@ Return an improved prompt that maintains the original intent while addressing th
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"""
 Original prompt: {original_prompt.prompt}
-Style modifiers: {', '.join(str(m) for m in original_prompt.style_modifiers)}
+Style modifiers: {', '.join(str(m) if not isinstance(m, tuple) else ' '.join(str(elem) for elem in m) for m in original_prompt.style_modifiers)}
 Technical params: {json.dumps(original_prompt.technical_params)}
 
 Source scene: {emotional_moment.text_excerpt}

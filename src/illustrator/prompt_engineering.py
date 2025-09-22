@@ -1028,8 +1028,15 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         )
         prompt_parts.append(atmospheric_guidance)
 
-        # Style modifiers
-        style_modifiers_text = ", ".join(str(m) for m in style_translation['style_modifiers'])
+        # Style modifiers (handle tuples properly)
+        style_modifiers_formatted = []
+        for m in style_translation['style_modifiers']:
+            if isinstance(m, tuple):
+                # For tuples, join the elements with spaces
+                style_modifiers_formatted.append(" ".join(str(elem) for elem in m))
+            else:
+                style_modifiers_formatted.append(str(m))
+        style_modifiers_text = ", ".join(style_modifiers_formatted)
         prompt_parts.append(style_modifiers_text)
 
         # Join all parts
