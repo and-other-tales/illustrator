@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}Style Configuration - Manuscript Illustrator{% endblock %}
+
+{% block page_icon %}
+<i class="bi bi-palette me-2"></i>
+{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="/manuscript/{{ manuscript_id }}">Manuscript</a></li>
+        <li class="breadcrumb-item active">Style Configuration</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-palette me-2"></i>Configure Illustration Style
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="styleConfigForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <!-- Image Provider Selection -->
+                            <div class="mb-4">
+                                <label for="imageProvider" class="form-label fw-semibold">
+                                    <i class="bi bi-cpu me-2"></i>Image Provider
+                                </label>
+                                <select class="form-select" id="imageProvider" name="image_provider" required>
+                                    <option value="">Select Provider...</option>
+                                    <option value="dalle">DALL-E</option>
+                                    <option value="imagen4">Imagen 4</option>
+                                    <option value="flux">Flux</option>
+                                </select>
+                                <div class="form-text">Choose the AI image generation provider</div>
+                            </div>
+
+                            <!-- Art Style -->
+                            <div class="mb-4">
+                                <label for="artStyle" class="form-label fw-semibold">
+                                    <i class="bi bi-brush me-2"></i>Art Style
+                                </label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="artStyle"
+                                       name="art_style"
+                                       value="digital painting"
+                                       required>
+                                <div class="form-text">Base artistic style for illustrations</div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <!-- Color Palette -->
+                            <div class="mb-4">
+                                <label for="colorPalette" class="form-label fw-semibold">
+                                    <i class="bi bi-palette-fill me-2"></i>Color Palette
+                                </label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="colorPalette"
+                                       name="color_palette"
+                                       placeholder="e.g., warm tones, muted colors, vibrant">
+                                <div class="form-text">Optional: Specify color preferences</div>
+                            </div>
+
+                            <!-- Artistic Influences -->
+                            <div class="mb-4">
+                                <label for="artisticInfluences" class="form-label fw-semibold">
+                                    <i class="bi bi-person-hearts me-2"></i>Artistic Influences
+                                </label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="artisticInfluences"
+                                       name="artistic_influences"
+                                       placeholder="e.g., Van Gogh, Studio Ghibli, Art Nouveau">
+                                <div class="form-text">Optional: Artists or art movements for inspiration</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Style Configuration File Path -->
+                    <div class="mb-4">
+                        <label for="styleConfigPath" class="form-label fw-semibold">
+                            <i class="bi bi-file-earmark-text me-2"></i>Style Configuration File
+                        </label>
+                        <input type="text"
+                               class="form-control"
+                               id="styleConfigPath"
+                               name="style_config_path"
+                               placeholder="Optional: Path to custom style configuration file">
+                        <div class="form-text">Advanced: Load style settings from a configuration file</div>
+                    </div>
+
+                    <!-- Processing Options -->
+                    <div class="mb-4">
+                        <label for="maxEmotionalMoments" class="form-label fw-semibold">
+                            <i class="bi bi-heart me-2"></i>Max Emotional Moments
+                        </label>
+                        <input type="number"
+                               class="form-control"
+                               id="maxEmotionalMoments"
+                               name="max_emotional_moments"
+                               value="10"
+                               min="1"
+                               max="20"
+                               required>
+                        <div class="form-text">Maximum number of key emotional moments to illustrate (1-20)</div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="/manuscript/{{ manuscript_id }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left me-2"></i>Back to Manuscript
+                        </a>
+
+                        <div>
+                            <button type="button" class="btn btn-outline-primary me-2" onclick="previewStyle()">
+                                <i class="bi bi-eye me-2"></i>Preview Style
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-play-fill me-2"></i>Start Processing
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Style Preview Card -->
+        <div class="card shadow mt-4" id="previewCard" style="display: none;">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-eye me-2"></i>Style Preview
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="previewContent" class="text-muted">
+                    Select your style options and click "Preview Style" to see how your settings will affect the illustrations.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form submission handler
+document.getElementById('styleConfigForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const styleConfig = Object.fromEntries(formData.entries());
+
+    // Convert string numbers to actual numbers
+    styleConfig.max_emotional_moments = parseInt(styleConfig.max_emotional_moments);
+
+    // Remove empty optional fields
+    Object.keys(styleConfig).forEach(key => {
+        if (!styleConfig[key] || styleConfig[key].trim() === '') {
+            delete styleConfig[key];
+        }
+    });
+
+    const requestData = {
+        manuscript_id: "{{ manuscript_id }}",
+        style_config: styleConfig,
+        max_emotional_moments: styleConfig.max_emotional_moments || 10
+    };
+
+    try {
+        // Disable form while processing
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>Starting...';
+
+        const response = await fetch('/api/process', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            // Redirect to processing page
+            window.location.href = `/manuscript/{{ manuscript_id }}/process?session_id=${result.session_id}`;
+        } else {
+            const error = await response.json();
+            alert('Error starting processing: ' + (error.detail || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    } finally {
+        // Re-enable form
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+});
+
+// Style preview function
+function previewStyle() {
+    const formData = new FormData(document.getElementById('styleConfigForm'));
+    const styleConfig = Object.fromEntries(formData.entries());
+
+    const previewCard = document.getElementById('previewCard');
+    const previewContent = document.getElementById('previewContent');
+
+    let preview = '<div class="row">';
+
+    if (styleConfig.image_provider) {
+        preview += `<div class="col-md-6 mb-2"><strong>Provider:</strong> ${styleConfig.image_provider.toUpperCase()}</div>`;
+    }
+
+    if (styleConfig.art_style) {
+        preview += `<div class="col-md-6 mb-2"><strong>Art Style:</strong> ${styleConfig.art_style}</div>`;
+    }
+
+    if (styleConfig.color_palette) {
+        preview += `<div class="col-md-6 mb-2"><strong>Colors:</strong> ${styleConfig.color_palette}</div>`;
+    }
+
+    if (styleConfig.artistic_influences) {
+        preview += `<div class="col-md-6 mb-2"><strong>Influences:</strong> ${styleConfig.artistic_influences}</div>`;
+    }
+
+    if (styleConfig.max_emotional_moments) {
+        preview += `<div class="col-md-6 mb-2"><strong>Max Moments:</strong> ${styleConfig.max_emotional_moments}</div>`;
+    }
+
+    preview += '</div>';
+
+    if (preview === '<div class="row"></div>') {
+        preview = '<div class="text-muted">No style configuration specified yet.</div>';
+    }
+
+    previewContent.innerHTML = preview;
+    previewCard.style.display = 'block';
+}
+</script>
+{% endblock %}
