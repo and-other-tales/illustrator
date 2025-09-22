@@ -51,7 +51,7 @@ class ChapterResponse(BaseModel):
 
 class StyleConfigRequest(BaseModel):
     """Request model for style configuration."""
-    image_provider: ImageProvider
+    image_provider: Optional[str] = None  # Changed to string to match frontend
     art_style: str = "digital painting"
     color_palette: Optional[str] = None
     artistic_influences: Optional[str] = None
@@ -67,7 +67,7 @@ class StyleConfigSaveRequest(BaseModel):
 class ProcessingRequest(BaseModel):
     """Request model to start processing a manuscript."""
     manuscript_id: str
-    style_config: StyleConfigRequest
+    style_config: Dict[str, Any]  # Changed to dict to match frontend data
     max_emotional_moments: int = Field(default=10, ge=1, le=20)
 
 

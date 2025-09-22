@@ -16,6 +16,7 @@ from rich.console import Console
 
 from illustrator.web.routes import manuscripts, chapters
 from illustrator.web.models.web_models import ConnectionManager
+from illustrator.models import EmotionalTone
 
 console = Console()
 
@@ -108,10 +109,12 @@ async def run_processing_workflow(
     try:
         # Import the processing logic
         import sys
+        import base64
         from pathlib import Path
         sys.path.append(str(Path(__file__).parent.parent.parent.parent))
         from generate_scene_illustrations import ComprehensiveSceneAnalyzer, IllustrationGenerator
-        from src.illustrator.database import DatabaseManager
+        from illustrator.web.routes.manuscripts import get_saved_manuscripts
+        import uuid
 
         # Send initial status
         await connection_manager.send_personal_message(
@@ -123,13 +126,26 @@ async def run_processing_workflow(
             session_id
         )
 
-        # Initialize components
-        db_manager = DatabaseManager()
-        analyzer = ComprehensiveSceneAnalyzer()
-        generator = IllustrationGenerator(
-            image_provider=style_config.get("image_provider", "imagen4"),
-            art_style=style_config.get("art_style", "digital painting")
-        )
+        # Initialize components with WebSocket-enabled analyzer
+        analyzer = WebSocketComprehensiveSceneAnalyzer(connection_manager, session_id)
+        from illustrator.models import ImageProvider
+
+        # Map string to ImageProvider enum
+        provider_str = style_config.get("image_provider", "imagen4").lower()
+        if provider_str == "dalle":
+            provider = ImageProvider.DALLE
+        elif provider_str == "imagen4":
+            provider = ImageProvider.IMAGEN4
+        elif provider_str == "flux":
+            provider = ImageProvider.FLUX
+        else:
+            provider = ImageProvider.DALLE  # default fallback
+
+        # Create output directory
+        output_dir = Path("illustrator_output") / "generated_images"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        generator = WebSocketIllustrationGenerator(connection_manager, session_id, provider, output_dir)
 
         # Load manuscript chapters
         await connection_manager.send_personal_message(
@@ -141,11 +157,19 @@ async def run_processing_workflow(
             session_id
         )
 
-        manuscript = db_manager.get_manuscript(manuscript_id)
+        # Find manuscript by ID (using the same logic as manuscripts.py)
+        manuscripts = get_saved_manuscripts()
+        manuscript = None
+        for saved_manuscript in manuscripts:
+            generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, saved_manuscript.file_path))
+            if generated_id == manuscript_id:
+                manuscript = saved_manuscript
+                break
+
         if not manuscript:
             raise Exception(f"Manuscript {manuscript_id} not found")
 
-        chapters = db_manager.get_chapters_by_manuscript_id(manuscript_id)
+        chapters = manuscript.chapters
         if not chapters:
             raise Exception(f"No chapters found for manuscript {manuscript_id}")
 
@@ -173,6 +197,15 @@ async def run_processing_workflow(
             )
 
             # Analyze chapter for emotional moments
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "info",
+                    "message": f"🔍 Deep analysis of Chapter {chapter.number}: {chapter.title}"
+                }),
+                session_id
+            )
+
             emotional_moments = await analyzer.analyze_chapter_comprehensive(chapter)
 
             await connection_manager.send_personal_message(
@@ -195,14 +228,26 @@ async def run_processing_workflow(
             )
 
             prompts = []
-            for moment in emotional_moments[:max_emotional_moments]:
+            for idx, moment in enumerate(emotional_moments[:max_emotional_moments], 1):
+                primary_tone = moment.emotional_tones[0] if moment.emotional_tones else "neutral"
                 prompt_text = generator.create_detailed_prompt(
-                    moment.description,
-                    moment.tone,
+                    moment.text_excerpt,
+                    primary_tone,
                     chapter.title,
                     style_config.get("art_style", "digital painting")
                 )
                 prompts.append(prompt_text)
+
+                # Log detailed prompt generation
+                excerpt_preview = moment.text_excerpt[:80] + "..." if len(moment.text_excerpt) > 80 else moment.text_excerpt
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "info",
+                        "message": f"      Prompt {idx}: [{primary_tone}] \"{excerpt_preview}\" → {style_config.get('art_style', 'digital painting')} illustration"
+                    }),
+                    session_id
+                )
 
             if i == 0:
                 await connection_manager.send_personal_message(
@@ -303,6 +348,285 @@ async def run_processing_workflow(
             }),
             session_id
         )
+
+
+class WebSocketComprehensiveSceneAnalyzer:
+    """Enhanced analyzer that sends progress updates via WebSocket."""
+
+    def __init__(self, connection_manager, session_id, llm_model: str = "claude-sonnet-4-20250514"):
+        # Import here to avoid circular imports
+        from generate_scene_illustrations import ComprehensiveSceneAnalyzer
+        self.analyzer = ComprehensiveSceneAnalyzer(llm_model)
+        self.connection_manager = connection_manager
+        self.session_id = session_id
+
+    async def analyze_chapter_comprehensive(self, chapter):
+        """Analyze chapter with WebSocket progress updates."""
+        # Send initial analysis message
+        await self.connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "info",
+                "message": f"📑 Created detailed text segments for analysis"
+            }),
+            self.session_id
+        )
+
+        # Create segments similar to the original analyzer
+        segments = self.analyzer._create_detailed_segments(chapter.content, segment_size=300, overlap=50)
+
+        await self.connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "info",
+                "message": f"   📑 Created {len(segments)} detailed text segments"
+            }),
+            self.session_id
+        )
+
+        # Process segments with progress updates
+        all_scored_moments = []
+        total_segments = len(segments)
+
+        for i, segment in enumerate(segments):
+            # Send progress update every few segments with details about high-scoring segments
+            if i % max(1, total_segments // 20) == 0:
+                progress = int((i / total_segments) * 100)
+                await self.connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "info",
+                        "message": f"⠋ Analyzing segments... {progress}% ({i}/{total_segments}) - Found {len(all_scored_moments)} promising moments so far"
+                    }),
+                    self.session_id
+                )
+
+            # Multi-criteria scoring
+            emotional_score = await self.analyzer._score_emotional_intensity(segment)
+            visual_score = await self.analyzer._score_visual_potential(segment)
+            narrative_score = await self.analyzer._score_narrative_significance(segment)
+            dialogue_score = await self.analyzer._score_dialogue_richness(segment)
+
+            # Combined score with weights for illustration potential
+            combined_score = (
+                emotional_score * 0.3 +
+                visual_score * 0.4 +
+                narrative_score * 0.2 +
+                dialogue_score * 0.1
+            )
+
+            if combined_score >= 0.4:  # Lower threshold for more candidates
+                moment = await self.analyzer._create_detailed_moment(segment, combined_score, chapter)
+                all_scored_moments.append((moment, combined_score))
+
+                # Log high-scoring moments as they're discovered (only show very high scores to avoid spam)
+                if combined_score >= 0.7:
+                    segment_preview = segment[:60] + "..." if len(segment) > 60 else segment
+                    await self.connection_manager.send_personal_message(
+                        json.dumps({
+                            "type": "log",
+                            "level": "info",
+                            "message": f"      🌟 High-impact moment found (Score: {combined_score:.2f}): \"{segment_preview}\""
+                        }),
+                        self.session_id
+                    )
+
+        await self.connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "info",
+                "message": f"   ✅ Found {len(all_scored_moments)} high-potential illustration moments"
+            }),
+            self.session_id
+        )
+
+        # Log details about each high-potential moment
+        for i, (moment, score) in enumerate(all_scored_moments[:10], 1):  # Show top 10
+            excerpt_preview = moment.text_excerpt[:100] + "..." if len(moment.text_excerpt) > 100 else moment.text_excerpt
+            tones_str = ", ".join([tone.value for tone in moment.emotional_tones])
+            await self.connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "info",
+                    "message": f"      #{i} (Score: {score:.2f}) [{tones_str}]: \"{excerpt_preview}\""
+                }),
+                self.session_id
+            )
+
+        # Select diverse moments
+        selected_moments = await self.analyzer._select_diverse_moments(all_scored_moments, target_count=10)
+
+        await self.connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "info",
+                "message": f"   🎨 Selected {len(selected_moments)} diverse illustration scenes"
+            }),
+            self.session_id
+        )
+
+        # Log details about each selected moment
+        for i, moment in enumerate(selected_moments, 1):
+            excerpt_preview = moment.text_excerpt[:120] + "..." if len(moment.text_excerpt) > 120 else moment.text_excerpt
+            tones_str = ", ".join([tone.value for tone in moment.emotional_tones])
+            await self.connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "info",
+                    "message": f"      Selected #{i} [{tones_str}] (Intensity: {moment.intensity_score:.2f}): \"{excerpt_preview}\""
+                }),
+                self.session_id
+            )
+
+        return selected_moments
+
+
+class WebSocketIllustrationGenerator:
+    """Enhanced image generator that sends progress updates via WebSocket."""
+
+    def __init__(self, connection_manager, session_id, provider, output_dir):
+        # Import here to avoid circular imports
+        from generate_scene_illustrations import IllustrationGenerator
+        self.generator = IllustrationGenerator(provider, output_dir)
+        self.connection_manager = connection_manager
+        self.session_id = session_id
+
+    def create_detailed_prompt(self, description, tone, chapter_title, art_style):
+        """Create a detailed prompt for image generation."""
+        # Create a comprehensive prompt based on the emotional moment
+        tone_description = {
+            EmotionalTone.JOY: "bright, uplifting, warm colors",
+            EmotionalTone.MELANCHOLY: "soft, muted tones, contemplative mood",
+            EmotionalTone.TENSION: "dramatic lighting, sharp contrasts, dynamic composition",
+            EmotionalTone.MYSTERY: "shadowy, atmospheric, intriguing lighting",
+            EmotionalTone.ROMANCE: "warm, intimate lighting, soft focus",
+            EmotionalTone.FEAR: "dark, ominous, high contrast",
+            EmotionalTone.ANTICIPATION: "golden hour lighting, expansive composition",
+            EmotionalTone.SADNESS: "soft, muted tones, melancholic mood",
+            EmotionalTone.EXCITEMENT: "vibrant, energetic colors, dynamic composition",
+            EmotionalTone.PEACE: "serene, calm lighting, balanced composition",
+            EmotionalTone.ADVENTURE: "epic, cinematic lighting, heroic composition"
+        }.get(tone, "balanced lighting and composition")
+
+        prompt = f"""
+        {art_style} illustration of: {description}
+
+        Scene from: {chapter_title}
+        Mood: {tone_description}
+
+        Style: High-quality {art_style}, detailed, cinematic composition, professional illustration
+        Technical: Sharp focus, vibrant colors, masterpiece quality, 8K resolution
+        """.strip()
+
+        return prompt
+
+    async def generate_images(self, prompts, chapter):
+        """Generate images with WebSocket progress updates."""
+        generated_images = []
+        total_prompts = len(prompts)
+
+        await self.connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "info",
+                "message": f"🎨 Starting image generation for {total_prompts} prompts..."
+            }),
+            self.session_id
+        )
+
+        for i, prompt in enumerate(prompts):
+            try:
+                # Send progress update with more detail
+                progress = int(((i + 1) / total_prompts) * 100)
+                # Extract scene description from prompt for logging
+                prompt_preview = str(prompt)[:150] + "..." if len(str(prompt)) > 150 else str(prompt)
+                await self.connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "info",
+                        "message": f"🖼️ Generating image {i+1}/{total_prompts} ({progress}%): {prompt_preview}"
+                    }),
+                    self.session_id
+                )
+
+                result = await self.generator.image_provider.generate_image(prompt)
+
+                if result.get('success'):
+                    # Save the image
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"chapter_{chapter.number}_scene_{i+1}_{timestamp}.png"
+                    file_path = self.generator.output_dir / filename
+
+                    # Ensure output directory exists
+                    self.generator.output_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Save image based on result type
+                    if 'base64_image' in result:
+                        image_data = base64.b64decode(result['base64_image'])
+                        with open(file_path, 'wb') as f:
+                            f.write(image_data)
+                    elif 'url' in result:
+                        # For URL-based results, we'd need to download
+                        # For now, just log the URL
+                        await self.connection_manager.send_personal_message(
+                            json.dumps({
+                                "type": "log",
+                                "level": "info",
+                                "message": f"✅ Generated image {i+1}: {result['url']}"
+                            }),
+                            self.session_id
+                        )
+
+                    result_info = {
+                        'success': True,
+                        'file_path': str(file_path),
+                        'prompt': prompt.detailed_prompt if hasattr(prompt, 'detailed_prompt') else str(prompt),
+                        'chapter_number': chapter.number,
+                        'scene_number': i + 1,
+                        'provider': str(self.generator.provider),
+                        'generated_at': timestamp
+                    }
+
+                    generated_images.append(result_info)
+
+                    await self.connection_manager.send_personal_message(
+                        json.dumps({
+                            "type": "log",
+                            "level": "success",
+                            "message": f"✅ Successfully generated image {i+1}/{total_prompts}"
+                        }),
+                        self.session_id
+                    )
+                else:
+                    await self.connection_manager.send_personal_message(
+                        json.dumps({
+                            "type": "log",
+                            "level": "warning",
+                            "message": f"❌ Failed to generate image {i+1}/{total_prompts}: {result.get('error', 'Unknown error')}"
+                        }),
+                        self.session_id
+                    )
+
+            except Exception as e:
+                await self.connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "error",
+                        "message": f"❌ Error generating image {i+1}/{total_prompts}: {str(e)}"
+                    }),
+                    self.session_id
+                )
+
+        await self.connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "success",
+                "message": f"🎉 Image generation complete! Generated {len(generated_images)} out of {total_prompts} images."
+            }),
+            self.session_id
+        )
+
+        return generated_images
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -30,6 +30,10 @@ class EmotionalTone(str, Enum):
     MYSTERY = "mystery"
     ROMANCE = "romance"
     ADVENTURE = "adventure"
+    # Additional emotional tones used in tests and other files
+    SUSPENSE = "suspense"
+    COURAGE = "courage"
+    NEUTRAL = "neutral"
 
 
 class Chapter(BaseModel):
