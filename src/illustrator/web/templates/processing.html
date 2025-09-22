@@ -246,6 +246,24 @@ function initializeProcessing() {
 
 async function startProcessingRequest() {
     try {
+        // First, load the saved style configuration
+        const styleResponse = await fetch('/api/manuscripts/{{ manuscript_id }}/style');
+        let styleConfig = null;
+
+        if (styleResponse.ok) {
+            const styleData = await styleResponse.json();
+            styleConfig = styleData.style_config;
+        }
+
+        // If no style config is saved, use defaults
+        if (!styleConfig) {
+            styleConfig = {
+                image_provider: "imagen4",
+                art_style: "digital painting"
+            };
+            addLogMessage('warning', 'No style configuration found. Using default settings.');
+        }
+
         const response = await fetch('/api/process', {
             method: 'POST',
             headers: {
@@ -253,10 +271,8 @@ async function startProcessingRequest() {
             },
             body: JSON.stringify({
                 manuscript_id: '{{ manuscript_id }}',
-                options: {
-                    generate_images: true,
-                    quality_review: true
-                }
+                style_config: styleConfig,
+                max_emotional_moments: 10
             })
         });
 

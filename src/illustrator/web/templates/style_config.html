@@ -180,10 +180,14 @@ document.getElementById('styleConfigForm').addEventListener('submit', async func
         }
     });
 
+    // Extract max_emotional_moments from styleConfig since it belongs at the top level
+    const maxEmotionalMoments = styleConfig.max_emotional_moments || 10;
+    delete styleConfig.max_emotional_moments;
+
     const requestData = {
         manuscript_id: "{{ manuscript_id }}",
         style_config: styleConfig,
-        max_emotional_moments: styleConfig.max_emotional_moments || 10
+        max_emotional_moments: maxEmotionalMoments
     };
 
     try {
