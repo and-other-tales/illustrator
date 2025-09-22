@@ -48,12 +48,20 @@
                                 <label for="artStyle" class="form-label fw-semibold">
                                     <i class="bi bi-brush me-2"></i>Art Style
                                 </label>
-                                <input type="text"
-                                       class="form-control"
-                                       id="artStyle"
-                                       name="art_style"
-                                       value="digital painting"
-                                       required>
+                                <select class="form-select" id="artStyle" name="art_style" required>
+                                    <option value="digital painting" selected>Digital Painting</option>
+                                    <option value="watercolor">Watercolor</option>
+                                    <option value="oil painting">Oil Painting</option>
+                                    <option value="pencil sketch">Pencil Sketch</option>
+                                    <option value="ink drawing">Ink Drawing</option>
+                                    <option value="acrylic painting">Acrylic Painting</option>
+                                    <option value="cartoon">Cartoon</option>
+                                    <option value="anime">Anime</option>
+                                    <option value="photorealistic">Photorealistic</option>
+                                    <option value="impressionist">Impressionist</option>
+                                    <option value="abstract">Abstract</option>
+                                    <option value="minimalist">Minimalist</option>
+                                </select>
                                 <div class="form-text">Base artistic style for illustrations</div>
                             </div>
                         </div>
