@@ -1,6 +1,7 @@
 """FastAPI web application for Manuscript Illustrator."""
 
 import os
+import json
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -11,9 +12,12 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from rich.console import Console
 
 from illustrator.web.routes import manuscripts, chapters
 from illustrator.web.models.web_models import ConnectionManager
+
+console = Console()
 
 # Load environment variables from .env file in the project root
 # Find the project root directory (where the .env file is located)
@@ -61,6 +65,7 @@ from illustrator.web.models.web_models import ProcessingRequest
 from fastapi import BackgroundTasks
 import uuid
 from datetime import datetime
+import asyncio
 
 @app.post("/api/process")
 async def start_processing(
@@ -72,8 +77,15 @@ async def start_processing(
         # Generate a session ID for tracking
         session_id = str(uuid.uuid4())
 
-        # For now, return success with session ID
-        # In a full implementation, this would start the actual processing workflow
+        # Start the actual processing in the background
+        background_tasks.add_task(
+            run_processing_workflow,
+            session_id=session_id,
+            manuscript_id=request.manuscript_id,
+            style_config=request.style_config,
+            max_emotional_moments=getattr(request, 'max_emotional_moments', 10)
+        )
+
         return {
             "success": True,
             "session_id": session_id,
@@ -84,6 +96,212 @@ async def start_processing(
         raise HTTPException(
             status_code=500,
             detail=f"Error starting processing: {str(e)}"
+        )
+
+async def run_processing_workflow(
+    session_id: str,
+    manuscript_id: str,
+    style_config: dict,
+    max_emotional_moments: int = 10
+):
+    """Run the actual processing workflow with WebSocket updates."""
+    try:
+        # Import the processing logic
+        import sys
+        from pathlib import Path
+        sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+        from generate_scene_illustrations import ComprehensiveSceneAnalyzer, IllustrationGenerator
+        from src.illustrator.database import DatabaseManager
+
+        # Send initial status
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "info",
+                "message": "Starting manuscript processing..."
+            }),
+            session_id
+        )
+
+        # Initialize components
+        db_manager = DatabaseManager()
+        analyzer = ComprehensiveSceneAnalyzer()
+        generator = IllustrationGenerator(
+            image_provider=style_config.get("image_provider", "imagen4"),
+            art_style=style_config.get("art_style", "digital painting")
+        )
+
+        # Load manuscript chapters
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "progress",
+                "progress": 10,
+                "message": "Loading manuscript chapters..."
+            }),
+            session_id
+        )
+
+        manuscript = db_manager.get_manuscript(manuscript_id)
+        if not manuscript:
+            raise Exception(f"Manuscript {manuscript_id} not found")
+
+        chapters = db_manager.get_chapters_by_manuscript_id(manuscript_id)
+        if not chapters:
+            raise Exception(f"No chapters found for manuscript {manuscript_id}")
+
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "step",
+                "step": 0,
+                "status": "completed"
+            }),
+            session_id
+        )
+
+        # Process each chapter
+        total_images = 0
+        progress_per_chapter = 70 // len(chapters)
+
+        for i, chapter in enumerate(chapters):
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "progress",
+                    "progress": 20 + (i * progress_per_chapter),
+                    "message": f"Analyzing Chapter {chapter.number}: {chapter.title}"
+                }),
+                session_id
+            )
+
+            # Analyze chapter for emotional moments
+            emotional_moments = await analyzer.analyze_chapter_comprehensive(chapter)
+
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "step",
+                    "step": 1,
+                    "status": "processing" if i == 0 else "completed"
+                }),
+                session_id
+            )
+
+            # Generate illustration prompts
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "progress",
+                    "progress": 20 + (i * progress_per_chapter) + (progress_per_chapter // 3),
+                    "message": f"Creating illustration prompts for Chapter {chapter.number}"
+                }),
+                session_id
+            )
+
+            prompts = []
+            for moment in emotional_moments[:max_emotional_moments]:
+                prompt_text = generator.create_detailed_prompt(
+                    moment.description,
+                    moment.tone,
+                    chapter.title,
+                    style_config.get("art_style", "digital painting")
+                )
+                prompts.append(prompt_text)
+
+            if i == 0:
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "step",
+                        "step": 1,
+                        "status": "completed"
+                    }),
+                    session_id
+                )
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "step",
+                        "step": 2,
+                        "status": "processing"
+                    }),
+                    session_id
+                )
+
+            # Generate images
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "progress",
+                    "progress": 20 + (i * progress_per_chapter) + (2 * progress_per_chapter // 3),
+                    "message": f"Generating {len(prompts)} images for Chapter {chapter.number}"
+                }),
+                session_id
+            )
+
+            results = await generator.generate_images(prompts, chapter)
+            total_images += len(results)
+
+            # Send image updates
+            for result in results:
+                if result.get("success") and result.get("file_path"):
+                    # Convert file path to web-accessible URL
+                    image_url = f"/static/generated/{Path(result['file_path']).name}"
+                    await connection_manager.send_personal_message(
+                        json.dumps({
+                            "type": "image",
+                            "image_url": image_url,
+                            "prompt": result.get("prompt", "")
+                        }),
+                        session_id
+                    )
+
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "step",
+                "step": 2,
+                "status": "completed"
+            }),
+            session_id
+        )
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "step",
+                "step": 3,
+                "status": "processing"
+            }),
+            session_id
+        )
+
+        # Final completion
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "progress",
+                "progress": 100,
+                "message": "Processing completed successfully!"
+            }),
+            session_id
+        )
+
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "step",
+                "step": 3,
+                "status": "completed"
+            }),
+            session_id
+        )
+
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "complete",
+                "images_count": total_images,
+                "message": f"Successfully generated {total_images} illustrations!"
+            }),
+            session_id
+        )
+
+    except Exception as e:
+        console.print(f"[red]Processing error: {e}[/red]")
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "error",
+                "error": str(e)
+            }),
+            session_id
         )
 
 
