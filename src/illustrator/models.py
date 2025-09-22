@@ -59,6 +59,15 @@ class IllustrationPrompt(BaseModel):
     technical_params: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific parameters")
 
 
+class StyleConfig(BaseModel):
+    """Configuration for illustration style and provider."""
+    image_provider: ImageProvider = Field(description="Image generation provider")
+    art_style: str = Field(default="digital painting", description="Base artistic style")
+    color_palette: str | None = Field(default=None, description="Color palette preferences")
+    artistic_influences: str | None = Field(default=None, description="Artistic influences or inspirations")
+    style_config_path: str | None = Field(default=None, description="Path to custom style config file")
+
+
 class ChapterAnalysis(BaseModel):
     """Complete analysis of a chapter."""
     chapter: Chapter = Field(description="Original chapter data")

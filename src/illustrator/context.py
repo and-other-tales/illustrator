@@ -60,6 +60,7 @@ Scene context: {scene_context}""",
     openai_api_key: str | None = Field(default=None, description="OpenAI API key for DALL-E")
     anthropic_api_key: str | None = Field(default=None, description="Anthropic API key for Claude")
     google_credentials: str | None = Field(default=None, description="Google Cloud credentials for Imagen4")
+    google_project_id: str | None = Field(default=None, description="Google Cloud project ID for Imagen4")
     huggingface_api_key: str | None = Field(default=None, description="HuggingFace API key for Flux")
 
     # Advanced settings
@@ -68,3 +69,21 @@ Scene context: {scene_context}""",
     batch_processing: bool = Field(default=False, description="Enable batch processing mode")
 
     model_config = {"extra": "allow"}
+
+
+# Create an alias for backwards compatibility and convenience
+IllustratorContext = ManuscriptContext
+
+
+def get_default_context() -> IllustratorContext:
+    """Get default context with environment variables."""
+    import os
+
+    return IllustratorContext(
+        user_id="default_user",
+        openai_api_key=os.getenv('OPENAI_API_KEY'),
+        anthropic_api_key=os.getenv('ANTHROPIC_API_KEY'),
+        google_credentials=os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
+        google_project_id=os.getenv('GOOGLE_PROJECT_ID'),
+        huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),
+    )

@@ -1,0 +1,540 @@
+{% extends "base.html" %}
+
+{% block title %}Processing - Manuscript Illustrator{% endblock %}
+
+{% block page_icon %}<i class="bi bi-gear-fill me-2"></i>{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-secondary" onclick="pauseProcessing()" id="pauseBtn" disabled>
+        <i class="bi bi-pause"></i> Pause
+    </button>
+    <button type="button" class="btn btn-outline-danger" onclick="cancelProcessing()" id="cancelBtn" disabled>
+        <i class="bi bi-stop"></i> Cancel
+    </button>
+    <a href="/manuscript/{{ manuscript_id }}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left"></i> Back to Manuscript
+    </a>
+</div>
+{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="/manuscript/{{ manuscript_id }}">Manuscript</a></li>
+        <li class="breadcrumb-item active">Processing</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<!-- Processing Status Overview -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-activity me-2"></i>Processing Status
+                </h5>
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status" id="processingSpinner">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <span class="badge bg-primary" id="processingStatus">Initializing</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <!-- Progress Bar -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <small class="fw-bold">Overall Progress</small>
+                                <small id="progressPercent">0%</small>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar"
+                                     style="width: 0%"
+                                     id="overallProgress">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Current Task -->
+                        <div class="mb-3">
+                            <h6 class="fw-bold">Current Task:</h6>
+                            <p class="mb-0" id="currentTask">Waiting to start...</p>
+                        </div>
+
+                        <!-- Processing Steps -->
+                        <div class="mb-3">
+                            <h6 class="fw-bold">Processing Pipeline:</h6>
+                            <div class="list-group" id="processingSteps">
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-circle text-muted me-2"></i>
+                                        Text Analysis & Scene Extraction
+                                    </div>
+                                    <small class="text-muted">Pending</small>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-circle text-muted me-2"></i>
+                                        Prompt Engineering & Style Application
+                                    </div>
+                                    <small class="text-muted">Pending</small>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-circle text-muted me-2"></i>
+                                        Image Generation
+                                    </div>
+                                    <small class="text-muted">Pending</small>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-circle text-muted me-2"></i>
+                                        Quality Review & Output Organization
+                                    </div>
+                                    <small class="text-muted">Pending</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <!-- Processing Stats -->
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">Processing Statistics</h6>
+                                <div class="row text-center">
+                                    <div class="col-6">
+                                        <div class="fw-bold fs-4 text-primary" id="chaptersProcessed">0</div>
+                                        <small class="text-muted">Chapters</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="fw-bold fs-4 text-success" id="imagesGenerated">0</div>
+                                        <small class="text-muted">Images</small>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="row text-center">
+                                    <div class="col-12">
+                                        <div class="fw-bold text-info" id="elapsedTime">00:00:00</div>
+                                        <small class="text-muted">Elapsed Time</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Session Info -->
+                        <div class="card mt-3">
+                            <div class="card-body">
+                                <h6 class="card-title">Session Information</h6>
+                                <div class="small">
+                                    <div class="mb-1">
+                                        <strong>Session ID:</strong>
+                                        <code id="sessionId">Not started</code>
+                                    </div>
+                                    <div class="mb-1">
+                                        <strong>Started:</strong>
+                                        <span id="startTime">-</span>
+                                    </div>
+                                    <div class="mb-1">
+                                        <strong>Status:</strong>
+                                        <span id="connectionStatus" class="badge bg-secondary">Connecting</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Processing Log -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-terminal me-2"></i>Processing Log
+                </h5>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary" onclick="toggleAutoScroll()" id="autoScrollBtn">
+                        <i class="bi bi-arrow-down"></i> Auto-scroll
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="clearLog()">
+                        <i class="bi bi-trash"></i> Clear
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="bg-dark text-light p-3" style="height: 300px; overflow-y: auto; font-family: monospace;" id="processingLog">
+                    <div class="text-muted">Waiting for processing to start...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Generated Images Preview -->
+<div class="row" id="imagesPreview" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-images me-2"></i>Generated Images
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="imagesList">
+                    <!-- Dynamic images will be added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Error Modal -->
+<div class="modal fade" id="errorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Processing Error
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger mb-3" role="alert">
+                    <strong>An error occurred during processing:</strong>
+                </div>
+                <pre id="errorDetails" class="bg-light p-3 rounded"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-warning" onclick="retryProcessing()">
+                    <i class="bi bi-arrow-clockwise"></i> Retry
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let websocket = null;
+let sessionId = null;
+let startTime = null;
+let autoScroll = true;
+let processingInterval = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeProcessing();
+});
+
+function initializeProcessing() {
+    // Start processing via API
+    startProcessingRequest();
+}
+
+async function startProcessingRequest() {
+    try {
+        const response = await fetch('/api/process', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                manuscript_id: '{{ manuscript_id }}',
+                options: {
+                    generate_images: true,
+                    quality_review: true
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            sessionId = result.session_id;
+            startTime = new Date(result.started_at);
+
+            document.getElementById('sessionId').textContent = sessionId;
+            document.getElementById('startTime').textContent = formatDateTime(startTime);
+
+            // Connect WebSocket for real-time updates
+            connectWebSocket();
+
+            // Start time tracking
+            startTimeTracking();
+
+            // Enable control buttons
+            document.getElementById('pauseBtn').disabled = false;
+            document.getElementById('cancelBtn').disabled = false;
+
+            addLogMessage('info', 'Processing session started successfully');
+        } else {
+            throw new Error(result.message || 'Failed to start processing');
+        }
+    } catch (error) {
+        console.error('Error starting processing:', error);
+        addLogMessage('error', `Failed to start processing: ${error.message}`);
+        updateProcessingStatus('error', 'Failed to Start');
+    }
+}
+
+function connectWebSocket() {
+    if (!sessionId) {
+        console.error('No session ID available for WebSocket connection');
+        return;
+    }
+
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/processing/${sessionId}`;
+
+    websocket = new WebSocket(wsUrl);
+
+    websocket.onopen = function(event) {
+        console.log('WebSocket connection established');
+        document.getElementById('connectionStatus').textContent = 'Connected';
+        document.getElementById('connectionStatus').className = 'badge bg-success';
+        addLogMessage('info', 'Connected to processing server');
+    };
+
+    websocket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        handleProcessingUpdate(data);
+    };
+
+    websocket.onclose = function(event) {
+        console.log('WebSocket connection closed');
+        document.getElementById('connectionStatus').textContent = 'Disconnected';
+        document.getElementById('connectionStatus').className = 'badge bg-warning';
+
+        if (event.code !== 1000) {
+            addLogMessage('warning', 'Connection to processing server lost');
+        }
+    };
+
+    websocket.onerror = function(error) {
+        console.error('WebSocket error:', error);
+        document.getElementById('connectionStatus').textContent = 'Error';
+        document.getElementById('connectionStatus').className = 'badge bg-danger';
+        addLogMessage('error', 'Connection error with processing server');
+    };
+}
+
+function handleProcessingUpdate(data) {
+    if (data.type === 'progress') {
+        updateProgress(data.progress, data.message);
+    } else if (data.type === 'step') {
+        updateProcessingStep(data.step, data.status);
+    } else if (data.type === 'image') {
+        addGeneratedImage(data.image_url, data.prompt);
+    } else if (data.type === 'error') {
+        showError(data.error);
+    } else if (data.type === 'complete') {
+        handleProcessingComplete(data);
+    } else if (data.type === 'log') {
+        addLogMessage(data.level, data.message);
+    }
+}
+
+function updateProgress(percentage, message) {
+    const progressBar = document.getElementById('overallProgress');
+    const progressPercent = document.getElementById('progressPercent');
+    const currentTask = document.getElementById('currentTask');
+
+    progressBar.style.width = `${percentage}%`;
+    progressPercent.textContent = `${percentage}%`;
+
+    if (message) {
+        currentTask.textContent = message;
+    }
+}
+
+function updateProcessingStep(stepIndex, status) {
+    const steps = document.querySelectorAll('#processingSteps .list-group-item');
+    if (steps[stepIndex]) {
+        const icon = steps[stepIndex].querySelector('i');
+        const statusText = steps[stepIndex].querySelector('small');
+
+        icon.className = 'bi me-2 ' + (
+            status === 'completed' ? 'bi-check-circle-fill text-success' :
+            status === 'processing' ? 'bi-arrow-clockwise text-primary' :
+            status === 'error' ? 'bi-x-circle-fill text-danger' :
+            'bi-circle text-muted'
+        );
+
+        statusText.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        statusText.className =
+            status === 'completed' ? 'text-success' :
+            status === 'processing' ? 'text-primary' :
+            status === 'error' ? 'text-danger' :
+            'text-muted';
+    }
+}
+
+function addGeneratedImage(imageUrl, prompt) {
+    const imagesList = document.getElementById('imagesList');
+    const imagesPreview = document.getElementById('imagesPreview');
+
+    const imageCol = document.createElement('div');
+    imageCol.className = 'col-md-3 mb-3';
+    imageCol.innerHTML = `
+        <div class="card">
+            <img src="${imageUrl}" class="card-img-top" alt="Generated image" style="height: 200px; object-fit: cover;">
+            <div class="card-body p-2">
+                <small class="text-muted">${escapeHtml(prompt)}</small>
+            </div>
+        </div>
+    `;
+
+    imagesList.appendChild(imageCol);
+    imagesPreview.style.display = 'block';
+
+    // Update counter
+    const counter = document.getElementById('imagesGenerated');
+    counter.textContent = parseInt(counter.textContent) + 1;
+}
+
+function addLogMessage(level, message) {
+    const log = document.getElementById('processingLog');
+    const timestamp = new Date().toLocaleTimeString();
+
+    const levelColors = {
+        'info': 'text-info',
+        'success': 'text-success',
+        'warning': 'text-warning',
+        'error': 'text-danger'
+    };
+
+    const logEntry = document.createElement('div');
+    logEntry.innerHTML = `
+        <span class="text-muted">[${timestamp}]</span>
+        <span class="${levelColors[level] || 'text-light'}">[${level.toUpperCase()}]</span>
+        ${escapeHtml(message)}
+    `;
+
+    log.appendChild(logEntry);
+
+    if (autoScroll) {
+        log.scrollTop = log.scrollHeight;
+    }
+}
+
+function updateProcessingStatus(status, label) {
+    const statusBadge = document.getElementById('processingStatus');
+    const spinner = document.getElementById('processingSpinner');
+
+    statusBadge.textContent = label;
+    statusBadge.className = 'badge ' + (
+        status === 'completed' ? 'bg-success' :
+        status === 'error' ? 'bg-danger' :
+        status === 'paused' ? 'bg-warning' :
+        'bg-primary'
+    );
+
+    if (status === 'completed' || status === 'error') {
+        spinner.style.display = 'none';
+    }
+}
+
+function startTimeTracking() {
+    processingInterval = setInterval(() => {
+        if (startTime) {
+            const elapsed = new Date() - startTime;
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+
+            document.getElementById('elapsedTime').textContent =
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+    }, 1000);
+}
+
+function toggleAutoScroll() {
+    autoScroll = !autoScroll;
+    const btn = document.getElementById('autoScrollBtn');
+    btn.classList.toggle('active', autoScroll);
+}
+
+function clearLog() {
+    document.getElementById('processingLog').innerHTML = '<div class="text-muted">Log cleared...</div>';
+}
+
+function pauseProcessing() {
+    addLogMessage('info', 'Pause functionality not yet implemented');
+}
+
+function cancelProcessing() {
+    if (confirm('Are you sure you want to cancel processing? This action cannot be undone.')) {
+        if (websocket) {
+            websocket.close();
+        }
+        updateProcessingStatus('cancelled', 'Cancelled');
+        addLogMessage('warning', 'Processing cancelled by user');
+    }
+}
+
+function retryProcessing() {
+    window.location.reload();
+}
+
+function handleProcessingComplete(data) {
+    updateProcessingStatus('completed', 'Completed');
+    updateProgress(100, 'Processing completed successfully');
+
+    if (processingInterval) {
+        clearInterval(processingInterval);
+    }
+
+    addLogMessage('success', `Processing completed! Generated ${data.images_count || 0} images.`);
+
+    // Show completion message
+    setTimeout(() => {
+        if (confirm('Processing completed successfully! Would you like to view the results in the gallery?')) {
+            window.location.href = `/manuscript/{{ manuscript_id }}/gallery`;
+        }
+    }, 2000);
+}
+
+function showError(error) {
+    document.getElementById('errorDetails').textContent = error;
+    new bootstrap.Modal(document.getElementById('errorModal')).show();
+    updateProcessingStatus('error', 'Error');
+    addLogMessage('error', error);
+}
+
+function formatDateTime(date) {
+    return date.toLocaleString();
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    if (websocket) {
+        websocket.close();
+    }
+    if (processingInterval) {
+        clearInterval(processingInterval);
+    }
+});
+</script>
+{% endblock %}

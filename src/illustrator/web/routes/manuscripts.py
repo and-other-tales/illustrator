@@ -353,22 +353,39 @@ async def preview_style_image(
         provider = get_image_provider(style_config.image_provider)
 
         # Generate a simple preview prompt
-        preview_prompt = f"A sample illustration in {style_config.art_style} style"
+        preview_prompt_text = f"A sample illustration in {style_config.art_style} style"
         if style_config.color_palette:
-            preview_prompt += f" with {style_config.color_palette} colors"
+            preview_prompt_text += f" with {style_config.color_palette} colors"
         if style_config.artistic_influences:
-            preview_prompt += f" inspired by {style_config.artistic_influences}"
-        preview_prompt += ", high quality, detailed"
+            preview_prompt_text += f" inspired by {style_config.artistic_influences}"
+        preview_prompt_text += ", high quality, detailed"
+
+        # Create IllustrationPrompt object
+        from illustrator.models import IllustrationPrompt
+        illustration_prompt = IllustrationPrompt(
+            provider=style_config.image_provider,
+            prompt=preview_prompt_text,
+            style_modifiers=[],
+            technical_params={}
+        )
 
         # Generate the image
-        image_url = await provider.generate_image(
-            prompt=preview_prompt,
-            style_config=style_config
-        )
+        result = await provider.generate_image(illustration_prompt)
+
+        # Extract image URL from result
+        if result.get('success'):
+            if result.get('image_data'):
+                # Convert base64 to data URL
+                image_url = f"data:image/png;base64,{result['image_data']}"
+            else:
+                # Use direct URL if available
+                image_url = result.get('image_url', '')
+        else:
+            raise Exception(result.get('error', 'Image generation failed'))
 
         return {
             "image_url": image_url,
-            "preview_prompt": preview_prompt,
+            "preview_prompt": preview_prompt_text,
             "style_summary": {
                 "provider": style_config.image_provider,
                 "art_style": style_config.art_style,

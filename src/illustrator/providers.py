@@ -582,3 +582,29 @@ class ProviderFactory:
             available.append(ImageProvider.FLUX)
 
         return available
+
+
+def get_image_provider(provider_type: str | ImageProvider, **credentials) -> ImageGenerationProvider:
+    """Get an image provider instance with credentials from context or environment."""
+    from illustrator.context import get_default_context
+
+    # Convert string to ImageProvider enum if needed
+    if isinstance(provider_type, str):
+        provider_type = ImageProvider(provider_type)
+
+    # Get credentials from context or fallback to provided ones
+    context = get_default_context()
+
+    # Prepare credentials dict, filtering out None values
+    creds = {
+        key: value for key, value in {
+            'openai_api_key': context.openai_api_key,
+            'huggingface_api_key': context.huggingface_api_key,
+            'google_credentials': context.google_credentials,
+            'google_project_id': getattr(context, 'google_project_id', None),
+            'anthropic_api_key': context.anthropic_api_key,
+            **credentials
+        }.items() if value is not None
+    }
+
+    return ProviderFactory.create_provider(provider_type, **creds)
