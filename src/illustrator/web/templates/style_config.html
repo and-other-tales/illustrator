@@ -212,43 +212,95 @@ document.getElementById('styleConfigForm').addEventListener('submit', async func
 });
 
 // Style preview function
-function previewStyle() {
+async function previewStyle() {
     const formData = new FormData(document.getElementById('styleConfigForm'));
     const styleConfig = Object.fromEntries(formData.entries());
 
     const previewCard = document.getElementById('previewCard');
     const previewContent = document.getElementById('previewContent');
 
-    let preview = '<div class="row">';
-
-    if (styleConfig.image_provider) {
-        preview += `<div class="col-md-6 mb-2"><strong>Provider:</strong> ${styleConfig.image_provider.toUpperCase()}</div>`;
+    // Validate required fields
+    if (!styleConfig.image_provider) {
+        showAlert('Please select an image provider to generate preview', 'warning');
+        return;
     }
 
-    if (styleConfig.art_style) {
-        preview += `<div class="col-md-6 mb-2"><strong>Art Style:</strong> ${styleConfig.art_style}</div>`;
-    }
-
-    if (styleConfig.color_palette) {
-        preview += `<div class="col-md-6 mb-2"><strong>Colors:</strong> ${styleConfig.color_palette}</div>`;
-    }
-
-    if (styleConfig.artistic_influences) {
-        preview += `<div class="col-md-6 mb-2"><strong>Influences:</strong> ${styleConfig.artistic_influences}</div>`;
-    }
-
-    if (styleConfig.max_emotional_moments) {
-        preview += `<div class="col-md-6 mb-2"><strong>Max Moments:</strong> ${styleConfig.max_emotional_moments}</div>`;
-    }
-
-    preview += '</div>';
-
-    if (preview === '<div class="row"></div>') {
-        preview = '<div class="text-muted">No style configuration specified yet.</div>';
-    }
-
-    previewContent.innerHTML = preview;
+    // Show loading state
+    previewContent.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Generating preview...</span>
+            </div>
+            <p class="mt-2">Generating style preview image...</p>
+        </div>
+    `;
     previewCard.style.display = 'block';
+
+    try {
+        // Prepare request data
+        const { max_emotional_moments, ...styleConfigOnly } = styleConfig;
+        Object.keys(styleConfigOnly).forEach(key => {
+            if (!styleConfigOnly[key] || styleConfigOnly[key].trim() === '') {
+                delete styleConfigOnly[key];
+            }
+        });
+
+        const requestData = {
+            manuscript_id: "{{ manuscript_id }}",
+            style_config: styleConfigOnly
+        };
+
+        const response = await fetch('/api/manuscripts/{{ manuscript_id }}/style/preview', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+
+            // Display image and style summary
+            let preview = '<div class="text-center mb-3">';
+            preview += `<img src="${result.image_url}" class="img-fluid rounded" style="max-width: 400px; max-height: 300px;" alt="Style Preview">`;
+            preview += '</div>';
+
+            preview += '<div class="row small">';
+            if (result.style_summary.provider) {
+                preview += `<div class="col-md-6 mb-1"><strong>Provider:</strong> ${result.style_summary.provider.toUpperCase()}</div>`;
+            }
+            if (result.style_summary.art_style) {
+                preview += `<div class="col-md-6 mb-1"><strong>Art Style:</strong> ${result.style_summary.art_style}</div>`;
+            }
+            if (result.style_summary.color_palette) {
+                preview += `<div class="col-md-6 mb-1"><strong>Colors:</strong> ${result.style_summary.color_palette}</div>`;
+            }
+            if (result.style_summary.artistic_influences) {
+                preview += `<div class="col-md-6 mb-1"><strong>Influences:</strong> ${result.style_summary.artistic_influences}</div>`;
+            }
+            preview += '</div>';
+
+            if (result.preview_prompt) {
+                preview += `<div class="mt-2 small text-muted"><strong>Generated with prompt:</strong> ${result.preview_prompt}</div>`;
+            }
+
+            previewContent.innerHTML = preview;
+        } else {
+            const error = await response.json();
+            previewContent.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Error generating preview:</strong> ${error.detail || 'Unknown error'}
+                </div>
+            `;
+        }
+    } catch (error) {
+        previewContent.innerHTML = `
+            <div class="alert alert-danger">
+                <strong>Network error:</strong> ${error.message}
+            </div>
+        `;
+    }
 }
 
 // Save style configuration function

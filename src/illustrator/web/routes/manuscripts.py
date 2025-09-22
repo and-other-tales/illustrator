@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -320,6 +320,67 @@ async def get_style_config(manuscript_id: str) -> Dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error loading style configuration: {str(e)}"
+        )
+
+
+@router.post("/{manuscript_id}/style/preview")
+async def preview_style_image(
+    manuscript_id: str,
+    request: StyleConfigSaveRequest,
+    background_tasks: BackgroundTasks
+) -> Dict[str, Any]:
+    """Generate a preview image using the style configuration."""
+    from illustrator.providers import get_image_provider
+    from illustrator.models import StyleConfig
+
+    # Verify the manuscript exists
+    manuscripts = get_saved_manuscripts()
+    for manuscript in manuscripts:
+        generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path))
+        if generated_id == manuscript_id:
+            break
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Manuscript not found"
+        )
+
+    try:
+        # Create style config from request
+        style_config = StyleConfig(**request.style_config.model_dump())
+
+        # Get the image provider
+        provider = get_image_provider(style_config.image_provider)
+
+        # Generate a simple preview prompt
+        preview_prompt = f"A sample illustration in {style_config.art_style} style"
+        if style_config.color_palette:
+            preview_prompt += f" with {style_config.color_palette} colors"
+        if style_config.artistic_influences:
+            preview_prompt += f" inspired by {style_config.artistic_influences}"
+        preview_prompt += ", high quality, detailed"
+
+        # Generate the image
+        image_url = await provider.generate_image(
+            prompt=preview_prompt,
+            style_config=style_config
+        )
+
+        return {
+            "image_url": image_url,
+            "preview_prompt": preview_prompt,
+            "style_summary": {
+                "provider": style_config.image_provider,
+                "art_style": style_config.art_style,
+                "color_palette": style_config.color_palette,
+                "artistic_influences": style_config.artistic_influences
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating preview image: {str(e)}"
         )
 
 
