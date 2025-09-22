@@ -255,6 +255,9 @@ function renderManuscriptsList(manuscripts) {
                     <a href="/manuscript/${manuscript.id}/gallery" class="btn btn-outline-success" title="Gallery">
                         <i class="bi bi-images"></i>
                     </a>
+                    <button onclick="deleteManuscriptFromDashboard('${manuscript.id}')" class="btn btn-outline-danger" title="Delete">
+                        <i class="bi bi-trash"></i>
+                    </button>
                 </div>
             </td>
         </tr>
@@ -288,6 +291,9 @@ function renderManuscriptsGrid(manuscripts) {
                         <a href="/manuscript/${manuscript.id}/gallery" class="btn btn-outline-success btn-sm">
                             <i class="bi bi-images"></i> Gallery
                         </a>
+                        <button onclick="deleteManuscriptFromDashboard('${manuscript.id}')" class="btn btn-outline-danger btn-sm">
+                            <i class="bi bi-trash"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -328,6 +334,28 @@ function getStatusBadgeClass(status) {
         case 'processing': return 'bg-warning';
         case 'error': return 'bg-danger';
         default: return 'bg-secondary';
+    }
+}
+
+async function deleteManuscriptFromDashboard(manuscriptId) {
+    if (!confirm('Are you sure you want to delete this manuscript? This action cannot be undone and will also delete all generated images.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/manuscripts/${manuscriptId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            // Refresh the dashboard to show updated list
+            loadDashboardData();
+        } else {
+            const error = await response.json();
+            alert('Error deleting manuscript: ' + (error.detail || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
     }
 }
 </script>

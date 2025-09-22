@@ -58,6 +58,12 @@ class StyleConfigRequest(BaseModel):
     style_config_path: Optional[str] = None
 
 
+class StyleConfigSaveRequest(BaseModel):
+    """Request model for saving style configuration."""
+    manuscript_id: str
+    style_config: StyleConfigRequest
+
+
 class ProcessingRequest(BaseModel):
     """Request model to start processing a manuscript."""
     manuscript_id: str

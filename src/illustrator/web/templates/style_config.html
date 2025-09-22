@@ -123,6 +123,9 @@
                         </a>
 
                         <div>
+                            <button type="button" class="btn btn-outline-secondary me-2" onclick="saveStyleConfig()">
+                                <i class="bi bi-floppy me-2"></i>Save Style
+                            </button>
                             <button type="button" class="btn btn-outline-primary me-2" onclick="previewStyle()">
                                 <i class="bi bi-eye me-2"></i>Preview Style
                             </button>
@@ -247,5 +250,101 @@ function previewStyle() {
     previewContent.innerHTML = preview;
     previewCard.style.display = 'block';
 }
+
+// Save style configuration function
+async function saveStyleConfig() {
+    const formData = new FormData(document.getElementById('styleConfigForm'));
+    const styleConfig = Object.fromEntries(formData.entries());
+
+    // Convert string numbers to actual numbers
+    styleConfig.max_emotional_moments = parseInt(styleConfig.max_emotional_moments);
+
+    // Remove empty optional fields and the max_emotional_moments (it's not part of style config)
+    const { max_emotional_moments, ...styleConfigOnly } = styleConfig;
+    Object.keys(styleConfigOnly).forEach(key => {
+        if (!styleConfigOnly[key] || styleConfigOnly[key].trim() === '') {
+            delete styleConfigOnly[key];
+        }
+    });
+
+    const requestData = {
+        manuscript_id: "{{ manuscript_id }}",
+        style_config: styleConfigOnly
+    };
+
+    try {
+        const response = await fetch('/api/manuscripts/{{ manuscript_id }}/style', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            showAlert('Style configuration saved successfully!', 'success');
+        } else {
+            const error = await response.json();
+            showAlert('Error saving style configuration: ' + (error.detail || 'Unknown error'), 'danger');
+        }
+    } catch (error) {
+        showAlert('Network error: ' + error.message, 'danger');
+    }
+}
+
+// Load saved style configuration on page load
+async function loadSavedStyleConfig() {
+    try {
+        const response = await fetch('/api/manuscripts/{{ manuscript_id }}/style');
+
+        if (response.ok) {
+            const result = await response.json();
+            if (result.style_config) {
+                populateForm(result.style_config);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading saved style config:', error);
+    }
+}
+
+// Populate form with saved configuration
+function populateForm(styleConfig) {
+    const form = document.getElementById('styleConfigForm');
+
+    Object.keys(styleConfig).forEach(key => {
+        const input = form.querySelector(`[name="${key}"]`);
+        if (input) {
+            input.value = styleConfig[key];
+        }
+    });
+}
+
+// Show alert function
+function showAlert(message, type = 'info') {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+    alertDiv.role = 'alert';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    const container = document.querySelector('.card-body');
+    container.appendChild(alertDiv);
+
+    // Auto-remove alert after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Load saved configuration when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadSavedStyleConfig();
+});
 </script>
 {% endblock %}

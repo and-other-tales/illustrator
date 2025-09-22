@@ -15,7 +15,8 @@ from illustrator.web.models.web_models import (
     ManuscriptResponse,
     DashboardStats,
     ErrorResponse,
-    SuccessResponse
+    SuccessResponse,
+    StyleConfigSaveRequest
 )
 
 router = APIRouter()
@@ -239,6 +240,87 @@ async def update_manuscript(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Manuscript not found"
     )
+
+
+@router.post("/{manuscript_id}/style")
+async def save_style_config(
+    manuscript_id: str,
+    request: StyleConfigSaveRequest
+) -> SuccessResponse:
+    """Save style configuration for a manuscript."""
+    # Verify the manuscript exists first
+    manuscripts = get_saved_manuscripts()
+
+    manuscript_found = None
+    for manuscript in manuscripts:
+        generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path))
+        if generated_id == manuscript_id:
+            manuscript_found = manuscript
+            break
+
+    if not manuscript_found:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Manuscript not found"
+        )
+
+    try:
+        # Create a style config directory for this manuscript if it doesn't exist
+        style_config_dir = SAVED_MANUSCRIPTS_DIR / "style_configs"
+        style_config_dir.mkdir(exist_ok=True)
+
+        # Save the style configuration
+        style_config_file = style_config_dir / f"{manuscript_id}_style.json"
+
+        with open(style_config_file, 'w', encoding='utf-8') as f:
+            json.dump(request.style_config.model_dump(), f, indent=2, ensure_ascii=False)
+
+        return SuccessResponse(
+            message="Style configuration saved successfully",
+            data={"style_config_path": str(style_config_file)}
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error saving style configuration: {str(e)}"
+        )
+
+
+@router.get("/{manuscript_id}/style")
+async def get_style_config(manuscript_id: str) -> Dict[str, Any]:
+    """Get saved style configuration for a manuscript."""
+    # Verify the manuscript exists first
+    manuscripts = get_saved_manuscripts()
+
+    for manuscript in manuscripts:
+        generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path))
+        if generated_id == manuscript_id:
+            break
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Manuscript not found"
+        )
+
+    try:
+        # Check if style configuration exists
+        style_config_dir = SAVED_MANUSCRIPTS_DIR / "style_configs"
+        style_config_file = style_config_dir / f"{manuscript_id}_style.json"
+
+        if not style_config_file.exists():
+            return {"style_config": None}
+
+        with open(style_config_file, 'r', encoding='utf-8') as f:
+            style_config_data = json.load(f)
+
+        return {"style_config": style_config_data}
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error loading style configuration: {str(e)}"
+        )
 
 
 @router.delete("/{manuscript_id}")

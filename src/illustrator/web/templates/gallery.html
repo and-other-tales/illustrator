@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Gallery - Manuscript Illustrator{% endblock %}
+
+{% block page_icon %}
+<i class="bi bi-images me-2"></i>
+{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="/manuscript/{{ manuscript_id }}">Manuscript</a></li>
+        <li class="breadcrumb-item active">Gallery</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-images me-2"></i>Illustration Gallery
+            </h2>
+            <div>
+                <button class="btn btn-outline-secondary me-2" onclick="refreshGallery()">
+                    <i class="bi bi-arrow-clockwise me-2"></i>Refresh
+                </button>
+                <a href="/manuscript/{{ manuscript_id }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Manuscript
+                </a>
+            </div>
+        </div>
+
+        <!-- Gallery Grid -->
+        <div id="galleryGrid" class="row g-4">
+            <!-- Images will be loaded here -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-5" style="display: none;">
+            <div class="mb-4">
+                <i class="bi bi-image text-muted" style="font-size: 4rem;"></i>
+            </div>
+            <h4 class="text-muted">No illustrations yet</h4>
+            <p class="text-muted mb-4">Start processing your manuscript to generate illustrations.</p>
+            <a href="/manuscript/{{ manuscript_id }}/style" class="btn btn-primary">
+                <i class="bi bi-palette me-2"></i>Configure Style & Process
+            </a>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="text-center py-5">
+            <div class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h5 class="text-muted">Loading gallery...</h5>
+        </div>
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div class="modal fade" id="imageModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalTitle">Illustration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <img id="modalImage" src="" alt="Illustration" class="img-fluid w-100">
+            </div>
+            <div class="modal-footer">
+                <div id="imageDetails" class="flex-grow-1 text-start">
+                    <!-- Image details will be populated here -->
+                </div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let manuscriptId = "{{ manuscript_id }}";
+
+// Load gallery on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadGallery();
+});
+
+async function loadGallery() {
+    const galleryGrid = document.getElementById('galleryGrid');
+    const emptyState = document.getElementById('emptyState');
+    const loadingState = document.getElementById('loadingState');
+
+    // Show loading state
+    loadingState.style.display = 'block';
+    emptyState.style.display = 'none';
+    galleryGrid.innerHTML = '';
+
+    try {
+        const response = await fetch(`/api/manuscripts/${manuscriptId}/images`);
+
+        if (response.ok) {
+            const data = await response.json();
+            const images = data.images || [];
+
+            loadingState.style.display = 'none';
+
+            if (images.length === 0) {
+                emptyState.style.display = 'block';
+            } else {
+                displayImages(images);
+            }
+        } else {
+            // API endpoint doesn't exist yet, show empty state
+            loadingState.style.display = 'none';
+            emptyState.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error loading gallery:', error);
+        loadingState.style.display = 'none';
+        emptyState.style.display = 'block';
+    }
+}
+
+function displayImages(images) {
+    const galleryGrid = document.getElementById('galleryGrid');
+
+    images.forEach(image => {
+        const imageCard = createImageCard(image);
+        galleryGrid.appendChild(imageCard);
+    });
+}
+
+function createImageCard(image) {
+    const col = document.createElement('div');
+    col.className = 'col-md-6 col-lg-4';
+
+    col.innerHTML = `
+        <div class="card h-100 shadow-sm">
+            <div class="position-relative">
+                <img src="${image.url}"
+                     alt="${image.description || 'Illustration'}"
+                     class="card-img-top"
+                     style="height: 250px; object-fit: cover; cursor: pointer;"
+                     onclick="showImageModal('${image.url}', '${image.title || 'Illustration'}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                <div class="position-absolute top-0 end-0 m-2">
+                    <span class="badge bg-primary">${image.chapter || 'Chapter'}</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <h6 class="card-title">${image.title || 'Untitled'}</h6>
+                <p class="card-text text-muted small">${image.description || 'No description available'}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">${image.style || 'Default style'}</small>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-sm"
+                                onclick="downloadImage('${image.url}', '${image.title || 'illustration'}')">
+                            <i class="bi bi-download"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return col;
+}
+
+function showImageModal(imageUrl, title, imageData) {
+    const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+    const modalImage = document.getElementById('modalImage');
+    const modalTitle = document.getElementById('imageModalTitle');
+    const imageDetails = document.getElementById('imageDetails');
+
+    modalImage.src = imageUrl;
+    modalTitle.textContent = title;
+
+    // Populate image details
+    let detailsHtml = '';
+    if (imageData.description) {
+        detailsHtml += `<p><strong>Description:</strong> ${imageData.description}</p>`;
+    }
+    if (imageData.chapter) {
+        detailsHtml += `<p><strong>Chapter:</strong> ${imageData.chapter}</p>`;
+    }
+    if (imageData.style) {
+        detailsHtml += `<p><strong>Style:</strong> ${imageData.style}</p>`;
+    }
+    if (imageData.emotional_tone) {
+        detailsHtml += `<p><strong>Emotional Tone:</strong> ${imageData.emotional_tone}</p>`;
+    }
+
+    imageDetails.innerHTML = detailsHtml;
+    modal.show();
+}
+
+function downloadImage(imageUrl, filename) {
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = filename + '.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function refreshGallery() {
+    loadGallery();
+}
+</script>
+
+{% block extra_css %}
+<style>
+.card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease-in-out;
+}
+
+.card-img-top:hover {
+    opacity: 0.9;
+}
+</style>
+{% endblock %}
+
+{% endblock %}
