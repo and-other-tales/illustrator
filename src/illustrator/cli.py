@@ -40,7 +40,7 @@ class ManuscriptCLI:
 
     def setup_environment(self):
         """Load environment variables and validate configuration."""
-        load_dotenv()
+        load_dotenv('.env')
 
         # Validate required API keys based on selected provider
         image_provider = os.getenv('DEFAULT_IMAGE_PROVIDER', 'dalle')

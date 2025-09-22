@@ -10,9 +10,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
 from illustrator.web.routes import manuscripts, chapters
 from illustrator.web.models.web_models import ConnectionManager
+
+# Load environment variables from .env file in the project root
+# Find the project root directory (where the .env file is located)
+project_root = Path(__file__).parent.parent.parent.parent
+env_file = project_root / '.env'
+load_dotenv(env_file)
 
 
 # Get the web directory path
