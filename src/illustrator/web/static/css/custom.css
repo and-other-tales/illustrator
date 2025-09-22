@@ -369,13 +369,31 @@ h5, h6 { font: var(--md-type-scale-label); }
 
 /* Chapter cards */
 .chapter-card {
-    border-left: 4px solid var(--primary-color);
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    position: relative;
 }
 
-.chapter-card:hover {
-    border-left-color: var(--success-color);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+.chapter-card .card {
+    border-left: 4px solid #6366f1;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%);
+    border-radius: 16px;
+    transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+[data-bs-theme="dark"] .chapter-card .card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(51, 65, 85, 0.95) 100%);
+    border-left-color: #8b5cf6;
+}
+
+.chapter-card:hover .card {
+    border-left-color: #10b981;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(0, 0, 0, 0.05);
+    transform: translateY(-2px) scale(1.01);
+}
+
+[data-bs-theme="dark"] .chapter-card:hover .card {
+    border-left-color: #34d399;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3), 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 .chapter-status {

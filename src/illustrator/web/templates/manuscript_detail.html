@@ -131,13 +131,13 @@
 <!-- Chapter Card Template -->
 <template id="chapterTemplate">
     <div class="chapter-card mb-3">
-        <div class="card border-start border-primary border-3">
+        <div class="card">
             <div class="card-body">
                 <div class="row align-items-center">
                     <div class="col-md-8">
                         <div class="d-flex align-items-center mb-2">
-                            <span class="badge bg-primary me-3 chapter-number">1</span>
-                            <h6 class="mb-0 chapter-title">Chapter Title</h6>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle me-3 chapter-number fw-semibold px-3 py-2">1</span>
+                            <h6 class="mb-0 chapter-title fw-semibold">Chapter Title</h6>
                         </div>
                         <div class="row small text-muted">
                             <div class="col-sm-4">
@@ -154,19 +154,29 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="d-flex gap-1 justify-content-end">
-                            <button class="btn btn-sm btn-outline-primary" onclick="generateChapterHeaders(this)" title="Chapter Headers">
-                                <i class="material-icons-outlined">palette</i>
+                        <div class="d-flex gap-2 justify-content-end flex-wrap">
+                            <button class="btn btn-sm btn-light border" onclick="generateChapterHeaders(this)" title="Chapter Headers">
+                                <i class="material-icons-outlined me-1">palette</i>
+                                Headers
                             </button>
-                            <button class="btn btn-sm btn-outline-info" onclick="editChapter(this)" title="Edit Chapter">
-                                <i class="bi bi-pencil"></i>
+                            <button class="btn btn-sm btn-outline-primary" onclick="editChapter(this)" title="Edit Chapter">
+                                <i class="bi bi-pencil me-1"></i>
+                                Edit
                             </button>
                             <button class="btn btn-sm btn-outline-success" onclick="analyzeChapter(this)" title="Analyze Chapter">
-                                <i class="bi bi-search"></i>
+                                <i class="bi bi-search me-1"></i>
+                                Analyze
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteChapter(this)" title="Delete Chapter">
-                                <i class="bi bi-trash"></i>
-                            </button>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item text-danger" href="#" onclick="deleteChapterFromDropdown(this)">
+                                        <i class="bi bi-trash me-2"></i>Delete Chapter
+                                    </a></li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -313,6 +323,11 @@ async function deleteChapter(button) {
         hideLoadingOverlay();
         showError('Failed to delete chapter: ' + error.message);
     }
+}
+
+function deleteChapterFromDropdown(link) {
+    const button = link.closest('.chapter-card').querySelector('.dropdown-toggle');
+    deleteChapter(button);
 }
 
 function editManuscript() {

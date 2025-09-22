@@ -73,6 +73,39 @@ import uuid
 from datetime import datetime
 import asyncio
 
+@app.get("/api/process/status/{manuscript_id}")
+async def get_processing_status(manuscript_id: str):
+    """Check if there's an active processing session for a manuscript."""
+    try:
+        # Look for active sessions for this manuscript
+        active_session = None
+        for session_id, session_data in connection_manager.sessions.items():
+            if session_data.manuscript_id == manuscript_id:
+                active_session = {
+                    "session_id": session_id,
+                    "status": session_data.status.dict() if hasattr(session_data, 'status') else None,
+                    "is_connected": session_id in connection_manager.active_connections
+                }
+                break
+
+        if active_session:
+            return {
+                "success": True,
+                "active_session": active_session,
+                "message": "Active session found"
+            }
+        else:
+            return {
+                "success": True,
+                "active_session": None,
+                "message": "No active session found"
+            }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error checking processing status: {str(e)}"
+        )
+
 @app.post("/api/process")
 async def start_processing(
     request: ProcessingRequest,
@@ -80,6 +113,17 @@ async def start_processing(
 ):
     """Start manuscript processing and illustration generation."""
     try:
+        # Check if there's already an active session for this manuscript
+        for session_id, session_data in connection_manager.sessions.items():
+            if session_data.manuscript_id == request.manuscript_id:
+                return {
+                    "success": True,
+                    "session_id": session_id,
+                    "message": "Reconnecting to existing processing session",
+                    "started_at": datetime.now().isoformat(),
+                    "is_existing": True
+                }
+
         # Generate a session ID for tracking
         session_id = str(uuid.uuid4())
 
@@ -96,7 +140,8 @@ async def start_processing(
             "success": True,
             "session_id": session_id,
             "message": "Processing started successfully",
-            "started_at": datetime.now().isoformat()
+            "started_at": datetime.now().isoformat(),
+            "is_existing": False
         }
     except Exception as e:
         raise HTTPException(
@@ -119,7 +164,29 @@ async def run_processing_workflow(
         sys.path.append(str(Path(__file__).parent.parent.parent.parent))
         from generate_scene_illustrations import ComprehensiveSceneAnalyzer, IllustrationGenerator
         from illustrator.web.routes.manuscripts import get_saved_manuscripts
+        from illustrator.web.models.web_models import ProcessingSessionData, ProcessingStatus
         import uuid
+
+        # Create and store session data
+        initial_status = ProcessingStatus(
+            session_id=session_id,
+            manuscript_id=manuscript_id,
+            status="started",
+            progress=0,
+            total_chapters=0,  # Will be updated when we load the manuscript
+            message="Starting manuscript processing...",
+            current_chapter=None,
+            error=None
+        )
+
+        session_data = ProcessingSessionData(
+            session_id=session_id,
+            manuscript_id=manuscript_id,
+            websocket=None,
+            status=initial_status
+        )
+
+        connection_manager.sessions[session_id] = session_data
 
         # Send initial status
         await connection_manager.send_personal_message(
@@ -355,6 +422,12 @@ async def run_processing_workflow(
             session_id
         )
 
+        # Update session status to completed
+        if session_id in connection_manager.sessions:
+            connection_manager.sessions[session_id].status.status = "completed"
+            connection_manager.sessions[session_id].status.progress = 100
+            connection_manager.sessions[session_id].status.message = f"Successfully generated {total_images} illustrations!"
+
     except Exception as e:
         console.print(f"[red]Processing error: {e}[/red]")
         await connection_manager.send_personal_message(
@@ -364,6 +437,11 @@ async def run_processing_workflow(
             }),
             session_id
         )
+
+        # Update session status to error
+        if session_id in connection_manager.sessions:
+            connection_manager.sessions[session_id].status.status = "error"
+            connection_manager.sessions[session_id].status.error = str(e)
 
 
 class WebSocketComprehensiveSceneAnalyzer:

@@ -168,6 +168,9 @@
                     <button type="button" class="btn btn-outline-secondary" onclick="toggleAutoScroll()" id="autoScrollBtn">
                         <i class="bi bi-arrow-down"></i> Auto-scroll
                     </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="toggleMaximizeLog()" id="maximizeLogBtn">
+                        <i class="bi bi-arrows-fullscreen"></i> Maximize
+                    </button>
                     <button type="button" class="btn btn-outline-secondary" onclick="clearLog()">
                         <i class="bi bi-trash"></i> Clear
                     </button>
@@ -239,8 +242,50 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeProcessing();
 });
 
-function initializeProcessing() {
-    // Start processing via API
+async function initializeProcessing() {
+    // First check if there's an existing processing session
+    try {
+        const statusResponse = await fetch('/api/process/status/{{ manuscript_id }}');
+        if (statusResponse.ok) {
+            const statusData = await statusResponse.json();
+
+            if (statusData.active_session) {
+                // Reconnect to existing session
+                sessionId = statusData.active_session.session_id;
+
+                addLogMessage('info', 'Reconnecting to existing processing session...');
+
+                // Set session info
+                document.getElementById('sessionId').textContent = sessionId;
+                document.getElementById('startTime').textContent = formatDateTime(new Date());
+
+                // If the session has status data, update the UI
+                if (statusData.active_session.status) {
+                    const status = statusData.active_session.status;
+                    updateProgress(status.progress, status.message);
+                    updateProcessingStatus(status.status, status.status);
+                }
+
+                // Connect WebSocket for real-time updates
+                connectWebSocket();
+
+                // Start time tracking
+                startTimeTracking();
+
+                // Enable control buttons
+                document.getElementById('pauseBtn').disabled = false;
+                document.getElementById('cancelBtn').disabled = false;
+
+                addLogMessage('info', 'Reconnected to existing processing session');
+                return;
+            }
+        }
+    } catch (error) {
+        console.error('Error checking existing session:', error);
+        addLogMessage('warning', 'Could not check for existing session, starting new one');
+    }
+
+    // No existing session found, start new processing
     startProcessingRequest();
 }
 
@@ -299,7 +344,11 @@ async function startProcessingRequest() {
             document.getElementById('pauseBtn').disabled = false;
             document.getElementById('cancelBtn').disabled = false;
 
-            addLogMessage('info', 'Processing session started successfully');
+            if (result.is_existing) {
+                addLogMessage('info', 'Reconnected to existing processing session');
+            } else {
+                addLogMessage('info', 'Processing session started successfully');
+            }
         } else {
             throw new Error(result.message || 'Failed to start processing');
         }
@@ -488,6 +537,27 @@ function toggleAutoScroll() {
 
 function clearLog() {
     document.getElementById('processingLog').innerHTML = '<div class="text-muted">Log cleared...</div>';
+}
+
+let logMaximized = false;
+
+function toggleMaximizeLog() {
+    const log = document.getElementById('processingLog');
+    const btn = document.getElementById('maximizeLogBtn');
+
+    if (!logMaximized) {
+        // Maximize: double the height
+        log.style.height = '600px';
+        btn.innerHTML = '<i class="bi bi-arrows-collapse"></i> Minimize';
+        btn.classList.add('active');
+        logMaximized = true;
+    } else {
+        // Minimize: return to original height
+        log.style.height = '300px';
+        btn.innerHTML = '<i class="bi bi-arrows-fullscreen"></i> Maximize';
+        btn.classList.remove('active');
+        logMaximized = false;
+    }
 }
 
 function pauseProcessing() {
