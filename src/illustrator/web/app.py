@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from illustrator.web.routes import manuscripts, chapters, analysis, gallery
+from illustrator.web.routes import manuscripts, chapters
 from illustrator.web.models.web_models import ConnectionManager
 
 
@@ -48,8 +48,6 @@ connection_manager = ConnectionManager()
 # Include routers
 app.include_router(manuscripts.router, prefix="/api/manuscripts", tags=["manuscripts"])
 app.include_router(chapters.router, prefix="/api/chapters", tags=["chapters"])
-app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
-app.include_router(gallery.router, prefix="/api/gallery", tags=["gallery"])
 
 
 @app.get("/", response_class=HTMLResponse)

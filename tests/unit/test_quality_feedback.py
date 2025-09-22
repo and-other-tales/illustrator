@@ -23,22 +23,29 @@ class TestQualityAssessment:
 
     def test_quality_assessment_creation(self):
         """Test creating a quality assessment."""
+        quality_scores = {
+            QualityMetric.VISUAL_ACCURACY: 0.85,
+            QualityMetric.EMOTIONAL_RESONANCE: 0.80,
+            QualityMetric.ARTISTIC_CONSISTENCY: 0.90,
+            QualityMetric.TECHNICAL_QUALITY: 0.75,
+            QualityMetric.NARRATIVE_RELEVANCE: 0.88
+        }
+
         assessment = QualityAssessment(
-            overall_score=85,
-            accuracy_score=80,
-            style_consistency=90,
-            emotional_alignment=85,
-            technical_quality=80,
-            prompt_effectiveness=88,
-            areas_for_improvement=["lighting could be more dramatic"],
-            strengths=["excellent character portrayal"],
-            recommendations=["adjust lighting modifiers"]
+            prompt_id="test-prompt-123",
+            generation_success=True,
+            quality_scores=quality_scores,
+            feedback_notes="Excellent character portrayal with good emotional depth",
+            improvement_suggestions=["Enhance background details", "Adjust lighting"],
+            provider=ImageProvider.DALLE,
+            timestamp=datetime.now().isoformat()
         )
 
-        assert assessment.overall_score == 85
-        assert assessment.accuracy_score == 80
-        assert "excellent character portrayal" in assessment.strengths
-        assert len(assessment.recommendations) == 1
+        assert assessment.prompt_id == "test-prompt-123"
+        assert assessment.generation_success is True
+        assert assessment.quality_scores[QualityMetric.VISUAL_ACCURACY] == 0.85
+        assert len(assessment.improvement_suggestions) == 2
+        assert assessment.provider == ImageProvider.DALLE
 
     def test_quality_assessment_validation(self):
         """Test quality assessment score validation."""
