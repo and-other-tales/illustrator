@@ -192,7 +192,7 @@ class DalleProvider(ImageGenerationProvider):
 
         return IllustrationPrompt(
             provider=ImageProvider.DALLE,
-            prompt=f"{main_prompt}. {', '.join(style_modifiers)}",
+            prompt=f"{main_prompt}. {', '.join(str(m) for m in style_modifiers)}",
             style_modifiers=style_modifiers,
             negative_prompt=negative_prompt,  # Note: DALL-E doesn't use negative prompts, but stored for compatibility
             technical_params=technical_params,
@@ -326,7 +326,7 @@ class Imagen4Provider(ImageGenerationProvider):
 
         return IllustrationPrompt(
             provider=ImageProvider.IMAGEN4,
-            prompt=f"{main_prompt}. {', '.join(style_modifiers)}",
+            prompt=f"{main_prompt}. {', '.join(str(m) for m in style_modifiers)}",
             style_modifiers=style_modifiers,
             negative_prompt=negative_prompt,
             technical_params=technical_params,
@@ -466,7 +466,7 @@ class FluxProvider(ImageGenerationProvider):
 
         return IllustrationPrompt(
             provider=ImageProvider.FLUX,
-            prompt=f"{main_prompt}. {', '.join(style_modifiers)}",
+            prompt=f"{main_prompt}. {', '.join(str(m) for m in style_modifiers)}",
             style_modifiers=style_modifiers,
             negative_prompt=negative_prompt,
             technical_params=technical_params,

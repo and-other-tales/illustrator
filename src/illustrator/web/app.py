@@ -615,11 +615,19 @@ class WebSocketIllustrationGenerator:
 
             # Log additional AI analysis details
             if hasattr(illustration_prompt, 'style_modifiers') and illustration_prompt.style_modifiers:
+                # Ensure all style modifiers are strings before joining
+                style_modifiers_str = []
+                for modifier in illustration_prompt.style_modifiers[:3]:
+                    if isinstance(modifier, tuple):
+                        style_modifiers_str.append(str(modifier))
+                    else:
+                        style_modifiers_str.append(str(modifier))
+
                 await self.connection_manager.send_personal_message(
                     json.dumps({
                         "type": "log",
                         "level": "info",
-                        "message": f"   🎨 Style modifiers: {', '.join(illustration_prompt.style_modifiers[:3])}..."
+                        "message": f"   🎨 Style modifiers: {', '.join(style_modifiers_str)}..."
                     }),
                     self.session_id
                 )
