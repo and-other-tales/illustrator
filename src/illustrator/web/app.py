@@ -246,8 +246,8 @@ async def run_processing_workflow(
                 prompts.append(prompt_text)
 
                 # Log detailed prompt generation with AI analysis
-                excerpt_preview = moment.text_excerpt[:80] + "..." if len(moment.text_excerpt) > 80 else moment.text_excerpt
-                prompt_preview = prompt_text[:120] + "..." if len(prompt_text) > 120 else prompt_text
+                excerpt_preview = moment.text_excerpt
+                prompt_preview = prompt_text
                 await connection_manager.send_personal_message(
                     json.dumps({
                         "type": "log",
@@ -437,7 +437,7 @@ class WebSocketComprehensiveSceneAnalyzer:
 
                 # Log high-scoring moments as they're discovered (only show very high scores to avoid spam)
                 if combined_score >= 0.7:
-                    segment_preview = segment[:60] + "..." if len(segment) > 60 else segment
+                    segment_preview = segment
                     await self.connection_manager.send_personal_message(
                         json.dumps({
                             "type": "log",
@@ -458,7 +458,7 @@ class WebSocketComprehensiveSceneAnalyzer:
 
         # Log details about each high-potential moment
         for i, (moment, score) in enumerate(all_scored_moments[:10], 1):  # Show top 10
-            excerpt_preview = moment.text_excerpt[:100] + "..." if len(moment.text_excerpt) > 100 else moment.text_excerpt
+            excerpt_preview = moment.text_excerpt
             tones_str = ", ".join([tone.value for tone in moment.emotional_tones])
             await self.connection_manager.send_personal_message(
                 json.dumps({
@@ -483,7 +483,7 @@ class WebSocketComprehensiveSceneAnalyzer:
 
         # Log details about each selected moment
         for i, moment in enumerate(selected_moments, 1):
-            excerpt_preview = moment.text_excerpt[:120] + "..." if len(moment.text_excerpt) > 120 else moment.text_excerpt
+            excerpt_preview = moment.text_excerpt
             tones_str = ", ".join([tone.value for tone in moment.emotional_tones])
             await self.connection_manager.send_personal_message(
                 json.dumps({
@@ -601,7 +601,7 @@ class WebSocketIllustrationGenerator:
                 # Send progress update with more detail
                 progress = int(((i + 1) / total_prompts) * 100)
                 # Extract scene description from prompt for logging
-                prompt_preview = str(prompt)[:150] + "..." if len(str(prompt)) > 150 else str(prompt)
+                prompt_preview = str(prompt)
                 await self.connection_manager.send_personal_message(
                     json.dumps({
                         "type": "log",
