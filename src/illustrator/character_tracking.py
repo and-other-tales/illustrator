@@ -92,29 +92,29 @@ class CharacterRelationship:
 class CharacterProfile:
     """Comprehensive character profile with consistency tracking."""
     name: str
-    aliases: List[str]
-    name_variations: List[str]  # Nick, Nicholas, etc.
-    character_role: str  # protagonist, antagonist, supporting, etc.
+    aliases: List[str] = None
+    name_variations: List[str] = None  # Nick, Nicholas, etc.
+    character_role: str = "supporting"  # protagonist, antagonist, supporting, etc.
 
     # Physical consistency
-    physical_description: PhysicalDescription
-    appearance_history: List[CharacterAppearance]
-    physical_inconsistencies: List[str]
+    physical_description: PhysicalDescription = None
+    appearance_history: List[CharacterAppearance] = None
+    physical_inconsistencies: List[str] = None
 
     # Emotional/Psychological
-    emotional_profile: EmotionalProfile
-    personality_traits: List[str]
-    character_arc_stage: str
+    emotional_profile: EmotionalProfile = None
+    personality_traits: List[str] = None
+    character_arc_stage: str = "introduction"
 
     # Relationships
-    relationships: Dict[str, CharacterRelationship]
+    relationships: Dict[str, CharacterRelationship] = None
 
     # Tracking metadata
-    first_appearance_chapter: int
-    last_appearance_chapter: int
-    total_appearances: int
-    narrative_importance: float  # 0.0 to 1.0
-    consistency_score: float  # 0.0 to 1.0
+    first_appearance_chapter: int = 0
+    last_appearance_chapter: int = 0
+    total_appearances: int = 0
+    narrative_importance: float = 0.5  # 0.0 to 1.0
+    consistency_score: float = 1.0  # 0.0 to 1.0
 
     # For illustration consistency
     preferred_illustration_style: Optional[str] = None
@@ -138,6 +138,18 @@ class CharacterProfile:
             self.visual_emphasis_points = []
         if self.illustration_notes is None:
             self.illustration_notes = []
+        if self.physical_description is None:
+            self.physical_description = PhysicalDescription()
+        if self.emotional_profile is None:
+            self.emotional_profile = EmotionalProfile(
+                dominant_emotions=[EmotionalTone.NEUTRAL],
+                emotional_range=0.5,
+                emotional_stability=0.5,
+                stress_responses=[],
+                comfort_emotions=[EmotionalTone.PEACE],
+                emotional_triggers=[],
+                expression_style="moderate"
+            )
 
 
 class CharacterTracker:
