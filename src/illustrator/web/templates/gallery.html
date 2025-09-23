@@ -33,9 +33,41 @@
             </div>
         </div>
 
-        <!-- Gallery Grid -->
-        <div id="galleryGrid" class="row g-4">
-            <!-- Images will be loaded here -->
+        <!-- Gallery Controls -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div class="btn-group" role="group" aria-label="View options">
+                        <button class="btn btn-outline-primary btn-sm active" id="masonryViewBtn" onclick="setGalleryView('masonry')">
+                            <i class="bi bi-grid-3x3-gap me-1"></i>Masonry
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" id="gridViewBtn" onclick="setGalleryView('grid')">
+                            <i class="bi bi-grid me-1"></i>Grid
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" id="listViewBtn" onclick="setGalleryView('list')">
+                            <i class="bi bi-list me-1"></i>List
+                        </button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="downloadAllImages()">
+                                <i class="bi bi-download me-1"></i>Download All
+                            </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="showImageStats()">
+                                <i class="bi bi-bar-chart me-1"></i>Stats
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gallery Container -->
+        <div class="gallery-container">
+            <!-- Modern Masonry Gallery Grid -->
+            <div id="galleryGrid" class="masonry-grid">
+                <!-- Images will be loaded here -->
+            </div>
         </div>
 
         <!-- Empty State -->
@@ -52,10 +84,54 @@
 
         <!-- Loading State -->
         <div id="loadingState" class="text-center py-5">
-            <div class="spinner-border text-primary mb-3" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
+            <div class="modern-spinner mx-auto mb-4"></div>
             <h5 class="text-muted">Loading gallery...</h5>
+            <p class="text-muted small">Preparing your beautiful illustrations</p>
+        </div>
+
+        <!-- Skeleton Loading -->
+        <div id="skeletonState" class="d-none">
+            <div class="masonry-grid">
+                <div class="masonry-item skeleton-loading-item">
+                    <div class="card">
+                        <div class="skeleton skeleton-card"></div>
+                        <div class="card-body">
+                            <div class="skeleton skeleton-text"></div>
+                            <div class="skeleton skeleton-text small" style="width: 70%;"></div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="skeleton skeleton-text small" style="width: 40%;"></div>
+                                <div class="skeleton skeleton-button" style="width: 80px; height: 32px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="masonry-item skeleton-loading-item">
+                    <div class="card">
+                        <div class="skeleton skeleton-card" style="height: 280px;"></div>
+                        <div class="card-body">
+                            <div class="skeleton skeleton-text"></div>
+                            <div class="skeleton skeleton-text small" style="width: 80%;"></div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="skeleton skeleton-text small" style="width: 50%;"></div>
+                                <div class="skeleton skeleton-button" style="width: 80px; height: 32px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="masonry-item skeleton-loading-item">
+                    <div class="card">
+                        <div class="skeleton skeleton-card" style="height: 220px;"></div>
+                        <div class="card-body">
+                            <div class="skeleton skeleton-text"></div>
+                            <div class="skeleton skeleton-text small" style="width: 60%;"></div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="skeleton skeleton-text small" style="width: 35%;"></div>
+                                <div class="skeleton skeleton-button" style="width: 80px; height: 32px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -138,43 +214,208 @@ function displayImages(images) {
 }
 
 function createImageCard(image) {
-    const col = document.createElement('div');
-    col.className = 'col-md-6 col-lg-4';
+    const item = document.createElement('div');
+    item.className = 'masonry-item fade-in';
 
-    col.innerHTML = `
-        <div class="card h-100 shadow-sm">
-            <div class="position-relative">
+    // Randomize card heights slightly for masonry effect
+    const aspectRatios = [1.2, 1.4, 1.6, 1.8];
+    const randomAspect = aspectRatios[Math.floor(Math.random() * aspectRatios.length)];
+    const imageHeight = Math.floor(200 * randomAspect);
+
+    item.innerHTML = `
+        <div class="card modern-image-card shadow-sm">
+            <div class="position-relative image-container">
                 <img src="${image.url}"
                      alt="${image.description || 'Illustration'}"
-                     class="card-img-top"
-                     style="height: 250px; object-fit: cover; cursor: pointer;"
-                     onclick="showImageModal('${image.url}', '${image.title || 'Illustration'}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
-                <div class="position-absolute top-0 end-0 m-2">
-                    <span class="badge bg-primary">${image.chapter || 'Chapter'}</span>
-                </div>
-            </div>
-            <div class="card-body">
-                <h6 class="card-title">${image.title || 'Untitled'}</h6>
-                <p class="card-text text-muted small">${image.description || 'No description available'}</p>
-                <div class="d-flex justify-content-between align-items-center">
-                    <small class="text-muted">${image.style || 'Default style'}</small>
-                    <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-outline-primary btn-sm"
+                     class="card-img-top modern-image"
+                     style="height: ${imageHeight}px; object-fit: cover; cursor: pointer;"
+                     onclick="showImageModal('${image.url}', '${image.title || 'Illustration'}', ${JSON.stringify(image).replace(/"/g, '&quot;')})"
+                     loading="lazy">
+                <div class="image-overlay">
+                    <div class="image-actions">
+                        <button type="button" class="btn btn-light btn-sm rounded-pill me-2"
                                 onclick="downloadImage('${image.url}', '${image.title || 'illustration'}')">
                             <i class="bi bi-download"></i>
                         </button>
-                        <button type="button" class="btn btn-outline-danger btn-sm"
+                        <button type="button" class="btn btn-light btn-sm rounded-pill me-2"
+                                onclick="shareImage('${image.url}', '${image.title || 'illustration'}')">
+                            <i class="bi bi-share"></i>
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm rounded-pill"
                                 onclick="deleteImage('${image.id || image.filename}', '${image.title || 'this image'}')"
                                 title="Delete image">
                             <i class="bi bi-trash"></i>
                         </button>
+                    </div>
+                    <div class="image-info">
+                        <span class="badge bg-primary rounded-pill">${image.chapter || 'Chapter'}</span>
+                        ${image.style ? `<span class="badge bg-secondary rounded-pill ms-1">${image.style}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <h6 class="card-title text-truncate" title="${image.title || 'Untitled'}">${image.title || 'Untitled'}</h6>
+                <p class="card-text text-muted small mb-2">${(image.description || 'No description available').substring(0, 80)}${(image.description || '').length > 80 ? '...' : ''}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        <i class="bi bi-clock me-1"></i>
+                        ${formatTimeAgo(image.created_at || new Date())}
+                    </small>
+                    <div class="image-rating">
+                        ${generateStarRating(image.rating || 0)}
                     </div>
                 </div>
             </div>
         </div>
     `;
 
-    return col;
+    return item;
+}
+
+// Gallery view switcher
+let currentGalleryView = 'masonry';
+
+function setGalleryView(viewType) {
+    currentGalleryView = viewType;
+
+    // Update button states
+    document.querySelectorAll('[id$="ViewBtn"]').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(viewType + 'ViewBtn').classList.add('active');
+
+    const galleryGrid = document.getElementById('galleryGrid');
+
+    // Remove existing classes
+    galleryGrid.classList.remove('masonry-grid', 'grid-view', 'list-view');
+
+    // Add new view class
+    switch(viewType) {
+        case 'masonry':
+            galleryGrid.classList.add('masonry-grid');
+            break;
+        case 'grid':
+            galleryGrid.classList.add('grid-view');
+            break;
+        case 'list':
+            galleryGrid.classList.add('list-view');
+            break;
+    }
+
+    // Re-render images if they exist
+    if (galleryGrid.children.length > 0) {
+        // Simple refresh for now, could be optimized
+        loadGallery();
+    }
+}
+
+// Helper functions
+function formatTimeAgo(date) {
+    const now = new Date();
+    const then = new Date(date);
+    const diffMs = now - then;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return then.toLocaleDateString();
+}
+
+function generateStarRating(rating) {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+
+    for (let i = 0; i < fullStars; i++) {
+        stars.push('<i class="bi bi-star-fill text-warning"></i>');
+    }
+    if (hasHalfStar) {
+        stars.push('<i class="bi bi-star-half text-warning"></i>');
+    }
+    for (let i = fullStars + (hasHalfStar ? 1 : 0); i < 5; i++) {
+        stars.push('<i class="bi bi-star text-muted"></i>');
+    }
+
+    return stars.join('');
+}
+
+function shareImage(imageUrl, title) {
+    if (navigator.share) {
+        navigator.share({
+            title: title,
+            text: `Check out this illustration: ${title}`,
+            url: imageUrl
+        }).catch(console.error);
+    } else {
+        // Fallback to clipboard
+        navigator.clipboard.writeText(imageUrl).then(() => {
+            showMessage('Image URL copied to clipboard!', 'success');
+        }).catch(() => {
+            showMessage('Could not copy URL', 'warning');
+        });
+    }
+}
+
+function downloadAllImages() {
+    const images = document.querySelectorAll('.modern-image');
+    let downloaded = 0;
+
+    showMessage(`Starting download of ${images.length} images...`, 'info');
+
+    images.forEach((img, index) => {
+        setTimeout(() => {
+            const link = document.createElement('a');
+            link.href = img.src;
+            link.download = `illustration-${index + 1}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            downloaded++;
+            if (downloaded === images.length) {
+                showMessage(`Successfully downloaded ${downloaded} images!`, 'success');
+            }
+        }, index * 500); // Stagger downloads
+    });
+}
+
+function showImageStats() {
+    const images = document.querySelectorAll('.modern-image');
+    const totalImages = images.length;
+    const chapters = new Set();
+    const styles = new Set();
+
+    document.querySelectorAll('.badge.bg-primary').forEach(badge => {
+        chapters.add(badge.textContent.trim());
+    });
+
+    document.querySelectorAll('.badge.bg-secondary').forEach(badge => {
+        styles.add(badge.textContent.trim());
+    });
+
+    const statsHtml = `
+        <div class="text-center">
+            <h5><i class="bi bi-bar-chart text-primary me-2"></i>Gallery Statistics</h5>
+            <div class="row text-center mt-4">
+                <div class="col-4">
+                    <div class="h2 text-primary">${totalImages}</div>
+                    <div class="text-muted">Total Images</div>
+                </div>
+                <div class="col-4">
+                    <div class="h2 text-success">${chapters.size}</div>
+                    <div class="text-muted">Chapters</div>
+                </div>
+                <div class="col-4">
+                    <div class="h2 text-info">${styles.size}</div>
+                    <div class="text-muted">Styles</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Could show in a modal, for now just show as message
+    showMessage(statsHtml, 'info', 8000);
 }
 
 function showImageModal(imageUrl, title, imageData) {

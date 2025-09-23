@@ -11,18 +11,17 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements files
+# Copy requirements files and source code first
 COPY pyproject.toml ./
+COPY src/ ./src/
+COPY README.md ./
 
 # Install Python dependencies including web dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e ".[web,dev]"
 
-# Copy application code
+# Copy remaining application code
 COPY . .
-
-# Install the application in editable mode
-RUN pip install -e .
 
 # Copy and set permissions for start script
 COPY start.sh /app/start.sh

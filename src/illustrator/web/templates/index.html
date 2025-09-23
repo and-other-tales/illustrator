@@ -17,59 +17,103 @@
 
 {% block content %}
 <!-- Stats Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="card-title mb-1">Manuscripts</h5>
-                        <h2 class="mb-0" id="totalManuscripts">-</h2>
+<div class="row mb-5 g-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="card stats-card modern-stats-card bg-primary text-white h-100 bounce-in">
+            <div class="card-body position-relative">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="stats-icon me-3">
+                                <i class="material-icons-outlined fs-2">auto_stories</i>
+                            </div>
+                            <h5 class="card-title mb-0 opacity-90">Manuscripts</h5>
+                        </div>
+                        <h1 class="mb-1 fw-bold" id="totalManuscripts">
+                            <span class="counter" data-target="0">0</span>
+                        </h1>
+                        <small class="opacity-75">
+                            <i class="bi bi-trend-up me-1"></i>
+                            <span id="manuscriptsTrend">+0% from last month</span>
+                        </small>
                     </div>
-                    <i class="bi bi-book fs-1 opacity-50"></i>
                 </div>
+                <div class="stats-wave"></div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="card-title mb-1">Chapters</h5>
-                        <h2 class="mb-0" id="totalChapters">-</h2>
+    <div class="col-lg-3 col-md-6">
+        <div class="card stats-card modern-stats-card bg-success text-white h-100 bounce-in" style="animation-delay: 0.1s;">
+            <div class="card-body position-relative">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="stats-icon me-3">
+                                <i class="material-icons-outlined fs-2">description</i>
+                            </div>
+                            <h5 class="card-title mb-0 opacity-90">Chapters</h5>
+                        </div>
+                        <h1 class="mb-1 fw-bold" id="totalChapters">
+                            <span class="counter" data-target="0">0</span>
+                        </h1>
+                        <small class="opacity-75">
+                            <i class="bi bi-book me-1"></i>
+                            <span id="chaptersTrend">Across all manuscripts</span>
+                        </small>
                     </div>
-                    <i class="bi bi-file-text fs-1 opacity-50"></i>
                 </div>
+                <div class="stats-wave"></div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="card-title mb-1">Images</h5>
-                        <h2 class="mb-0" id="totalImages">-</h2>
+    <div class="col-lg-3 col-md-6">
+        <div class="card stats-card modern-stats-card bg-warning text-white h-100 bounce-in" style="animation-delay: 0.2s;">
+            <div class="card-body position-relative">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="stats-icon me-3">
+                                <i class="material-icons-outlined fs-2">image</i>
+                            </div>
+                            <h5 class="card-title mb-0 opacity-90">Illustrations</h5>
+                        </div>
+                        <h1 class="mb-1 fw-bold" id="totalImages">
+                            <span class="counter" data-target="0">0</span>
+                        </h1>
+                        <small class="opacity-75">
+                            <i class="bi bi-palette me-1"></i>
+                            <span id="imagesTrend">Generated with AI</span>
+                        </small>
                     </div>
-                    <i class="bi bi-image fs-1 opacity-50"></i>
                 </div>
+                <div class="stats-wave"></div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="card-title mb-1">Processing</h5>
-                        <h2 class="mb-0" id="processingCount">-</h2>
+    <div class="col-lg-3 col-md-6">
+        <div class="card stats-card modern-stats-card processing-card text-white h-100 bounce-in" style="animation-delay: 0.3s;">
+            <div class="card-body position-relative">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="stats-icon me-3">
+                                <i class="material-icons-outlined fs-2 processing-icon">settings</i>
+                            </div>
+                            <h5 class="card-title mb-0 opacity-90">Processing</h5>
+                        </div>
+                        <h1 class="mb-1 fw-bold" id="processingCount">
+                            <span class="counter" data-target="0">0</span>
+                        </h1>
+                        <small class="opacity-75">
+                            <i class="bi bi-activity me-1"></i>
+                            <span id="processingTrend">Active tasks</span>
+                        </small>
                     </div>
-                    <i class="bi bi-gear fs-1 opacity-50"></i>
                 </div>
+                <div class="stats-wave processing-wave"></div>
             </div>
         </div>
     </div>
@@ -196,11 +240,11 @@ async function loadDashboardData() {
         const response = await fetch('/api/manuscripts/stats');
         const data = await response.json();
 
-        // Update stats
-        document.getElementById('totalManuscripts').textContent = data.total_manuscripts;
-        document.getElementById('totalChapters').textContent = data.total_chapters;
-        document.getElementById('totalImages').textContent = data.total_images;
-        document.getElementById('processingCount').textContent = data.processing_count;
+        // Animate counter updates
+        animateCounter('totalManuscripts', data.total_manuscripts || 0);
+        animateCounter('totalChapters', data.total_chapters || 0);
+        animateCounter('totalImages', data.total_images || 0);
+        animateCounter('processingCount', data.processing_count || 0);
 
         // Load manuscripts
         if (data.recent_manuscripts && data.recent_manuscripts.length > 0) {
@@ -211,8 +255,70 @@ async function loadDashboardData() {
 
     } catch (error) {
         console.error('Error loading dashboard data:', error);
-        showError('Failed to load dashboard data');
+
+        // Show skeleton loading on error for better UX
+        showSkeletonLoading();
+        setTimeout(() => {
+            hideSkeletonLoading();
+            showError('Failed to load dashboard data');
+        }, 2000);
     }
+}
+
+function animateCounter(elementId, target) {
+    const element = document.getElementById(elementId);
+    const counter = element.querySelector('.counter');
+
+    if (!counter) return;
+
+    const startValue = parseInt(counter.textContent) || 0;
+    const increment = Math.ceil((target - startValue) / 30);
+    const duration = 1500;
+    const stepTime = duration / Math.abs(target - startValue);
+
+    let currentValue = startValue;
+
+    const timer = setInterval(() => {
+        currentValue += increment;
+
+        if ((increment > 0 && currentValue >= target) || (increment < 0 && currentValue <= target)) {
+            currentValue = target;
+            clearInterval(timer);
+        }
+
+        counter.textContent = currentValue;
+        counter.style.transform = 'scale(1.1)';
+
+        setTimeout(() => {
+            counter.style.transform = 'scale(1)';
+        }, 100);
+
+    }, stepTime);
+}
+
+function showSkeletonLoading() {
+    // Add skeleton loading to stats cards
+    const statsCards = document.querySelectorAll('.modern-stats-card');
+    statsCards.forEach(card => {
+        const counter = card.querySelector('.counter');
+        if (counter) {
+            counter.classList.add('skeleton', 'skeleton-text');
+            counter.style.width = '60px';
+            counter.style.height = '2rem';
+        }
+    });
+}
+
+function hideSkeletonLoading() {
+    const statsCards = document.querySelectorAll('.modern-stats-card');
+    statsCards.forEach(card => {
+        const counter = card.querySelector('.counter');
+        if (counter) {
+            counter.classList.remove('skeleton', 'skeleton-text');
+            counter.style.width = 'auto';
+            counter.style.height = 'auto';
+        }
+    });
 }
 
 function renderManuscripts(manuscripts) {
