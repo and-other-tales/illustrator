@@ -31,58 +31,64 @@
 <body>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark shadow-lg fixed-top" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); backdrop-filter: blur(10px);">
-        <div class="container">
-            <a class="navbar-brand fw-bold d-flex align-items-center text-gradient" href="/">
-                <span class="material-icons-outlined me-2 fs-3" style="background: linear-gradient(45deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">auto_stories</span>
-                <span class="d-none d-sm-inline">othertales Illustrator</span>
-                <span class="d-inline d-sm-none">othertales</span>
-            </a>
-
-            <button class="navbar-toggler border-0 p-1" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon-custom">
-                    <span class="material-icons-outlined fs-5">menu</span>
-                </span>
-            </button>
-
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto ms-lg-4">
-                    <li class="nav-item">
-                        <a class="nav-link d-flex align-items-center px-3 py-2 rounded-pill nav-link-modern" href="/">
-                            <span class="material-icons-outlined me-2 fs-6">dashboard</span>
-                            <span class="d-none d-lg-inline">Dashboard</span>
+        <div class="container-fluid">
+            <div class="row w-100 mx-0">
+                <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2 px-0">
+                    <div class="container-fluid">
+                        <a class="navbar-brand fw-bold d-flex align-items-center text-gradient" href="/">
+                            <span class="material-icons-outlined me-2 fs-3" style="background: linear-gradient(45deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">auto_stories</span>
+                            <span class="d-none d-sm-inline">othertales Illustrator</span>
+                            <span class="d-inline d-sm-none">othertales</span>
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link d-flex align-items-center px-3 py-2 rounded-pill nav-link-modern" href="/manuscript/new">
-                            <span class="material-icons-outlined me-2 fs-6">add_circle</span>
-                            <span class="d-none d-lg-inline">New Manuscript</span>
-                        </a>
-                    </li>
-                </ul>
 
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle d-flex align-items-center px-3 py-2 rounded-pill nav-link-modern" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <span class="material-icons-outlined me-2 fs-6">settings</span>
-                            <span class="d-none d-lg-inline">Settings</span>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg rounded-3" style="min-width: 200px;">
-                            <li><a class="dropdown-item d-flex align-items-center px-3 py-2 rounded-2 dropdown-item-modern" href="#" data-bs-toggle="modal" data-bs-target="#apiKeysModal">
-                                <span class="material-icons-outlined me-3 fs-6 text-primary">vpn_key</span>
-                                API Keys
-                            </a></li>
-                            <li><a class="dropdown-item d-flex align-items-center px-3 py-2 rounded-2 dropdown-item-modern" href="#" id="themeToggle">
-                                <span class="material-icons-outlined me-3 fs-6 text-primary">palette</span>
-                                <span>Toggle Theme</span>
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item d-flex align-items-center px-3 py-2 rounded-2 dropdown-item-modern text-muted" href="#">
-                                <span class="material-icons-outlined me-3 fs-6">info</span>
-                                About
-                            </a></li>
-                        </ul>
-                    </li>
-                </ul>
+                        <button class="navbar-toggler border-0 p-1" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                            <span class="navbar-toggler-icon-custom">
+                                <span class="material-icons-outlined fs-5">menu</span>
+                            </span>
+                        </button>
+
+                        <div class="collapse navbar-collapse" id="navbarNav">
+                            <ul class="navbar-nav me-auto ms-lg-4">
+                                <li class="nav-item">
+                                    <a class="nav-link d-flex align-items-center px-3 py-2 rounded-pill nav-link-modern" href="/">
+                                        <span class="material-icons-outlined me-2 fs-6">dashboard</span>
+                                        <span class="d-none d-lg-inline">Dashboard</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link d-flex align-items-center px-3 py-2 rounded-pill nav-link-modern" href="/manuscript/new">
+                                        <span class="material-icons-outlined me-2 fs-6">add_circle</span>
+                                        <span class="d-none d-lg-inline">New Manuscript</span>
+                                    </a>
+                                </li>
+                            </ul>
+
+                            <ul class="navbar-nav">
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle d-flex align-items-center px-3 py-2 rounded-pill nav-link-modern" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <span class="material-icons-outlined me-2 fs-6">settings</span>
+                                        <span class="d-none d-lg-inline">Settings</span>
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg rounded-3" style="min-width: 200px;">
+                                        <li><a class="dropdown-item d-flex align-items-center px-3 py-2 rounded-2 dropdown-item-modern" href="#" data-bs-toggle="modal" data-bs-target="#apiKeysModal">
+                                            <span class="material-icons-outlined me-3 fs-6 text-primary">vpn_key</span>
+                                            API Keys
+                                        </a></li>
+                                        <li><a class="dropdown-item d-flex align-items-center px-3 py-2 rounded-2 dropdown-item-modern" href="#" id="themeToggle">
+                                            <span class="material-icons-outlined me-3 fs-6 text-primary">palette</span>
+                                            <span>Toggle Theme</span>
+                                        </a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item d-flex align-items-center px-3 py-2 rounded-2 dropdown-item-modern text-muted" href="#">
+                                            <span class="material-icons-outlined me-3 fs-6">info</span>
+                                            About
+                                        </a></li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </nav>

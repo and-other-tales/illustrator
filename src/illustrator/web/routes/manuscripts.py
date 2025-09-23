@@ -54,6 +54,12 @@ def get_manuscript_processing_status(manuscript_id: str) -> str:
 _manuscripts_cache = {}
 _cache_timestamp = None
 
+def invalidate_manuscripts_cache():
+    """Invalidate the manuscripts cache to force a refresh."""
+    global _manuscripts_cache, _cache_timestamp
+    _manuscripts_cache.clear()
+    _cache_timestamp = None
+
 def get_saved_manuscripts() -> List[SavedManuscript]:
     """Load all saved manuscripts from disk with caching."""
     global _manuscripts_cache, _cache_timestamp
@@ -253,6 +259,9 @@ async def create_manuscript(request: ManuscriptCreateRequest) -> ManuscriptRespo
     file_path = save_manuscript_to_disk(saved_manuscript)
     manuscript_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(file_path)))
 
+    # Invalidate cache to ensure new manuscript appears in the dashboard
+    invalidate_manuscripts_cache()
+
     return ManuscriptResponse(
         id=manuscript_id,
         metadata=metadata,
@@ -284,6 +293,9 @@ async def update_manuscript(
 
             # Save updated manuscript
             save_manuscript_to_disk(manuscript)
+
+            # Invalidate cache to ensure updated manuscript appears in the dashboard
+            invalidate_manuscripts_cache()
 
             return ManuscriptResponse(
                 id=manuscript_id,
@@ -700,6 +712,9 @@ async def delete_manuscript(manuscript_id: str) -> SuccessResponse:
                 if images_dir.exists():
                     import shutil
                     shutil.rmtree(images_dir)
+
+                # Invalidate cache to ensure the deleted manuscript doesn't appear in the dashboard
+                invalidate_manuscripts_cache()
 
                 return SuccessResponse(
                     message="Manuscript deleted successfully"
