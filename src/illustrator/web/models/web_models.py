@@ -123,12 +123,30 @@ class GalleryResponse(BaseModel):
     images_by_chapter: Dict[str, List[ImageResponse]]
 
 
+class ProcessingLogEntry(BaseModel):
+    """A single log entry for processing."""
+    timestamp: str
+    level: str  # info, warning, error, success
+    message: str
+
+class ProcessingImageEntry(BaseModel):
+    """A single generated image entry."""
+    url: str
+    prompt: str
+    chapter_number: Optional[int] = None
+    scene_number: Optional[int] = None
+    timestamp: str
+
 class ProcessingSessionData(BaseModel):
     """Data structure for tracking processing sessions."""
     session_id: str
     manuscript_id: str
     websocket: Optional[WebSocket] = None
     status: ProcessingStatus
+    logs: List[ProcessingLogEntry] = []
+    images: List[ProcessingImageEntry] = []
+    start_time: Optional[str] = None
+    step_status: Dict[int, str] = {}  # Track which steps are completed/in-progress
 
     class Config:
         arbitrary_types_allowed = True
@@ -147,14 +165,56 @@ class ConnectionManager:
         self.active_connections[session_id] = websocket
 
     def disconnect(self, session_id: str):
-        """Remove a WebSocket connection."""
+        """Remove a WebSocket connection but preserve session data."""
+        if session_id in self.active_connections:
+            del self.active_connections[session_id]
+        # Don't delete session data - keep it for reconnection
+
+    def cleanup_session(self, session_id: str):
+        """Completely remove a session (called when processing completes/errors)."""
         if session_id in self.active_connections:
             del self.active_connections[session_id]
         if session_id in self.sessions:
             del self.sessions[session_id]
 
+    def add_log_entry(self, session_id: str, level: str, message: str):
+        """Add a log entry to the session."""
+        if session_id in self.sessions:
+            from datetime import datetime
+            log_entry = ProcessingLogEntry(
+                timestamp=datetime.now().isoformat(),
+                level=level,
+                message=message
+            )
+            self.sessions[session_id].logs.append(log_entry)
+
+    def add_image_entry(self, session_id: str, url: str, prompt: str, chapter_number: Optional[int] = None, scene_number: Optional[int] = None):
+        """Add an image entry to the session."""
+        if session_id in self.sessions:
+            from datetime import datetime
+            image_entry = ProcessingImageEntry(
+                url=url,
+                prompt=prompt,
+                chapter_number=chapter_number,
+                scene_number=scene_number,
+                timestamp=datetime.now().isoformat()
+            )
+            self.sessions[session_id].images.append(image_entry)
+
     async def send_personal_message(self, message: str, session_id: str):
-        """Send a message to a specific connection."""
+        """Send a message to a specific connection and store log entry."""
+        import json
+        try:
+            # Parse message to extract log level and content
+            message_data = json.loads(message)
+            if message_data.get('type') == 'log':
+                self.add_log_entry(session_id, message_data.get('level', 'info'), message_data.get('message', ''))
+            elif message_data.get('type') == 'image':
+                self.add_image_entry(session_id, message_data.get('image_url', ''), message_data.get('prompt', ''))
+        except:
+            # If not JSON, treat as simple log message
+            self.add_log_entry(session_id, 'info', message)
+
         if session_id in self.active_connections:
             websocket = self.active_connections[session_id]
             await websocket.send_text(message)

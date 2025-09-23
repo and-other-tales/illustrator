@@ -550,6 +550,78 @@ async def list_manuscript_images(manuscript_id: str) -> Dict[str, Any]:
         }
 
 
+@router.delete("/{manuscript_id}/images/{image_id}")
+async def delete_manuscript_image(manuscript_id: str, image_id: str) -> SuccessResponse:
+    """Delete a specific image for a manuscript."""
+    try:
+        from ..services.illustration_service import IllustrationService
+
+        # Initialize illustration service
+        illustration_service = IllustrationService()
+
+        try:
+            # Try to delete from database first
+            illustration = illustration_service.get_illustration_by_id(image_id)
+
+            if not illustration:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Image not found"
+                )
+
+            # Verify the image belongs to the correct manuscript
+            if str(illustration.manuscript_id) != manuscript_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Image does not belong to this manuscript"
+                )
+
+            # Delete the physical file
+            if illustration.file_path and Path(illustration.file_path).exists():
+                Path(illustration.file_path).unlink()
+
+            # Delete from database
+            illustration_service.delete_illustration(image_id)
+
+            return SuccessResponse(
+                message="Image deleted successfully"
+            )
+
+        finally:
+            illustration_service.close()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Fallback to filesystem deletion if database fails
+        print(f"Database delete failed, falling back to filesystem: {e}")
+
+        # Parse image_id as filename for filesystem fallback
+        filename = image_id
+        if not filename.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff')):
+            filename = f"{image_id}.png"  # Assume PNG if no extension
+
+        generated_images_dir = Path("illustrator_output") / "generated_images"
+        image_path = generated_images_dir / filename
+
+        if not image_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image not found"
+            )
+
+        try:
+            image_path.unlink()
+            return SuccessResponse(
+                message="Image deleted successfully"
+            )
+        except Exception as delete_error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error deleting image: {str(delete_error)}"
+            )
+
+
 @router.delete("/{manuscript_id}")
 async def delete_manuscript(manuscript_id: str) -> SuccessResponse:
     """Delete a manuscript."""

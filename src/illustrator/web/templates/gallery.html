@@ -75,6 +75,9 @@
                 <div id="imageDetails" class="flex-grow-1 text-start">
                     <!-- Image details will be populated here -->
                 </div>
+                <button id="deleteImageBtn" type="button" class="btn btn-outline-danger me-2" onclick="deleteCurrentModalImage()">
+                    <i class="bi bi-trash me-2"></i>Delete
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
@@ -160,6 +163,11 @@ function createImageCard(image) {
                                 onclick="downloadImage('${image.url}', '${image.title || 'illustration'}')">
                             <i class="bi bi-download"></i>
                         </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                onclick="deleteImage('${image.id || image.filename}', '${image.title || 'this image'}')"
+                                title="Delete image">
+                            <i class="bi bi-trash"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -174,6 +182,9 @@ function showImageModal(imageUrl, title, imageData) {
     const modalImage = document.getElementById('modalImage');
     const modalTitle = document.getElementById('imageModalTitle');
     const imageDetails = document.getElementById('imageDetails');
+
+    // Store current image data for deletion
+    currentModalImageData = imageData;
 
     modalImage.src = imageUrl;
     modalTitle.textContent = title;
@@ -208,6 +219,69 @@ function downloadImage(imageUrl, filename) {
 
 function refreshGallery() {
     loadGallery();
+}
+
+// Global variable to store current modal image data
+let currentModalImageData = null;
+
+async function deleteImage(imageId, imageTitle) {
+    if (!confirm(`Are you sure you want to delete "${imageTitle}"? This action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/manuscripts/${manuscriptId}/images/${imageId}`, {
+            method: 'DELETE',
+        });
+
+        if (response.ok) {
+            // Show success message
+            showMessage('Image deleted successfully', 'success');
+
+            // Reload the gallery
+            loadGallery();
+        } else {
+            const errorData = await response.json();
+            showMessage(`Failed to delete image: ${errorData.detail || 'Unknown error'}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Error deleting image:', error);
+        showMessage('Failed to delete image. Please try again.', 'danger');
+    }
+}
+
+function deleteCurrentModalImage() {
+    if (currentModalImageData) {
+        const imageId = currentModalImageData.id || currentModalImageData.filename;
+        const imageTitle = currentModalImageData.title || 'this image';
+
+        // Close modal first
+        const modal = bootstrap.Modal.getInstance(document.getElementById('imageModal'));
+        modal.hide();
+
+        // Then delete the image
+        deleteImage(imageId, imageTitle);
+    }
+}
+
+function showMessage(message, type = 'info') {
+    // Create a Bootstrap alert
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(alertDiv);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
 }
 </script>
 

@@ -252,18 +252,53 @@ async function initializeProcessing() {
             if (statusData.active_session) {
                 // Reconnect to existing session
                 sessionId = statusData.active_session.session_id;
+                const session = statusData.active_session;
 
                 addLogMessage('info', 'Reconnecting to existing processing session...');
 
                 // Set session info
                 document.getElementById('sessionId').textContent = sessionId;
-                document.getElementById('startTime').textContent = formatDateTime(new Date());
 
-                // If the session has status data, update the UI
-                if (statusData.active_session.status) {
-                    const status = statusData.active_session.status;
+                // Set start time if available
+                if (session.start_time) {
+                    startTime = new Date(session.start_time);
+                    document.getElementById('startTime').textContent = formatDateTime(startTime);
+                }
+
+                // Restore session state
+                if (session.status) {
+                    const status = session.status;
                     updateProgress(status.progress, status.message);
                     updateProcessingStatus(status.status, status.status);
+                }
+
+                // Restore step status
+                if (session.step_status) {
+                    Object.keys(session.step_status).forEach(stepIndex => {
+                        updateProcessingStep(parseInt(stepIndex), session.step_status[stepIndex]);
+                    });
+                }
+
+                // Restore logs
+                if (session.logs && session.logs.length > 0) {
+                    // Clear the initial log and add preserved logs
+                    const log = document.getElementById('processingLog');
+                    log.innerHTML = '';
+
+                    session.logs.forEach(logEntry => {
+                        restoreLogMessage(logEntry.timestamp, logEntry.level, logEntry.message);
+                    });
+
+                    addLogMessage('info', `Restored ${session.logs.length} log entries from previous session`);
+                }
+
+                // Restore images
+                if (session.images && session.images.length > 0) {
+                    session.images.forEach(imageEntry => {
+                        addGeneratedImage(imageEntry.url, imageEntry.prompt);
+                    });
+
+                    addLogMessage('info', `Restored ${session.images.length} generated images from previous session`);
                 }
 
                 // Connect WebSocket for real-time updates
@@ -276,7 +311,7 @@ async function initializeProcessing() {
                 document.getElementById('pauseBtn').disabled = false;
                 document.getElementById('cancelBtn').disabled = false;
 
-                addLogMessage('info', 'Reconnected to existing processing session');
+                addLogMessage('success', 'Successfully reconnected to existing processing session with full state restoration');
                 return;
             }
         }
@@ -496,6 +531,30 @@ function addLogMessage(level, message) {
     if (autoScroll) {
         log.scrollTop = log.scrollHeight;
     }
+}
+
+function restoreLogMessage(timestamp, level, message) {
+    const log = document.getElementById('processingLog');
+
+    // Parse the timestamp to display local time
+    const date = new Date(timestamp);
+    const displayTime = date.toLocaleTimeString();
+
+    const levelColors = {
+        'info': 'text-info',
+        'success': 'text-success',
+        'warning': 'text-warning',
+        'error': 'text-danger'
+    };
+
+    const logEntry = document.createElement('div');
+    logEntry.innerHTML = `
+        <span class="text-muted">[${displayTime}]</span>
+        <span class="${levelColors[level] || 'text-light'}">[${level.toUpperCase()}]</span>
+        ${escapeHtml(message)}
+    `;
+
+    log.appendChild(logEntry);
 }
 
 function updateProcessingStatus(status, label) {

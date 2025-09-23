@@ -84,7 +84,11 @@ async def get_processing_status(manuscript_id: str):
                 active_session = {
                     "session_id": session_id,
                     "status": session_data.status.dict() if hasattr(session_data, 'status') else None,
-                    "is_connected": session_id in connection_manager.active_connections
+                    "is_connected": session_id in connection_manager.active_connections,
+                    "logs": [log.dict() for log in session_data.logs],
+                    "images": [image.dict() for image in session_data.images],
+                    "start_time": session_data.start_time,
+                    "step_status": session_data.step_status
                 }
                 break
 
@@ -183,7 +187,9 @@ async def run_processing_workflow(
             session_id=session_id,
             manuscript_id=manuscript_id,
             websocket=None,
-            status=initial_status
+            status=initial_status,
+            start_time=datetime.now().isoformat(),
+            step_status={0: "pending", 1: "pending", 2: "pending", 3: "pending"}
         )
 
         connection_manager.sessions[session_id] = session_data
@@ -253,6 +259,10 @@ async def run_processing_workflow(
             }),
             session_id
         )
+
+        # Update step status in session
+        if session_id in connection_manager.sessions:
+            connection_manager.sessions[session_id].step_status[0] = "completed"
 
         # Process each chapter
         total_images = 0
@@ -350,6 +360,11 @@ async def run_processing_workflow(
                     session_id
                 )
 
+                # Update step status in session
+                if session_id in connection_manager.sessions:
+                    connection_manager.sessions[session_id].step_status[1] = "completed"
+                    connection_manager.sessions[session_id].step_status[2] = "processing"
+
             # Generate images
             await connection_manager.send_personal_message(
                 json.dumps({
@@ -368,6 +383,16 @@ async def run_processing_workflow(
                 if result.get("success") and result.get("file_path"):
                     # Convert file path to web-accessible URL
                     image_url = f"/generated/{Path(result['file_path']).name}"
+
+                    # Add image entry to session
+                    connection_manager.add_image_entry(
+                        session_id=session_id,
+                        url=image_url,
+                        prompt=result.get("prompt", ""),
+                        chapter_number=chapter.number,
+                        scene_number=results.index(result) + 1
+                    )
+
                     await connection_manager.send_personal_message(
                         json.dumps({
                             "type": "image",
@@ -394,6 +419,11 @@ async def run_processing_workflow(
             session_id
         )
 
+        # Update step status in session
+        if session_id in connection_manager.sessions:
+            connection_manager.sessions[session_id].step_status[2] = "completed"
+            connection_manager.sessions[session_id].step_status[3] = "processing"
+
         # Final completion
         await connection_manager.send_personal_message(
             json.dumps({
@@ -412,6 +442,10 @@ async def run_processing_workflow(
             }),
             session_id
         )
+
+        # Update step status in session
+        if session_id in connection_manager.sessions:
+            connection_manager.sessions[session_id].step_status[3] = "completed"
 
         await connection_manager.send_personal_message(
             json.dumps({
