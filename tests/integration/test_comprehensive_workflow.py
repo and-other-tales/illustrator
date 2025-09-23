@@ -350,8 +350,8 @@ class TestComprehensiveWorkflow:
         assert hasattr(self.character_tracker, 'characters')
         assert hasattr(self.parallel_processor, 'max_concurrent_llm')
         assert hasattr(self.error_handler, 'recovery_stats')
-        assert hasattr(self.narrative_analyzer, 'genre_classifier')
-        assert hasattr(self.visual_composer, 'composition_rules')
+        assert hasattr(self.narrative_analyzer, 'llm')
+        assert hasattr(self.visual_composer, 'llm')
         assert hasattr(self.prompt_engineer, 'scene_analyzer')
         assert hasattr(self.emotional_analyzer, 'llm')
 
