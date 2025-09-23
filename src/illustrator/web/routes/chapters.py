@@ -119,10 +119,11 @@ async def get_manuscript_chapters(manuscript_id: str) -> List[ChapterResponse]:
 
     chapters = []
     for i, chapter in enumerate(manuscript.chapters):
+        chapter_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{manuscript_id}_{chapter.number}"))
         chapters.append(ChapterResponse(
-            id=str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{manuscript_id}_{chapter.number}")),
+            id=chapter_id,
             chapter=chapter,
-            analysis=load_chapter_analysis(generated_id),
+            analysis=load_chapter_analysis(chapter_id),
             images_generated=count_chapter_images(manuscript_id, chapter.number),
             processing_status="draft"
         ))
