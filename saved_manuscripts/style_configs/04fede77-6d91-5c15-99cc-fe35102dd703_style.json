@@ -2,6 +2,6 @@
   "image_provider": "dalle",
   "art_style": "pencil sketch",
   "color_palette": "Black and White",
-  "artistic_influences": "EH Shephard",
+  "artistic_influences": "E.H. Shephard",
   "style_config_path": "advanced_eh_shepard_config.json"
 }

@@ -332,40 +332,56 @@ async def generate_chapter_headers(
         )
 
     try:
-        # For now, create mock header options since we don't have the full LLM setup in the web routes
-        # In a full implementation, you would initialize the PromptEngineer here
+        # Initialize the advanced PromptEngineer system for chapter header generation
+        import os
+        from langchain.chat_models import init_chat_model
+        from illustrator.prompt_engineering import PromptEngineer
+        from illustrator.models import ImageProvider
 
-        # Mock response with 4 header options
+        # Check for required API key
+        anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
+        if not anthropic_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Anthropic API key is required for advanced prompt engineering"
+            )
+
+        # Initialize LLM and PromptEngineer
+        llm = init_chat_model(
+            model="anthropic/claude-3-5-sonnet-20241022",
+            api_key=anthropic_api_key
+        )
+        prompt_engineer = PromptEngineer(llm)
+
+        # Set default style preferences if not provided
+        if not style_config:
+            style_config = {
+                'art_style': 'digital illustration',
+                'color_palette': 'harmonious',
+                'artistic_influences': None
+            }
+
+        # Generate sophisticated chapter headers using full content analysis
+        provider = ImageProvider.DALLE  # Default provider for web interface
+        chapter_header_options = await prompt_engineer.generate_chapter_header_options(
+            chapter=chapter,
+            style_preferences=style_config,
+            provider=provider
+        )
+
+        # Convert to response format
         header_options = []
-
-        for i in range(4):
-            option_types = ["Symbolic", "Character-focused", "Environmental", "Action"]
-            styles = ["watercolor painting", "digital art", "pencil sketch", "oil painting"]
-
-            from illustrator.models import IllustrationPrompt, ImageProvider
-
-            prompt = IllustrationPrompt(
-                provider=ImageProvider.DALLE,
-                prompt=f"{option_types[i]} chapter header for '{chapter.title}', {styles[i]} style",
-                style_modifiers=[styles[i], "chapter header", "horizontal composition"],
-                negative_prompt="text, words, letters, low quality",
-                technical_params={
-                    "aspect_ratio": "16:9",
-                    "style": "artistic",
-                    "quality": "high"
-                }
+        for option in chapter_header_options:
+            option_response = ChapterHeaderOptionResponse(
+                option_number=option.option_number,
+                title=option.title,
+                description=option.description,
+                visual_focus=option.visual_focus,
+                artistic_style=option.artistic_style,
+                composition_notes=option.composition_notes,
+                prompt=option.prompt
             )
-
-            option = ChapterHeaderOptionResponse(
-                option_number=i + 1,
-                title=f"{option_types[i]} Header",
-                description=f"A {option_types[i].lower()} representation focusing on the chapter's core themes",
-                visual_focus=f"{option_types[i].lower()} elements from the chapter",
-                artistic_style=styles[i],
-                composition_notes="Horizontal header layout with balanced composition",
-                prompt=prompt
-            )
-            header_options.append(option)
+            header_options.append(option_response)
 
         return ChapterHeaderResponse(
             chapter_id=chapter_id,

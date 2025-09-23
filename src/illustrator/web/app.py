@@ -685,23 +685,6 @@ class WebSocketIllustrationGenerator:
                                               chapter.title,
                                               style_config.get("art_style", "digital painting"))
 
-    def _create_fallback_prompt(self, description, tone, chapter_title, art_style):
-        """Fallback prompt generation method."""
-        tone_description = {
-            EmotionalTone.JOY: "bright, uplifting, warm colors",
-            EmotionalTone.MELANCHOLY: "soft, muted tones, contemplative mood",
-            EmotionalTone.TENSION: "dramatic lighting, sharp contrasts, dynamic composition",
-            EmotionalTone.MYSTERY: "shadowy, atmospheric, intriguing lighting",
-            EmotionalTone.ROMANCE: "warm, intimate lighting, soft focus",
-            EmotionalTone.FEAR: "dark, ominous, high contrast",
-            EmotionalTone.ANTICIPATION: "golden hour lighting, expansive composition",
-            EmotionalTone.SADNESS: "soft, muted tones, melancholic mood",
-            EmotionalTone.EXCITEMENT: "vibrant, energetic colors, dynamic composition",
-            EmotionalTone.PEACE: "serene, calm lighting, balanced composition",
-            EmotionalTone.ADVENTURE: "epic, cinematic lighting, heroic composition"
-        }.get(tone, "balanced lighting and composition")
-
-        return f"{art_style} illustration: {description[:100]}... Scene mood: {tone_description}, high-quality {art_style}"
 
     async def generate_images(self, prompts, chapter):
         """Generate images with WebSocket progress updates."""

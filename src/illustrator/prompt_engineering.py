@@ -219,43 +219,9 @@ Extract the most important visual elements for illustration.""")
             return visual_elements
 
         except Exception as e:
-            # Fallback to pattern-based extraction
-            return self._pattern_based_extraction(text, context)
+            logger.error(f"Visual element extraction failed: {e}")
+            raise ValueError(f"Failed to extract visual elements from scene: {str(e)}")
 
-    def _pattern_based_extraction(self, text: str, context: str) -> List[VisualElement]:
-        """Fallback pattern-based visual element extraction."""
-        elements = []
-        text_lower = text.lower()
-
-        # Extract characters
-        character_matches = []
-        for pattern in self.character_patterns:
-            matches = re.findall(pattern, text_lower)
-            character_matches.extend(matches)
-
-        if character_matches:
-            elements.append(VisualElement(
-                element_type="character",
-                description=f"Character elements: {', '.join(set(character_matches))}",
-                importance=0.8,
-                attributes={"detected_features": character_matches}
-            ))
-
-        # Extract environment
-        env_matches = []
-        for pattern in self.environment_patterns:
-            matches = re.findall(pattern, text_lower)
-            env_matches.extend(matches)
-
-        if env_matches:
-            elements.append(VisualElement(
-                element_type="environment",
-                description=f"Environmental elements: {', '.join(set(env_matches))}",
-                importance=0.7,
-                attributes={"detected_elements": env_matches}
-            ))
-
-        return elements
 
     async def _analyze_composition(
         self,
@@ -323,38 +289,10 @@ Recommend the optimal composition for maximum visual and emotional impact.""")
                 emotional_weight=float(composition_data.get('emotional_weight', 0.5))
             )
 
-        except Exception:
-            # Fallback composition based on emotional tones
-            return self._fallback_composition(emotional_moment)
+        except Exception as e:
+            logger.error(f"Scene composition analysis failed: {e}")
+            raise ValueError(f"Failed to analyze scene composition: {str(e)}")
 
-    def _fallback_composition(self, emotional_moment: EmotionalMoment) -> SceneComposition:
-        """Generate fallback composition based on emotional analysis."""
-        primary_emotion = emotional_moment.emotional_tones[0] if emotional_moment.emotional_tones else EmotionalTone.ANTICIPATION
-
-        # Emotion-based composition defaults
-        composition_map = {
-            EmotionalTone.JOY: (CompositionType.MEDIUM_SHOT, LightingMood.GOLDEN_HOUR, "warm and uplifting"),
-            EmotionalTone.SADNESS: (CompositionType.CLOSE_UP, LightingMood.SOFT, "melancholic and introspective"),
-            EmotionalTone.FEAR: (CompositionType.WIDE_SHOT, LightingMood.DRAMATIC, "tense and foreboding"),
-            EmotionalTone.ANGER: (CompositionType.DRAMATIC, LightingMood.HARSH, "intense and confrontational"),
-            EmotionalTone.MYSTERY: (CompositionType.ESTABLISHING, LightingMood.MYSTERIOUS, "atmospheric and enigmatic"),
-        }
-
-        comp_type, lighting, atmosphere = composition_map.get(
-            primary_emotion,
-            (CompositionType.MEDIUM_SHOT, LightingMood.NATURAL, "balanced emotional scene")
-        )
-
-        return SceneComposition(
-            composition_type=comp_type,
-            focal_point="central narrative element",
-            background_elements=["atmospheric setting"],
-            foreground_elements=["key story elements"],
-            lighting_mood=lighting,
-            atmosphere=atmosphere,
-            color_palette_suggestion="emotionally appropriate palette",
-            emotional_weight=emotional_moment.intensity_score
-        )
 
 
 class StyleTranslator:
@@ -774,133 +712,7 @@ class StyleTranslator:
             "provider_optimizations": {}
         }
 
-    async def analyze_chapter_for_headers(self, chapter: Chapter) -> List[ChapterHeaderOption]:
-        """Analyze a chapter to generate 4 header illustration options."""
-        analysis_prompt = f"""
-        Analyze the following chapter and create 4 distinct header illustration options.
-        Each option should capture a different aspect of the chapter's essence.
 
-        Chapter Title: {chapter.title}
-        Chapter Content: {chapter.content[:2000]}...
-
-        For each header option, consider:
-        1. THEMATIC FOCUS - Key themes, symbols, or motifs
-        2. VISUAL STYLE - Different artistic approaches (realistic, symbolic, atmospheric, dramatic)
-        3. COMPOSITION - How the elements should be arranged
-        4. EMOTIONAL TONE - The feeling the header should evoke
-
-        Create exactly 4 options with these focuses:
-        Option 1: Symbolic/Metaphorical representation
-        Option 2: Character-focused dramatic scene
-        Option 3: Environmental/atmospheric setting
-        Option 4: Action/conflict moment
-
-        Return as JSON with this structure:
-        {{
-            "options": [
-                {{
-                    "option_number": 1,
-                    "title": "Symbolic Focus",
-                    "description": "Brief description of the concept",
-                    "visual_focus": "Main visual element",
-                    "artistic_style": "Recommended style",
-                    "composition_notes": "Layout and framing suggestions",
-                    "key_elements": ["element1", "element2", "element3"],
-                    "emotional_tone": "primary emotion",
-                    "color_palette": "color suggestions"
-                }},
-                ...
-            ]
-        }}
-        """
-
-        try:
-            response = await self.llm.ainvoke([
-                SystemMessage(content="You are an expert visual artist and book designer specializing in chapter header illustrations."),
-                HumanMessage(content=analysis_prompt)
-            ])
-
-            # Parse the JSON response
-            response_text = response.content.strip()
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3].strip()
-            elif response_text.startswith("```"):
-                response_text = response_text[3:-3].strip()
-
-            analysis_data = json.loads(response_text)
-            header_options = []
-
-            for option_data in analysis_data.get("options", []):
-                # Create basic illustration prompt for each option
-                base_prompt = f"{option_data['visual_focus']}, {option_data['artistic_style']}, {option_data['composition_notes']}"
-
-                illustration_prompt = IllustrationPrompt(
-                    provider=ImageProvider.DALLE,  # Default provider
-                    prompt=base_prompt,
-                    style_modifiers=[
-                        option_data['artistic_style'],
-                        f"chapter header illustration",
-                        f"{option_data['color_palette']} color palette"
-                    ],
-                    negative_prompt="text, letters, words, typography, low quality, blurry, distorted",
-                    technical_params={
-                        "aspect_ratio": "16:9",
-                        "style": "artistic",
-                        "quality": "high"
-                    }
-                )
-
-                header_option = ChapterHeaderOption(
-                    option_number=option_data['option_number'],
-                    title=option_data['title'],
-                    description=option_data['description'],
-                    visual_focus=option_data['visual_focus'],
-                    artistic_style=option_data['artistic_style'],
-                    composition_notes=option_data['composition_notes'],
-                    prompt=illustration_prompt
-                )
-                header_options.append(header_option)
-
-            return header_options
-
-        except Exception as e:
-            print(f"Error analyzing chapter for headers: {e}")
-            # Return default header options as fallback
-            return self._create_default_header_options(chapter)
-
-    def _create_default_header_options(self, chapter: Chapter) -> List[ChapterHeaderOption]:
-        """Create default header options when analysis fails."""
-        default_options = []
-
-        # Extract first few sentences for context
-        first_sentences = chapter.content[:500]
-
-        for i in range(4):
-            styles = ["watercolor painting", "digital art", "pencil sketch", "oil painting"]
-            focuses = ["symbolic", "character-driven", "environmental", "dramatic"]
-
-            base_prompt = f"Chapter header illustration, {focuses[i]} style, based on: {chapter.title}"
-
-            illustration_prompt = IllustrationPrompt(
-                provider=ImageProvider.DALLE,  # Default provider
-                prompt=base_prompt,
-                style_modifiers=[styles[i], "chapter header", "artistic"],
-                negative_prompt="text, words, low quality",
-                technical_params={"aspect_ratio": "16:9", "quality": "high"}
-            )
-
-            option = ChapterHeaderOption(
-                option_number=i + 1,
-                title=f"{focuses[i].title()} Header",
-                description=f"A {focuses[i]} representation of chapter themes",
-                visual_focus=f"{focuses[i]} elements from the chapter",
-                artistic_style=styles[i],
-                composition_notes="Horizontal header layout",
-                prompt=illustration_prompt
-            )
-            default_options.append(option)
-
-        return default_options
 
 
 class PromptEngineer:
@@ -1091,79 +903,186 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         style_preferences: Dict[str, Any],
         provider: ImageProvider = ImageProvider.DALLE
     ) -> List[ChapterHeaderOption]:
-        """Generate 4 chapter header illustration options."""
+        """Generate 4 chapter header illustration options using comprehensive content analysis."""
 
-        # Create a StyleTranslator instance with LLM for header analysis
-        style_translator_with_llm = StyleTranslator()
-        style_translator_with_llm.llm = self.llm
-        header_options = await style_translator_with_llm.analyze_chapter_for_headers(chapter)
+        # Analyze the full chapter content for visual themes and elements
+        analysis_prompt = f"""
+        Analyze this complete chapter and create 4 distinct header illustration options that capture different visual aspects of the chapter's content, themes, and narrative elements.
 
-        # Enhance each option's prompt using the full prompt engineering system
-        enhanced_options = []
-        for option in header_options:
-            try:
-                # Get style translation for this specific style
-                header_style_config = {
+        Chapter Title: {chapter.title}
+        Chapter Content: {chapter.content}
+
+        For each header option, deeply analyze the chapter content to identify:
+        1. Key visual scenes and moments
+        2. Thematic symbols and metaphors present in the text
+        3. Character descriptions and emotional states
+        4. Environmental settings and atmospheric details
+        5. Narrative conflicts and dramatic moments
+
+        Create exactly 4 options with these focuses:
+        Option 1: Symbolic/Metaphorical - Extract symbolic elements and themes from the text
+        Option 2: Character-focused - Based on character descriptions and emotional moments in the chapter
+        Option 3: Environmental/Atmospheric - Based on setting descriptions and environmental details
+        Option 4: Dramatic moment - Based on a key conflict or dramatic scene from the chapter
+
+        For each option, provide a detailed analysis of the specific textual elements that inform the visual design.
+
+        Return as JSON with this structure:
+        {{
+            "options": [
+                {{
+                    "option_number": 1,
+                    "title": "Specific title based on chapter content",
+                    "description": "Detailed description referencing specific text passages",
+                    "visual_focus": "Specific visual element extracted from chapter text",
+                    "artistic_style": "Style appropriate to the content",
+                    "composition_notes": "Specific composition based on textual analysis",
+                    "key_textual_references": ["specific quotes or passages that inform this design"],
+                    "emotional_tone": "emotion derived from chapter analysis",
+                    "color_palette": "colors suggested by chapter content and mood",
+                    "detailed_scene_elements": "specific environmental and character details from text"
+                }},
+                ...
+            ]
+        }}
+        """
+
+        try:
+            response = await self.llm.ainvoke([
+                SystemMessage(content="You are an expert visual artist and literary analyst who creates detailed illustration concepts based on deep textual analysis."),
+                HumanMessage(content=analysis_prompt)
+            ])
+
+            # Parse the JSON response
+            response_text = response.content.strip()
+            if response_text.startswith("```json"):
+                response_text = response_text[7:-3].strip()
+            elif response_text.startswith("```"):
+                response_text = response_text[3:-3].strip()
+
+            import json
+            analysis_data = json.loads(response_text)
+            header_options = []
+
+            for i, option_data in enumerate(analysis_data.get("options", [])):
+                # Create a mock emotional moment for each header option based on the analysis
+                header_emotional_moment = EmotionalMoment(
+                    text_excerpt=option_data.get('detailed_scene_elements', option_data['visual_focus']),
+                    context=f"Chapter header for '{chapter.title}' - {option_data['description']}",
+                    emotional_tones=[EmotionalTone(option_data.get('emotional_tone', 'anticipation').upper()) if option_data.get('emotional_tone', 'anticipation').upper() in [e.name for e in EmotionalTone] else EmotionalTone.ANTICIPATION],
+                    intensity_score=0.7
+                )
+
+                # Create enhanced style preferences for this specific header
+                header_style_preferences = {
                     **style_preferences,
-                    'style_name': option.artistic_style,
-                    'base_prompt_modifiers': [
-                        option.artistic_style,
-                        "chapter header illustration",
-                        "horizontal composition"
-                    ]
+                    'style_config': {
+                        'style_name': option_data['artistic_style'],
+                        'base_prompt_modifiers': [
+                            option_data['artistic_style'],
+                            "chapter header illustration",
+                            "horizontal composition",
+                            "book illustration style"
+                        ],
+                        'technical_params': {
+                            "aspect_ratio": "16:9",
+                            "style": "artistic",
+                            "quality": "high"
+                        }
+                    }
                 }
 
-                # Create a mock scene composition for header style
-                header_composition = SceneComposition(
-                    composition_type=CompositionType.ESTABLISHING,
-                    focal_point=option.visual_focus,
-                    background_elements=[],
-                    foreground_elements=[option.visual_focus],
-                    lighting_mood=LightingMood.NATURAL,
-                    atmosphere="chapter header style",
-                    color_palette_suggestion="harmonious",
-                    emotional_weight=0.7
-                )
-
-                # Get enhanced style translation
-                style_translation = self.style_translator.translate_style_config(
-                    header_style_config,
+                # Generate the sophisticated prompt using the main prompt engineering system
+                illustration_prompt = await self.engineer_prompt(
+                    header_emotional_moment,
                     provider,
-                    header_composition
+                    header_style_preferences,
+                    chapter,
+                    []  # No previous scenes for headers
                 )
 
-                # Create enhanced prompt
-                enhanced_prompt = IllustrationPrompt(
+                # Create the header option with the advanced prompt
+                header_option = ChapterHeaderOption(
+                    option_number=i + 1,
+                    title=option_data['title'],
+                    description=option_data['description'],
+                    visual_focus=option_data['visual_focus'],
+                    artistic_style=option_data['artistic_style'],
+                    composition_notes=option_data['composition_notes'],
+                    prompt=illustration_prompt
+                )
+                header_options.append(header_option)
+
+            return header_options
+
+        except Exception as e:
+            print(f"Error generating advanced chapter headers: {e}")
+            # Create informed fallback options using chapter content analysis
+            return await self._create_content_aware_header_options(chapter, style_preferences, provider)
+
+    async def _create_content_aware_header_options(self, chapter: Chapter, style_preferences: Dict[str, Any], provider: ImageProvider) -> List[ChapterHeaderOption]:
+        """Create content-aware header options when advanced analysis fails."""
+        # Extract key elements from chapter content
+        content_sample = chapter.content[:1000]  # Use more content than the old fallback
+
+        # Simple content analysis to inform the options
+        content_themes = {
+            "symbolic": "abstract representation of chapter themes",
+            "character": f"character elements from the chapter content: {content_sample[:200]}",
+            "environmental": f"setting and atmosphere based on: {content_sample[:200]}",
+            "dramatic": f"key dramatic moment from chapter: {content_sample[:200]}"
+        }
+
+        styles = ["symbolic watercolor", "character portrait", "atmospheric landscape", "dramatic scene"]
+        focuses = ["symbolic", "character-driven", "environmental", "dramatic"]
+
+        header_options = []
+        for i in range(4):
+            # Create a more informed emotional moment
+            header_emotional_moment = EmotionalMoment(
+                text_excerpt=content_themes[focuses[i]],
+                context=f"Chapter header for '{chapter.title}' with {focuses[i]} focus",
+                emotional_tones=[EmotionalTone.ANTICIPATION],
+                intensity_score=0.6
+            )
+
+            # Use the main prompt engineering system even for fallback
+            try:
+                illustration_prompt = await self.engineer_prompt(
+                    header_emotional_moment,
+                    provider,
+                    {
+                        **style_preferences,
+                        'style_config': {
+                            'style_name': styles[i],
+                            'base_prompt_modifiers': [styles[i], "chapter header", "horizontal composition"]
+                        }
+                    },
+                    chapter,
+                    []
+                )
+            except Exception:
+                # Last resort basic prompt if everything fails
+                illustration_prompt = IllustrationPrompt(
                     provider=provider,
-                    prompt=f"{option.prompt.base_prompt}, {option.composition_notes}",
-                    style_modifiers=style_translation['style_modifiers'],
-                    negative_prompt=", ".join(style_translation['negative_prompt']) if style_translation['negative_prompt'] else option.prompt.negative_prompt,
-                    technical_params={
-                        **style_translation['technical_params'],
-                        "aspect_ratio": "16:9",  # Header aspect ratio
-                        "style": "artistic"
-                    }
+                    prompt=f"Chapter header illustration for '{chapter.title}', {styles[i]} style, {focuses[i]} approach",
+                    style_modifiers=[styles[i], "chapter header", "artistic"],
+                    negative_prompt="text, words, low quality",
+                    technical_params={"aspect_ratio": "16:9", "quality": "high"}
                 )
 
-                # Update the option with enhanced prompt
-                enhanced_option = ChapterHeaderOption(
-                    option_number=option.option_number,
-                    title=option.title,
-                    description=option.description,
-                    visual_focus=option.visual_focus,
-                    artistic_style=option.artistic_style,
-                    composition_notes=option.composition_notes,
-                    prompt=enhanced_prompt
-                )
+            option = ChapterHeaderOption(
+                option_number=i + 1,
+                title=f"{focuses[i].title()} Header",
+                description=f"A {focuses[i]} representation based on chapter content",
+                visual_focus=content_themes[focuses[i]],
+                artistic_style=styles[i],
+                composition_notes="Horizontal header composition with chapter-specific elements",
+                prompt=illustration_prompt
+            )
+            header_options.append(option)
 
-                enhanced_options.append(enhanced_option)
-
-            except Exception as e:
-                print(f"Error enhancing header option {option.option_number}: {e}")
-                # Fall back to original option
-                enhanced_options.append(option)
-
-        return enhanced_options
+        return header_options
 
     async def _enhance_scene_description(
         self,
@@ -1228,131 +1147,14 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
 
             # Ensure we have a substantive description
             if len(enhanced_description) < 50:
-                # Use enhanced fallback if AI response is too brief
-                return self._create_detailed_fallback_description(original_text, visual_elements, scene_composition)
+                raise ValueError("AI generated description is too brief - insufficient content analysis")
 
             return enhanced_description
 
         except Exception as e:
-            logger.warning(f"Scene description enhancement failed: {e}")
-            return self._create_detailed_fallback_description(original_text, visual_elements, scene_composition)
+            logger.error(f"Scene description enhancement failed: {e}")
+            raise ValueError(f"Failed to enhance scene description: {str(e)}")
 
-    def _create_detailed_fallback_description(
-        self,
-        original_text: str,
-        visual_elements: List[VisualElement],
-        scene_composition: SceneComposition
-    ) -> str:
-        """Create an exceptionally detailed fallback description when AI enhancement fails."""
-        parts = []
-
-        # Enhanced fallback with rich environmental and character specificity
-        character_elements = [elem for elem in visual_elements if elem.element_type == "character"]
-        environment_elements = [elem for elem in visual_elements if elem.element_type == "environment"]
-        atmosphere_elements = [elem for elem in visual_elements if elem.element_type == "atmosphere"]
-
-        # DETAILED ENVIRONMENTAL SETTING
-        if environment_elements:
-            setting = environment_elements[0].description
-            # Enhance with specific architectural and atmospheric details
-            if "coffee" in setting.lower() or "café" in setting.lower() or "shop" in setting.lower():
-                parts.append("Interior cozy coffee shop scene with wooden counter, ceramic cup displays, espresso machine details, hanging menu boards, small café tables, warm ambient lighting creating intimate atmosphere")
-            elif "house" in setting.lower() or "home" in setting.lower() or "room" in setting.lower():
-                parts.append("Interior domestic setting with period architectural details, wooden furniture, textured wallpaper, window light casting gentle shadows, cozy furnishings creating lived-in atmosphere")
-            elif "door" in setting.lower() or "entrance" in setting.lower():
-                parts.append("Architectural framing with detailed doorway, wooden panels, brass hardware, threshold details, creating sense of transition and anticipation")
-            else:
-                parts.append(f"Richly detailed {setting} with specific environmental textures, atmospheric lighting, and period-appropriate furnishings")
-        else:
-            # Infer detailed setting from text context
-            if any(word in original_text.lower() for word in ["coffee", "café", "barista", "counter", "order"]):
-                parts.append("Intimate coffee shop interior with wooden counter details, ceramic coffee cups arranged on shelves, espresso machine with steam, display case with pastries, small wooden tables, warm lighting fixtures creating cozy café atmosphere")
-            elif any(word in original_text.lower() for word in ["house", "room", "home", "door", "window"]):
-                parts.append("Interior domestic setting with detailed period furnishings, wooden elements, textured fabrics, natural lighting from windows, architectural details creating warm, lived-in environment")
-            else:
-                parts.append("Detailed environmental setting with rich textural elements, atmospheric lighting, and period-specific architectural details")
-
-        # SPECIFIC CHARACTER DETAILS WITH EMOTIONAL EXPRESSIONS
-        if character_elements:
-            char_descriptions = []
-            for char in character_elements:
-                base_desc = char.description
-                # Enhanced emotional and physical details
-                if hasattr(char, 'attributes') and char.attributes:
-                    facial_expr = char.attributes.get('facial_expression', '')
-                    body_lang = char.attributes.get('body_language', '')
-                    emotion_sig = char.attributes.get('emotional_significance', '')
-
-                    enhanced_desc = base_desc
-                    if facial_expr:
-                        enhanced_desc += f" with {facial_expr}"
-                    if body_lang:
-                        enhanced_desc += f", {body_lang}"
-                    if emotion_sig:
-                        enhanced_desc += f" conveying {emotion_sig}"
-                    char_descriptions.append(enhanced_desc)
-                else:
-                    # Add inferred emotional details based on text context
-                    if any(word in original_text.lower() for word in ["fear", "afraid", "startled", "shocked"]):
-                        char_descriptions.append(f"{base_desc} showing startled expression with wide eyes, tense posture, conveying fear and unease")
-                    elif any(word in original_text.lower() for word in ["smile", "happy", "joy", "pleased"]):
-                        char_descriptions.append(f"{base_desc} with gentle smile, relaxed posture, expressing warmth and contentment")
-                    elif any(word in original_text.lower() for word in ["curious", "wonder", "watching", "observing"]):
-                        char_descriptions.append(f"{base_desc} with attentive expression, slightly tilted head, posture suggesting curiosity and engagement")
-                    else:
-                        char_descriptions.append(f"{base_desc} with expressive facial features and meaningful body language")
-
-            parts.append(f"featuring {', '.join(char_descriptions)}")
-        else:
-            # Infer character presence and details from text
-            if "barista" in original_text.lower():
-                parts.append("featuring female barista behind counter with detailed facial expression showing mix of professional service and underlying emotional tension, positioned with careful body language")
-            elif "customer" in original_text.lower():
-                parts.append("featuring casual customer with relaxed posture and unaware expression, creating contrast with other characters' emotional states")
-            elif "lukas" in original_text.lower():
-                parts.append("featuring male character Lukas with thoughtful, expressive face, detailed posture suggesting contemplation or emotional engagement")
-            else:
-                parts.append("featuring character with highly detailed facial expressions, specific body language, and emotionally resonant positioning")
-
-        # ENHANCED COMPOSITION AND ARTISTIC DETAILS
-        comp_desc = f"{scene_composition.composition_type.value} composition"
-        if scene_composition.composition_type.value == "intimate":
-            comp_desc += " creating personal, close connection between viewer and subjects"
-        elif scene_composition.composition_type.value == "medium_shot":
-            comp_desc += " balancing character details with environmental context"
-        elif scene_composition.composition_type.value == "close_up":
-            comp_desc += " focusing intensely on facial expressions and emotional details"
-
-        comp_desc += f" with visual focus on {scene_composition.focal_point}"
-        parts.append(comp_desc)
-
-        # RICH ATMOSPHERIC DETAILS
-        if atmosphere_elements:
-            atmo_desc = atmosphere_elements[0].description
-            # Enhance atmospheric description
-            if "mysterious" in atmo_desc.lower():
-                parts.append("creating mysterious atmosphere with strategic shadows, subtle environmental details, and sense of hidden narrative tension")
-            elif "warm" in atmo_desc.lower() or "cozy" in atmo_desc.lower():
-                parts.append("creating warm, inviting atmosphere with soft lighting, comfortable environmental details, and intimate mood")
-            else:
-                parts.append(f"creating {atmo_desc} with detailed environmental mood, lighting nuances, and emotional resonance")
-        elif hasattr(scene_composition, 'atmosphere') and scene_composition.atmosphere:
-            parts.append(f"creating {scene_composition.atmosphere} atmosphere with rich environmental details and emotional depth")
-        else:
-            # Enhanced atmospheric inference
-            if any(word in original_text.lower() for word in ["fear", "tension", "unease", "worried"]):
-                parts.append("creating subtle tension atmosphere - everyday setting with underlying psychological unease, perfect for expressive pencil illustration")
-            elif any(word in original_text.lower() for word in ["mystery", "curious", "watching", "strange"]):
-                parts.append("creating mysterious, anticipatory atmosphere with careful environmental details suggesting hidden narrative elements")
-            elif any(word in original_text.lower() for word in ["warm", "cozy", "comfortable", "friendly"]):
-                parts.append("creating warm, intimate atmosphere with detailed environmental comfort and gentle emotional resonance")
-            else:
-                parts.append("creating emotionally rich atmosphere with environmental details supporting the narrative mood")
-
-        # E.H. SHEPARD SPECIFIC ARTISTIC TECHNIQUE INTEGRATION
-        parts.append("Rendered in classic E.H. Shepard pencil illustration style with delicate crosshatching, expressive character faces, detailed environmental textures, soft graphite shading, and whimsical yet emotionally resonant artistic approach perfect for classic book illustration")
-
-        return ". ".join(parts)
 
     def _build_composition_guidance(self, scene_composition: SceneComposition) -> str:
         """Build composition and framing guidance."""

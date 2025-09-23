@@ -161,8 +161,8 @@ class EmotionalAnalyzer:
 
         # Combine and diversify moments across scenes
         if not all_moments:
-            # Fallback to traditional analysis
-            return await self.analyze_chapter(chapter, max_moments, min_intensity)
+            # No fallback - require proper scene analysis
+            raise ValueError("Advanced scene analysis failed to identify any emotional moments in chapter")
 
         # Sort by combined score (intensity + narrative significance)
         scored_moments = []
@@ -513,32 +513,6 @@ class EmotionalAnalyzer:
 
         return min(1.0, final_score)
 
-    def _calculate_pattern_score(self, text: str) -> float:
-        """Calculate emotional intensity based on pattern matching."""
-        text_lower = text.lower()
-        total_score = 0.0
-        matches = 0
-
-        for emotion, patterns in self.EMOTION_PATTERNS.items():
-            for pattern in patterns:
-                pattern_matches = len(re.findall(pattern, text_lower))
-                if pattern_matches > 0:
-                    matches += pattern_matches
-                    total_score += pattern_matches * 0.2
-
-        # Apply intensity modifiers
-        for intensity, modifiers in self.INTENSITY_MODIFIERS.items():
-            for modifier in modifiers:
-                if modifier in text_lower:
-                    multiplier = {'high': 1.5, 'medium': 1.2, 'low': 0.8}[intensity]
-                    total_score *= multiplier
-                    break
-
-        # Normalize by text length
-        words_count = len(text.split())
-        normalized_score = total_score / max(1, words_count / 100)
-
-        return min(1.0, normalized_score)
 
     async def _llm_intensity_score(self, segment: TextSegment) -> float:
         """Use LLM to score emotional intensity of a text segment."""
@@ -573,9 +547,10 @@ Return ONLY a decimal number between 0.0 and 1.0."""
 
             return max(0.0, min(1.0, score))
 
-        except (ValueError, AttributeError, Exception):
-            # Fallback to pattern-based scoring
-            return self._calculate_pattern_score(segment.text)
+        except (ValueError, AttributeError, Exception) as e:
+            # No fallback - require LLM analysis
+            logger.error(f"LLM intensity scoring failed: {e}")
+            raise ValueError(f"LLM intensity scoring failed: {str(e)}")
 
     async def _analyze_segment_detailed(
         self,

@@ -142,15 +142,28 @@ Return your analysis in JSON format with these fields:
         illustration_prompts = []
 
         if emotional_moments:
-            # Initialize the image provider
-            provider = ProviderFactory.create_provider(
-                context.image_provider,
-                openai_api_key=context.openai_api_key,
-                google_credentials=context.google_credentials,
-                google_project_id=runtime.context.user_id,  # Use user_id as project_id fallback
-                huggingface_api_key=context.huggingface_api_key,
-                anthropic_api_key=context.anthropic_api_key,
-            )
+            # Verify we have the required Anthropic API key for advanced prompt engineering
+            if not context.anthropic_api_key:
+                return {
+                    "error_message": "Anthropic API key is required for advanced prompt engineering",
+                    "retry_count": state.get("retry_count", 0) + 1,
+                }
+
+            # Initialize the image provider with mandatory prompt engineering support
+            try:
+                provider = ProviderFactory.create_provider(
+                    context.image_provider,
+                    openai_api_key=context.openai_api_key,
+                    google_credentials=context.google_credentials,
+                    google_project_id=context.google_project_id or runtime.context.user_id,
+                    huggingface_api_key=context.huggingface_api_key,
+                    anthropic_api_key=context.anthropic_api_key,
+                )
+            except ValueError as e:
+                return {
+                    "error_message": f"Failed to initialize image provider: {str(e)}",
+                    "retry_count": state.get("retry_count", 0) + 1,
+                }
 
             # Create style preferences dict
             style_preferences = {
@@ -182,14 +195,19 @@ Return your analysis in JSON format with these fields:
                     pass  # Continue without previous scenes if store access fails
 
             for moment in emotional_moments:
-                prompt = await provider.generate_prompt(
-                    emotional_moment=moment,
-                    style_preferences=style_preferences,
-                    context=setting_description,
-                    chapter_context=chapter,
-                    previous_scenes=previous_scenes,
-                )
-                illustration_prompts.append(prompt)
+                try:
+                    prompt = await provider.generate_prompt(
+                        emotional_moment=moment,
+                        style_preferences=style_preferences,
+                        context=setting_description,
+                        chapter_context=chapter,
+                        previous_scenes=previous_scenes,
+                    )
+                    illustration_prompts.append(prompt)
+                except Exception as e:
+                    logger.error(f"Failed to generate prompt for emotional moment: {e}")
+                    # Don't include this moment if prompt generation fails
+                    continue
 
         # Create complete analysis
         chapter_analysis = ChapterAnalysis(
@@ -255,15 +273,28 @@ async def generate_illustrations(state: ManuscriptState, runtime: Runtime[Manusc
         analysis = state["current_analysis"]
         context = runtime.context
 
-        # Initialize the image provider
-        provider = ProviderFactory.create_provider(
-            context.image_provider,
-            openai_api_key=context.openai_api_key,
-            google_credentials=context.google_credentials,
-            google_project_id=runtime.context.user_id,
-            huggingface_api_key=context.huggingface_api_key,
-            anthropic_api_key=context.anthropic_api_key,
-        )
+        # Verify we have the required Anthropic API key for advanced prompt engineering
+        if not context.anthropic_api_key:
+            return {
+                "error_message": "Anthropic API key is required for advanced prompt engineering",
+                "retry_count": state.get("retry_count", 0) + 1,
+            }
+
+        # Initialize the image provider with mandatory prompt engineering support
+        try:
+            provider = ProviderFactory.create_provider(
+                context.image_provider,
+                openai_api_key=context.openai_api_key,
+                google_credentials=context.google_credentials,
+                google_project_id=context.google_project_id or runtime.context.user_id,
+                huggingface_api_key=context.huggingface_api_key,
+                anthropic_api_key=context.anthropic_api_key,
+            )
+        except ValueError as e:
+            return {
+                "error_message": f"Failed to initialize image provider: {str(e)}",
+                "retry_count": state.get("retry_count", 0) + 1,
+            }
 
         # Initialize quality feedback system
         feedback_system = None
@@ -281,6 +312,12 @@ async def generate_illustrations(state: ManuscriptState, runtime: Runtime[Manusc
         quality_assessments = []
 
         # Generate images for each illustration prompt
+        if not analysis.illustration_prompts:
+            return {
+                "error_message": "No illustration prompts were generated for this chapter",
+                "retry_count": state.get("retry_count", 0) + 1,
+            }
+
         for i, prompt in enumerate(analysis.illustration_prompts):
             try:
                 result = await provider.generate_image(prompt)

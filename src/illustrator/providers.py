@@ -32,20 +32,21 @@ def _format_style_modifiers(style_modifiers: List[Any]) -> str:
 class ImageGenerationProvider(ABC):
     """Abstract base class for image generation providers."""
 
-    def __init__(self, anthropic_api_key: str = None):
-        """Initialize provider with optional LLM for advanced prompt engineering."""
-        self.prompt_engineer = None
+    def __init__(self, anthropic_api_key: str):
+        """Initialize provider with mandatory LLM for advanced prompt engineering."""
+        if not anthropic_api_key:
+            raise ValueError("Anthropic API key is required for prompt engineering")
+
         self.error_handler = ErrorRecoveryHandler(max_attempts=3)
 
-        if anthropic_api_key:
-            try:
-                llm = init_chat_model(
-                    model="anthropic/claude-3-5-sonnet-20241022",
-                    api_key=anthropic_api_key
-                )
-                self.prompt_engineer = PromptEngineer(llm)
-            except Exception:
-                pass  # Fall back to legacy prompt generation
+        try:
+            llm = init_chat_model(
+                model="anthropic/claude-3-5-sonnet-20241022",
+                api_key=anthropic_api_key
+            )
+            self.prompt_engineer = PromptEngineer(llm)
+        except Exception as e:
+            raise ValueError(f"Failed to initialize PromptEngineer: {str(e)}")
 
     async def generate_prompt(
         self,
@@ -55,33 +56,18 @@ class ImageGenerationProvider(ABC):
         chapter_context: Chapter = None,
         previous_scenes: List[Dict] = None
     ) -> IllustrationPrompt:
-        """Generate an optimized prompt for this provider."""
-        if self.prompt_engineer and chapter_context:
-            # Use advanced prompt engineering
-            return await self.prompt_engineer.engineer_prompt(
-                emotional_moment,
-                self.get_provider_type(),
-                style_preferences,
-                chapter_context,
-                previous_scenes or []
-            )
-        else:
-            # Fall back to legacy prompt generation
-            return await self._legacy_generate_prompt(
-                emotional_moment,
-                style_preferences,
-                context
-            )
+        """Generate an optimized prompt for this provider using advanced prompt engineering."""
+        if not chapter_context:
+            raise ValueError("Chapter context is required for prompt generation")
 
-    @abstractmethod
-    async def _legacy_generate_prompt(
-        self,
-        emotional_moment: EmotionalMoment,
-        style_preferences: Dict[str, Any],
-        context: str = "",
-    ) -> IllustrationPrompt:
-        """Legacy prompt generation method."""
-        pass
+        return await self.prompt_engineer.engineer_prompt(
+            emotional_moment,
+            self.get_provider_type(),
+            style_preferences,
+            chapter_context,
+            previous_scenes or []
+        )
+
 
     @abstractmethod
     def get_provider_type(self) -> ImageProvider:
@@ -101,7 +87,7 @@ class ImageGenerationProvider(ABC):
 class DalleProvider(ImageGenerationProvider):
     """OpenAI DALL-E image generation provider."""
 
-    def __init__(self, api_key: str, anthropic_api_key: str = None):
+    def __init__(self, api_key: str, anthropic_api_key: str):
         """Initialize DALL-E provider."""
         super().__init__(anthropic_api_key)
         self.api_key = api_key
@@ -111,107 +97,6 @@ class DalleProvider(ImageGenerationProvider):
         """Return DALL-E provider type."""
         return ImageProvider.DALLE
 
-    async def _legacy_generate_prompt(
-        self,
-        emotional_moment: EmotionalMoment,
-        style_preferences: Dict[str, Any],
-        context: str = "",
-    ) -> IllustrationPrompt:
-        """Generate DALL-E optimized prompt."""
-        # DALL-E specific style modifiers
-        style_modifiers = []
-
-        # Check if we have a full style configuration
-        if 'style_config' in style_preferences and style_preferences['style_config']:
-            config = style_preferences['style_config']
-
-            # Use base prompt modifiers from config
-            base_modifiers = config.get('base_prompt_modifiers', [])
-            style_modifiers.extend(base_modifiers)
-
-            # Get art style from config or preferences
-            art_style = config.get('style_name', style_preferences.get('art_style', 'digital painting'))
-            if art_style not in style_modifiers:
-                style_modifiers.append(art_style)
-
-        else:
-            # Standard style handling
-            # Base style
-            art_style = style_preferences.get('art_style', 'digital painting')
-            style_modifiers.append(art_style)
-
-            # Quality and detail modifiers for DALL-E
-            style_modifiers.extend([
-                "highly detailed",
-                "professional illustration",
-                "dramatic lighting",
-            ])
-
-        # Color palette (only if not using style config)
-        if not ('style_config' in style_preferences and style_preferences['style_config']):
-            color_palette = style_preferences.get('color_palette')
-            if color_palette:
-                style_modifiers.append(f"{color_palette} color palette")
-
-        # Emotional tone modifiers
-        tone_modifiers = {
-            'joy': 'bright and uplifting',
-            'sadness': 'melancholic and somber',
-            'fear': 'dark and foreboding',
-            'anger': 'intense and fiery',
-            'tension': 'suspenseful and dramatic',
-            'mystery': 'mysterious and atmospheric',
-            'romance': 'romantic and dreamy',
-            'adventure': 'dynamic and epic',
-        }
-
-        for tone in emotional_moment.emotional_tones:
-            if tone.value in tone_modifiers:
-                style_modifiers.append(tone_modifiers[tone.value])
-
-        # Build main prompt
-        scene_description = emotional_moment.text_excerpt
-        prompt_parts = [
-            scene_description,
-            f"Context: {emotional_moment.context}",
-        ]
-
-        if context:
-            prompt_parts.append(f"Story context: {context}")
-
-        main_prompt = ". ".join(prompt_parts)
-
-        # Technical parameters for DALL-E
-        if 'style_config' in style_preferences and style_preferences['style_config']:
-            config = style_preferences['style_config']
-            technical_params = config.get('technical_params', {
-                "model": "dall-e-3",
-                "size": "1024x1024",
-                "quality": "hd",
-                "style": "natural"
-            })
-        else:
-            technical_params = {
-                "model": "dall-e-3",
-                "size": "1024x1024",
-                "quality": "hd",
-                "style": "vivid" if any(tone.value in ['joy', 'excitement', 'adventure'] for tone in emotional_moment.emotional_tones) else "natural"
-            }
-
-        # Handle negative prompt from config
-        negative_prompt = None
-        if 'style_config' in style_preferences and style_preferences['style_config']:
-            config = style_preferences['style_config']
-            if config.get('negative_prompt'):
-                negative_prompt = ', '.join(config['negative_prompt'])
-
-        return IllustrationPrompt(
-            provider=ImageProvider.DALLE,
-            prompt=f"{main_prompt}. {_format_style_modifiers(style_modifiers)}",
-            style_modifiers=style_modifiers,
-            negative_prompt=negative_prompt,  # Note: DALL-E doesn't use negative prompts, but stored for compatibility
-            technical_params=technical_params,
-        )
 
     @resilient_async(
         max_attempts=3,
@@ -279,7 +164,7 @@ class DalleProvider(ImageGenerationProvider):
 class Imagen4Provider(ImageGenerationProvider):
     """Google Cloud Imagen4 image generation provider."""
 
-    def __init__(self, credentials_path: str, project_id: str, anthropic_api_key: str = None):
+    def __init__(self, credentials_path: str, project_id: str, anthropic_api_key: str):
         """Initialize Imagen4 provider."""
         super().__init__(anthropic_api_key)
         self.credentials_path = credentials_path
@@ -290,77 +175,6 @@ class Imagen4Provider(ImageGenerationProvider):
         """Return Imagen4 provider type."""
         return ImageProvider.IMAGEN4
 
-    async def _legacy_generate_prompt(
-        self,
-        emotional_moment: EmotionalMoment,
-        style_preferences: Dict[str, Any],
-        context: str = "",
-    ) -> IllustrationPrompt:
-        """Generate Imagen4 optimized prompt."""
-        style_modifiers = []
-
-        # Imagen4 excels at photorealistic and artistic styles
-        art_style = style_preferences.get('art_style', 'cinematic digital art')
-        style_modifiers.append(art_style)
-
-        # Imagen4 specific quality modifiers
-        style_modifiers.extend([
-            "masterpiece quality",
-            "ultra high resolution",
-            "cinematic composition",
-            "professional photography lighting",
-        ])
-
-        # Emotional atmosphere
-        atmosphere_modifiers = {
-            'joy': 'warm golden hour lighting, celebratory atmosphere',
-            'sadness': 'overcast sky, muted colors, melancholic mood',
-            'fear': 'dramatic shadows, ominous atmosphere, chiaroscuro lighting',
-            'anger': 'storm clouds, intense red lighting, turbulent atmosphere',
-            'tension': 'dramatic side lighting, film noir atmosphere',
-            'mystery': 'fog and mist, ethereal lighting, mysterious ambiance',
-            'romance': 'soft romantic lighting, dreamy atmosphere',
-            'adventure': 'epic landscape, dynamic composition, heroic lighting',
-        }
-
-        for tone in emotional_moment.emotional_tones:
-            if tone.value in atmosphere_modifiers:
-                style_modifiers.append(atmosphere_modifiers[tone.value])
-
-        # Build detailed scene description
-        scene_description = emotional_moment.text_excerpt
-        prompt_parts = [
-            scene_description,
-            f"Emotional context: {emotional_moment.context}",
-        ]
-
-        if context:
-            prompt_parts.append(f"Story setting: {context}")
-
-        main_prompt = ". ".join(prompt_parts)
-
-        # Negative prompt for Imagen4 (helps avoid unwanted elements)
-        negative_elements = [
-            "blurry", "low quality", "distorted", "amateur",
-            "text", "watermark", "signature", "logo",
-        ]
-
-        negative_prompt = ", ".join(negative_elements)
-
-        # Technical parameters
-        technical_params = {
-            "aspect_ratio": "1:1",
-            "safety_filter_level": "block_most",
-            "seed": None,  # Random seed for variation
-        }
-
-        return IllustrationPrompt(
-            provider=ImageProvider.IMAGEN4,
-            prompt=f"{main_prompt}. {_format_style_modifiers(style_modifiers)}",
-            style_modifiers=style_modifiers,
-            negative_prompt=negative_prompt,
-            technical_params=technical_params,
-        )
 
     async def generate_image(
         self,
@@ -413,7 +227,7 @@ class Imagen4Provider(ImageGenerationProvider):
 class FluxProvider(ImageGenerationProvider):
     """HuggingFace Flux 1.1 Pro image generation provider."""
 
-    def __init__(self, api_key: str, anthropic_api_key: str = None):
+    def __init__(self, api_key: str, anthropic_api_key: str):
         """Initialize Flux provider."""
         super().__init__(anthropic_api_key)
         self.api_key = api_key
@@ -423,84 +237,6 @@ class FluxProvider(ImageGenerationProvider):
         """Return Flux provider type."""
         return ImageProvider.FLUX
 
-    async def _legacy_generate_prompt(
-        self,
-        emotional_moment: EmotionalMoment,
-        style_preferences: Dict[str, Any],
-        context: str = "",
-    ) -> IllustrationPrompt:
-        """Generate Flux optimized prompt."""
-        style_modifiers = []
-
-        # Flux excels at artistic and stylized imagery
-        art_style = style_preferences.get('art_style', 'detailed digital illustration')
-        style_modifiers.append(art_style)
-
-        # Flux-specific style modifiers
-        style_modifiers.extend([
-            "highly detailed",
-            "intricate artwork",
-            "trending on artstation",
-            "concept art",
-        ])
-
-        # Style influence from preferences
-        artistic_influences = style_preferences.get('artistic_influences')
-        if artistic_influences:
-            style_modifiers.append(f"in the style of {artistic_influences}")
-
-        # Emotional style mapping for Flux
-        flux_styles = {
-            'joy': 'vibrant colors, dynamic energy, uplifting composition',
-            'sadness': 'muted palette, soft edges, contemplative mood',
-            'fear': 'dark shadows, sharp contrasts, unsettling composition',
-            'anger': 'bold reds, aggressive brushstrokes, intense energy',
-            'tension': 'diagonal lines, asymmetric composition, dramatic angles',
-            'mystery': 'atmospheric depth, subtle details, enigmatic elements',
-            'romance': 'soft pastels, flowing lines, intimate composition',
-            'adventure': 'epic scale, dynamic movement, heroic proportions',
-        }
-
-        for tone in emotional_moment.emotional_tones:
-            if tone.value in flux_styles:
-                style_modifiers.append(flux_styles[tone.value])
-
-        # Build comprehensive prompt
-        scene_description = emotional_moment.text_excerpt
-        prompt_parts = [
-            scene_description,
-            emotional_moment.context,
-        ]
-
-        if context:
-            prompt_parts.append(context)
-
-        main_prompt = ". ".join(prompt_parts)
-
-        # Negative prompt for Flux
-        negative_elements = [
-            "low quality", "blurred", "pixelated", "distorted",
-            "amateur", "simple", "basic", "ugly",
-            "text", "watermark", "signature",
-        ]
-
-        negative_prompt = ", ".join(negative_elements)
-
-        # Technical parameters for Flux
-        technical_params = {
-            "guidance_scale": 7.5,
-            "num_inference_steps": 28,
-            "width": 1024,
-            "height": 1024,
-        }
-
-        return IllustrationPrompt(
-            provider=ImageProvider.FLUX,
-            prompt=f"{main_prompt}. {_format_style_modifiers(style_modifiers)}",
-            style_modifiers=style_modifiers,
-            negative_prompt=negative_prompt,
-            technical_params=technical_params,
-        )
 
     async def generate_image(
         self,
@@ -565,6 +301,8 @@ class ProviderFactory:
     ) -> ImageGenerationProvider:
         """Create a provider instance based on type."""
         anthropic_key = credentials.get('anthropic_api_key')
+        if not anthropic_key:
+            raise ValueError("Anthropic API key is required for all providers (needed for prompt engineering)")
 
         if provider_type == ImageProvider.DALLE:
             api_key = credentials.get('openai_api_key')
@@ -591,6 +329,9 @@ class ProviderFactory:
     @staticmethod
     def get_available_providers(**credentials) -> List[ImageProvider]:
         """Get list of available providers based on provided credentials."""
+        if not credentials.get('anthropic_api_key'):
+            return []  # No providers available without Anthropic key for prompt engineering
+
         available = []
 
         if credentials.get('openai_api_key'):
