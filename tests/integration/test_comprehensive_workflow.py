@@ -32,10 +32,8 @@ class TestComprehensiveWorkflow:
         self.narrative_analyzer = NarrativeAnalyzer(self.mock_llm)
         self.visual_composer = AdvancedVisualComposer(self.mock_llm)
         self.prompt_engineer = PromptEngineer(
-            character_tracker=self.character_tracker,
-            scene_detector=self.scene_detector,
-            narrative_analyzer=self.narrative_analyzer,
-            visual_composer=self.visual_composer
+            llm=self.mock_llm,
+            character_tracker=self.character_tracker
         )
         self.emotional_analyzer = EmotionalAnalyzer(self.mock_llm)
 
@@ -239,18 +237,20 @@ class TestComprehensiveWorkflow:
         )
 
         # Test enhanced prompt creation
-        result = await self.prompt_engineer.create_enhanced_prompts(
-            emotional_moment, chapter
+        from illustrator.models import ImageProvider
+        result = await self.prompt_engineer.engineer_prompt(
+            emotional_moment,
+            ImageProvider.DALLE,
+            {},
+            chapter
         )
 
-        assert "prompts" in result
-        assert len(result["prompts"]) > 0
+        assert result is not None
 
         # Verify prompt structure
-        prompt = result["prompts"][0]
-        assert hasattr(prompt, 'prompt')
-        assert hasattr(prompt, 'provider')
-        assert hasattr(prompt, 'style_modifiers')
+        assert hasattr(result, 'prompt')
+        assert hasattr(result, 'provider')
+        assert hasattr(result, 'style_modifiers')
 
     @pytest.mark.asyncio
     async def test_emotional_analysis_integration(self):
@@ -314,12 +314,13 @@ class TestComprehensiveWorkflow:
                 )
 
                 # Step 6: Generate enhanced prompts
-                prompt_result = await self.prompt_engineer.create_enhanced_prompts(
-                    sample_moment, chapter
+                from illustrator.models import ImageProvider
+                prompt_result = await self.prompt_engineer.engineer_prompt(
+                    sample_moment, ImageProvider.DALLE, {}, chapter
                 )
 
-                assert "prompts" in prompt_result
-                assert len(prompt_result["prompts"]) > 0
+                assert prompt_result is not None
+                assert hasattr(prompt_result, 'prompt')
 
             # Verify all components completed without error
             assert "emotional_moments" in emotional_analysis
@@ -347,11 +348,11 @@ class TestComprehensiveWorkflow:
         # Verify they have the expected attributes
         assert hasattr(self.scene_detector, 'llm')
         assert hasattr(self.character_tracker, 'characters')
-        assert hasattr(self.parallel_processor, 'batch_config')
+        assert hasattr(self.parallel_processor, 'max_concurrent_llm')
         assert hasattr(self.error_handler, 'recovery_stats')
         assert hasattr(self.narrative_analyzer, 'genre_classifier')
         assert hasattr(self.visual_composer, 'composition_rules')
-        assert hasattr(self.prompt_engineer, 'character_tracker')
+        assert hasattr(self.prompt_engineer, 'scene_analyzer')
         assert hasattr(self.emotional_analyzer, 'llm')
 
     @pytest.mark.asyncio
