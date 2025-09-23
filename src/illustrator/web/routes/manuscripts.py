@@ -66,7 +66,7 @@ def get_saved_manuscripts() -> List[SavedManuscript]:
     current_time = time.time()
 
     if _cache_timestamp and current_time - _cache_timestamp < 30:
-        return list(_manuscripts_cache.values())
+        return [manuscript for manuscript, _ in _manuscripts_cache.values()]
 
     manuscripts = []
     new_cache = {}

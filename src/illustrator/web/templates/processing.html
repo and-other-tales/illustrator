@@ -711,8 +711,86 @@ function toggleMaximizeLog() {
     }
 }
 
-function pauseProcessing() {
-    addLogMessage('info', 'Pause functionality not yet implemented');
+async function pauseProcessing() {
+    if (!currentSessionId) {
+        addLogMessage('error', 'No active processing session to pause');
+        return;
+    }
+
+    const pauseBtn = document.getElementById('pauseBtn');
+    if (pauseBtn.disabled) return;
+
+    try {
+        pauseBtn.disabled = true;
+        pauseBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Pausing...';
+
+        const response = await fetch(`/api/process/${currentSessionId}/pause`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            addLogMessage('info', result.message);
+            // Update button to show resume option
+            pauseBtn.innerHTML = '<i class="bi bi-play"></i> Resume';
+            pauseBtn.onclick = resumeProcessing;
+            pauseBtn.disabled = false;
+        } else {
+            addLogMessage('error', result.detail || 'Failed to pause processing');
+            pauseBtn.innerHTML = '<i class="bi bi-pause"></i> Pause';
+            pauseBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error('Error pausing processing:', error);
+        addLogMessage('error', 'Network error while pausing processing');
+        pauseBtn.innerHTML = '<i class="bi bi-pause"></i> Pause';
+        pauseBtn.disabled = false;
+    }
+}
+
+async function resumeProcessing() {
+    if (!currentSessionId) {
+        addLogMessage('error', 'No paused session to resume');
+        return;
+    }
+
+    const pauseBtn = document.getElementById('pauseBtn');
+    if (pauseBtn.disabled) return;
+
+    try {
+        pauseBtn.disabled = true;
+        pauseBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Resuming...';
+
+        const response = await fetch(`/api/process/${currentSessionId}/resume`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            addLogMessage('success', result.message);
+            // Update button back to pause
+            pauseBtn.innerHTML = '<i class="bi bi-pause"></i> Pause';
+            pauseBtn.onclick = pauseProcessing;
+            pauseBtn.disabled = false;
+        } else {
+            addLogMessage('error', result.detail || 'Failed to resume processing');
+            pauseBtn.innerHTML = '<i class="bi bi-play"></i> Resume';
+            pauseBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error('Error resuming processing:', error);
+        addLogMessage('error', 'Network error while resuming processing');
+        pauseBtn.innerHTML = '<i class="bi bi-play"></i> Resume';
+        pauseBtn.disabled = false;
+    }
 }
 
 function cancelProcessing() {

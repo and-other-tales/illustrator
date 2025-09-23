@@ -23,6 +23,53 @@ router = APIRouter()
 
 # Storage paths
 SAVED_MANUSCRIPTS_DIR = Path("saved_manuscripts")
+SCENE_ILLUSTRATIONS_DIR = Path("scene_illustrations")
+ILLUSTRATOR_OUTPUT_DIR = Path("illustrator_output")
+
+def load_chapter_analysis(manuscript_id: str, chapter_number: int) -> Optional[dict]:
+    """Load analysis data for a specific chapter if it exists."""
+    try:
+        # Look for analysis files in scene_illustrations directory
+        for manuscripts_dir in SCENE_ILLUSTRATIONS_DIR.iterdir():
+            if manuscripts_dir.is_dir():
+                analysis_file = manuscripts_dir / f"chapter_{chapter_number:02d}_analysis.json"
+                if analysis_file.exists():
+                    with open(analysis_file, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+        return None
+    except Exception as e:
+        print(f"Error loading analysis for chapter {chapter_number}: {e}")
+        return None
+
+def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
+    """Count the number of generated images for a specific chapter."""
+    try:
+        count = 0
+
+        # Check scene_illustrations directory for images
+        for manuscripts_dir in SCENE_ILLUSTRATIONS_DIR.iterdir():
+            if manuscripts_dir.is_dir():
+                # Look for images with chapter pattern
+                for img_file in manuscripts_dir.glob(f"chapter_{chapter_number:02d}_scene_*.*"):
+                    if img_file.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}:
+                        count += 1
+
+                # Also check for chapter_XX_analysis images
+                for img_file in manuscripts_dir.glob(f"chapter_{chapter_number:02d}*.*"):
+                    if img_file.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}:
+                        count += 1
+
+        # Check illustrator_output directory for images
+        for output_dir in ILLUSTRATOR_OUTPUT_DIR.iterdir():
+            if output_dir.is_dir():
+                for img_file in output_dir.glob(f"chapter_{chapter_number:02d}*.*"):
+                    if img_file.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}:
+                        count += 1
+
+        return count
+    except Exception as e:
+        print(f"Error counting images for chapter {chapter_number}: {e}")
+        return 0
 
 
 def load_manuscript_by_id(manuscript_id: str) -> tuple[SavedManuscript, Path]:
@@ -155,12 +202,16 @@ async def get_chapter(chapter_id: str) -> ChapterResponse:
             for chapter in manuscript.chapters:
                 generated_chapter_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{manuscript_id}_{chapter.number}"))
                 if generated_chapter_id == chapter_id:
+                    # Load analysis and count images for this chapter
+                    analysis = load_chapter_analysis(manuscript_id, chapter.number)
+                    images_count = count_chapter_images(manuscript_id, chapter.number)
+
                     return ChapterResponse(
                         id=chapter_id,
                         chapter=chapter,
-                        analysis=None,  # TODO: Load analysis if available
-                        images_generated=0,  # TODO: Count generated images
-                        processing_status="draft"
+                        analysis=analysis,
+                        images_generated=images_count,
+                        processing_status="draft" if images_count == 0 else "completed"
                     )
         except Exception as e:
             print(f"Error loading manuscript {file_path}: {e}")

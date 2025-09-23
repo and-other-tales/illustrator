@@ -153,6 +153,111 @@ async def start_processing(
             detail=f"Error starting processing: {str(e)}"
         )
 
+@app.post("/api/process/{session_id}/pause")
+async def pause_processing(session_id: str):
+    """Pause an active processing session."""
+    try:
+        # Check if session exists
+        if session_id not in connection_manager.sessions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Processing session {session_id} not found"
+            )
+
+        session_data = connection_manager.sessions[session_id]
+
+        # Check if session is currently running
+        if session_data.status.status not in ["started", "analyzing", "generating"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot pause session in '{session_data.status.status}' state"
+            )
+
+        # Set pause flag
+        session_data.pause_requested = True
+
+        # Send pause message to client
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "info",
+                "message": "Pause requested - processing will pause after current task completes..."
+            }),
+            session_id
+        )
+
+        return {
+            "success": True,
+            "message": "Pause requested successfully",
+            "session_id": session_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error pausing processing: {str(e)}"
+        )
+
+@app.post("/api/process/{session_id}/resume")
+async def resume_processing(session_id: str):
+    """Resume a paused processing session."""
+    try:
+        # Check if session exists
+        if session_id not in connection_manager.sessions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Processing session {session_id} not found"
+            )
+
+        session_data = connection_manager.sessions[session_id]
+
+        # Check if session is paused
+        if session_data.status.status != "paused":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot resume session in '{session_data.status.status}' state"
+            )
+
+        # Clear pause flag and resume
+        session_data.pause_requested = False
+        session_data.status.status = "generating"  # Resume with generation
+        session_data.status.message = "Processing resumed..."
+
+        # Send resume message to client
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "success",
+                "message": "Processing resumed"
+            }),
+            session_id
+        )
+
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "progress",
+                "progress": session_data.status.progress,
+                "message": "Processing resumed..."
+            }),
+            session_id
+        )
+
+        return {
+            "success": True,
+            "message": "Processing resumed successfully",
+            "session_id": session_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error resuming processing: {str(e)}"
+        )
+
 async def run_processing_workflow(
     session_id: str,
     manuscript_id: str,
@@ -269,6 +374,28 @@ async def run_processing_workflow(
         progress_per_chapter = 70 // len(chapters)
 
         for i, chapter in enumerate(chapters):
+            # Check for pause request before processing each chapter
+            if connection_manager.sessions[session_id].pause_requested:
+                connection_manager.sessions[session_id].status.status = "paused"
+                connection_manager.sessions[session_id].status.message = f"Processing paused at Chapter {chapter.number}"
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "warning",
+                        "message": f"Processing paused at Chapter {chapter.number}"
+                    }),
+                    session_id
+                )
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "progress",
+                        "progress": connection_manager.sessions[session_id].status.progress,
+                        "message": f"Processing paused at Chapter {chapter.number}"
+                    }),
+                    session_id
+                )
+                return  # Exit the processing function
+
             await connection_manager.send_personal_message(
                 json.dumps({
                     "type": "progress",

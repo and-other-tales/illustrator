@@ -75,7 +75,7 @@ class ProcessingStatus(BaseModel):
     """Model for processing status updates."""
     session_id: str
     manuscript_id: str
-    status: str  # started, analyzing, generating, completed, error
+    status: str  # started, analyzing, generating, completed, error, paused
     progress: int  # 0-100
     current_chapter: Optional[int] = None
     total_chapters: int
@@ -147,6 +147,7 @@ class ProcessingSessionData(BaseModel):
     images: List[ProcessingImageEntry] = []
     start_time: Optional[str] = None
     step_status: Dict[int, str] = {}  # Track which steps are completed/in-progress
+    pause_requested: bool = False  # Flag to request pausing the processing
 
     class Config:
         arbitrary_types_allowed = True
