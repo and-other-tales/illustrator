@@ -130,8 +130,9 @@ async def get_dashboard_stats() -> DashboardStats:
     # Get recent manuscripts (last 10)
     recent_manuscripts = []
     for manuscript in manuscripts[:10]:
+        generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path))
         recent_manuscripts.append(ManuscriptResponse(
-            id=str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path)),
+            id=generated_id,
             metadata=manuscript.metadata,
             chapters=manuscript.chapters,
             total_images=count_generated_images(manuscript.metadata.title),
@@ -156,8 +157,9 @@ async def list_manuscripts() -> List[ManuscriptResponse]:
 
     response = []
     for manuscript in manuscripts:
+        generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path))
         response.append(ManuscriptResponse(
-            id=str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path)),
+            id=generated_id,
             metadata=manuscript.metadata,
             chapters=manuscript.chapters,
             total_images=count_generated_images(manuscript.metadata.title),
