@@ -45,6 +45,8 @@ class TestAPIIntegration:
 
     def create_test_manuscript(self, title="Test Manuscript", author="Test Author"):
         """Create a test manuscript file."""
+        manuscript_file = self.test_manuscripts_dir / f"{title.lower().replace(' ', '_')}.json"
+
         manuscript = SavedManuscript(
             metadata=ManuscriptMetadata(
                 title=title,
@@ -58,10 +60,9 @@ class TestAPIIntegration:
             ),
             chapters=[],
             saved_at="2024-01-01T00:00:00Z",
-            file_path=""
+            file_path=str(manuscript_file)
         )
 
-        manuscript_file = self.test_manuscripts_dir / f"{title.lower().replace(' ', '_')}.json"
         with open(manuscript_file, 'w') as f:
             json.dump(manuscript.model_dump(), f)
 

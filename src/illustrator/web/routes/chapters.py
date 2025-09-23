@@ -348,7 +348,7 @@ async def generate_chapter_headers(
                 provider=ImageProvider.DALLE,
                 prompt=f"{option_types[i]} chapter header for '{chapter.title}', {styles[i]} style",
                 style_modifiers=[styles[i], "chapter header", "horizontal composition"],
-                negative_prompt=["text", "words", "letters", "low quality"],
+                negative_prompt="text, words, letters, low quality",
                 technical_params={
                     "aspect_ratio": "16:9",
                     "style": "artistic",

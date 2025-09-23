@@ -77,8 +77,8 @@ def save_manuscript_to_disk(manuscript: SavedManuscript) -> Path:
 
 def count_generated_images(manuscript_title: str) -> int:
     """Count generated images for a manuscript."""
-    safe_title = manuscript_title.replace(" ", "_")
-    images_dir = ILLUSTRATOR_OUTPUT_DIR / safe_title / "generated_images"
+    # Images are stored directly in illustrator_output/generated_images/
+    images_dir = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
 
     if not images_dir.exists():
         return 0
@@ -86,10 +86,10 @@ def count_generated_images(manuscript_title: str) -> int:
     image_count = 0
     image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'}
 
-    for chapter_dir in images_dir.iterdir():
-        if chapter_dir.is_dir():
-            image_count += len([f for f in chapter_dir.iterdir()
-                               if f.suffix.lower() in image_extensions])
+    # Count all image files in the generated_images directory
+    for image_file in images_dir.iterdir():
+        if image_file.is_file() and image_file.suffix.lower() in image_extensions:
+            image_count += 1
 
     return image_count
 

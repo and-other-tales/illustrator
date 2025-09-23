@@ -815,8 +815,9 @@ class WebSocketIllustrationGenerator:
 async def dashboard(request: Request):
     """Main dashboard page."""
     return templates.TemplateResponse(
+        request,
         "index.html",
-        {"request": request, "title": "Dashboard"}
+        {"title": "Dashboard"}
     )
 
 
@@ -824,8 +825,9 @@ async def dashboard(request: Request):
 async def new_manuscript(request: Request):
     """New manuscript creation page."""
     return templates.TemplateResponse(
+        request,
         "manuscript_form.html",
-        {"request": request, "title": "New Manuscript", "manuscript": None}
+        {"title": "New Manuscript", "manuscript": None}
     )
 
 
@@ -833,8 +835,9 @@ async def new_manuscript(request: Request):
 async def manuscript_detail(request: Request, manuscript_id: str):
     """Manuscript detail and chapter management page."""
     return templates.TemplateResponse(
+        request,
         "manuscript_detail.html",
-        {"request": request, "title": "Manuscript", "manuscript_id": manuscript_id}
+        {"title": "Manuscript", "manuscript_id": manuscript_id}
     )
 
 
@@ -842,8 +845,9 @@ async def manuscript_detail(request: Request, manuscript_id: str):
 async def edit_manuscript(request: Request, manuscript_id: str):
     """Edit manuscript page."""
     return templates.TemplateResponse(
+        request,
         "manuscript_form.html",
-        {"request": request, "title": "Edit Manuscript", "manuscript_id": manuscript_id}
+        {"title": "Edit Manuscript", "manuscript_id": manuscript_id}
     )
 
 
@@ -851,8 +855,9 @@ async def edit_manuscript(request: Request, manuscript_id: str):
 async def new_chapter(request: Request, manuscript_id: str):
     """New chapter creation page."""
     return templates.TemplateResponse(
+        request,
         "chapter_form.html",
-        {"request": request, "title": "New Chapter", "manuscript_id": manuscript_id, "chapter": None}
+        {"title": "New Chapter", "manuscript_id": manuscript_id, "chapter": None}
     )
 
 
@@ -860,8 +865,9 @@ async def new_chapter(request: Request, manuscript_id: str):
 async def edit_chapter(request: Request, chapter_id: str):
     """Edit chapter page."""
     return templates.TemplateResponse(
+        request,
         "chapter_form.html",
-        {"request": request, "title": "Edit Chapter", "chapter_id": chapter_id}
+        {"title": "Edit Chapter", "chapter_id": chapter_id}
     )
 
 
@@ -869,8 +875,9 @@ async def edit_chapter(request: Request, chapter_id: str):
 async def style_config(request: Request, manuscript_id: str):
     """Style configuration page."""
     return templates.TemplateResponse(
+        request,
         "style_config.html",
-        {"request": request, "title": "Style Configuration", "manuscript_id": manuscript_id}
+        {"title": "Style Configuration", "manuscript_id": manuscript_id}
     )
 
 
@@ -878,8 +885,9 @@ async def style_config(request: Request, manuscript_id: str):
 async def processing_page(request: Request, manuscript_id: str):
     """Processing and analysis page."""
     return templates.TemplateResponse(
+        request,
         "processing.html",
-        {"request": request, "title": "Processing", "manuscript_id": manuscript_id}
+        {"title": "Processing", "manuscript_id": manuscript_id}
     )
 
 
@@ -887,8 +895,9 @@ async def processing_page(request: Request, manuscript_id: str):
 async def chapter_headers_page(request: Request, chapter_id: str):
     """Chapter header options page."""
     return templates.TemplateResponse(
+        request,
         "chapter_headers.html",
-        {"request": request, "title": "Chapter Headers", "chapter_id": chapter_id}
+        {"title": "Chapter Headers", "chapter_id": chapter_id}
     )
 
 
@@ -896,8 +905,9 @@ async def chapter_headers_page(request: Request, chapter_id: str):
 async def gallery_page(request: Request, manuscript_id: str):
     """Image gallery page."""
     return templates.TemplateResponse(
+        request,
         "gallery.html",
-        {"request": request, "title": "Gallery", "manuscript_id": manuscript_id}
+        {"title": "Gallery", "manuscript_id": manuscript_id}
     )
 
 
