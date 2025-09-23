@@ -167,11 +167,22 @@ h5, h6 { font: var(--md-type-scale-label); }
 .card-header {
     border: none;
     border-radius: 20px 20px 0 0 !important;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color: white;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+    color: white !important;
     padding: 2rem;
     position: relative;
     overflow: hidden;
+}
+
+/* Ensure manuscript header text visibility */
+.card-header.bg-gradient {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+    color: white !important;
+}
+
+.card-header h3,
+.card-header p {
+    color: white !important;
 }
 
 .card-header::before {
@@ -970,6 +981,17 @@ h5, h6 { font: var(--md-type-scale-label); }
     color: white;
     font-size: 2rem;
     cursor: pointer;
+}
+
+/* Dashboard specific styles */
+.recent-manuscripts-section {
+    margin-top: 3rem;
+}
+
+@media (max-width: 768px) {
+    .recent-manuscripts-section {
+        margin-top: 2rem;
+    }
 }
 
 /* Enhanced Responsive Design */
