@@ -552,12 +552,97 @@ class IllustrationGenerator:
 
                 except Exception as e:
                     console.print(f"[yellow]Warning: Could not generate prompt for moment {i+1}: {e}[/yellow]")
-                    # Fallback prompt
+                    # Fallback prompt (instructive, style-aware)
+                    art_style = (style_preferences.get('art_style') or 'digital painting').lower()
+
+                    if any(k in art_style for k in ["pencil", "shepard"]):
+                        lead = "A natural pencil sketch illustration in the classic E.H. Shepard style."
+                        technique = (
+                            "The sketch should balance subtle emotion and charm, with fine crosshatching, "
+                            "gentle graphite shading, and expressive, characterful linework."
+                        )
+                    elif "watercolor" in art_style:
+                        lead = "A delicate watercolor illustration with soft edges and layered washes."
+                        technique = "Use gentle color transitions, reserved whites, and restrained detail for a book-illustration feel."
+                    elif "oil" in art_style:
+                        lead = "A traditional oil painting with classic book-illustration sensibility."
+                        technique = "Employ controlled brushwork, clear focal hierarchy, and warm, cohesive tones."
+                    elif "digital" in art_style:
+                        lead = "A cinematic digital painting with classic book-illustration clarity."
+                        technique = "Use clean rendering, atmospheric lighting, and a readable focal point with restrained detailing."
+                    else:
+                        lead = f"A detailed {art_style} illustration in a classic book-illustration style."
+                        technique = "Maintain clear focal hierarchy, readable forms, and tasteful, story-forward detailing."
+
+                    tone_key = (moment.emotional_tones[0].name if moment.emotional_tones else "NEUTRAL").upper()
+                    tone_cues = {
+                        "JOY": "light, open posture; soft, warm lighting; relaxed expressions",
+                        "SADNESS": "slumped shoulders; downcast eyes; muted tones; gentle shadows",
+                        "FEAR": "stiff smile, wide eyes, tense shoulders; close, intimate framing; subtle unease",
+                        "ANGER": "tight jaw; furrowed brow; energetic angle; bold contrasts",
+                        "TENSION": "held breath; careful spacing between figures; controlled, taut poses",
+                        "MYSTERY": "soft shadows; partially obscured details; suggestive, not explicit cues",
+                        "ANTICIPATION": "forward lean; alert eyes; restrained motion; poised tension",
+                        "SUSPENSE": "stillness; withheld action; compressed spacing; shadow accents",
+                        "MELANCHOLY": "soft posture; thoughtful gaze; cool, quiet atmosphere",
+                        "PEACE": "relaxed stance; gentle light; uncluttered forms",
+                        "ROMANCE": "gentle posture; softened expressions; warm, intimate spacing",
+                        "NEUTRAL": "balanced posture; natural lighting; calm, observational framing"
+                    }
+                    tone_dir = tone_cues.get(tone_key, tone_cues["NEUTRAL"])            
+
+                    comp_by_tone = {
+                        "FEAR": "Use intimate, slightly off-center framing to heighten unease.",
+                        "TENSION": "Favor a medium, close, or three-quarter view that emphasizes body language.",
+                        "SADNESS": "Choose a quiet, balanced composition; leave gentle breathing space around the subject.",
+                        "ANGER": "Consider a dynamic angle with directional lines leading into the focal point.",
+                        "MYSTERY": "Let soft shadow shapes and partial occlusion guide the eye to the focal area.",
+                        "JOY": "Use an open composition with soft, welcoming shapes.",
+                        "ANTICIPATION": "Place the subject slightly off-center; leave room in the direction of attention.",
+                        "SUSPENSE": "Keep a controlled, symmetrical base with a small destabilizing element.",
+                        "MELANCHOLY": "Widen the framing slightly; allow negative space to carry feeling.",
+                        "PEACE": "Use an even, centered composition with gentle overlaps and clear separation.",
+                        "ROMANCE": "Favor a two-shot with soft triangulation and gentle overlap for intimacy.",
+                        "NEUTRAL": "Keep a balanced medium shot with clear focal hierarchy."
+                    }
+                    comp = comp_by_tone.get(tone_key, comp_by_tone["NEUTRAL"])          
+
+                    excerpt = (moment.text_excerpt or "").strip()
+                    if excerpt:
+                        scene_line = (
+                            f"Depict the specific moment described — \"{excerpt[:220]}\" — as a clear, readable scene."
+                        )
+                    else:
+                        scene_line = f"Depict a key moment from '{chapter.title}', focusing on a clear action and reaction."
+
+                    # Optional environment hints
+                    env_hints = []
+                    lower_all = f"{chapter.title} {excerpt}".lower()
+                    if any(k in lower_all for k in ["room", "hall", "hallway", "stair", "kitchen", "living room", "house", "home", "bedroom"]):
+                        env_hints.append("Interior domestic setting; suggest doorframes, window light, wall textures, and floor patterns.")
+                    if any(k in lower_all for k in ["phone", "call", "receiver", "hang up", "dial"]):
+                        env_hints.append("Include a phone or receiver as a subtle prop if appropriate.")
+                    if any(k in lower_all for k in ["night", "dark", "shadow", "dim", "lamp"]):
+                        env_hints.append("Low ambient light; soft lamp glow; readable shadow shapes.")
+
+                    parts = [
+                        lead,
+                        scene_line,
+                        f"Focus cues: {tone_dir}.",
+                        comp,
+                        "Include specific environmental cues suggested by the text (doors, windows, light sources, textures).",
+                        technique
+                    ]
+                    if env_hints:
+                        parts.insert(4, " ".join(env_hints))
+
+                    prompt_text = " ".join(parts)
+
                     fallback_prompt = IllustrationPrompt(
                         provider=self.provider,
-                        prompt=f"Illustration of: {moment.text_excerpt[:200]}...",
-                        style_modifiers=[style_preferences.get('art_style', 'digital art')],
-                        negative_prompt=None,
+                        prompt=prompt_text,
+                        style_modifiers=[style_preferences.get('art_style', 'book illustration')],
+                        negative_prompt="text, watermark, low quality, blurry",
                         technical_params=self._get_default_params()
                     )
                     prompts.append(fallback_prompt)

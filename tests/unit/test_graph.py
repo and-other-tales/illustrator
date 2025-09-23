@@ -692,6 +692,55 @@ class TestGraphConfiguration:
 class TestAsyncConcurrency:
     """Test async concurrency handling in graph functions."""
 
+    @pytest.fixture
+    def sample_context(self):
+        """Mock context for testing."""
+        return ManuscriptContext(
+            user_id="test_user",
+            anthropic_api_key="test_key",
+            manuscript_id="test_manuscript",
+            output_format="json",
+            analysis_mode="comprehensive",
+            image_provider="dalle"
+        )
+
+    @pytest.fixture
+    def mock_runtime(self, sample_context):
+        """Mock runtime with context."""
+        runtime = MagicMock()
+        runtime.context = sample_context
+        return runtime
+
+    @pytest.fixture
+    def sample_analysis(self):
+        """Sample chapter analysis for testing."""
+        from illustrator.models import Chapter, ChapterAnalysis, EmotionalMoment, EmotionalTone, IllustrationPrompt, ImageProvider
+
+        chapter = Chapter(title="Test", content="Test content", number=1, word_count=10)
+        emotional_moment = EmotionalMoment(
+            text_excerpt="test moment",
+            start_position=0,
+            end_position=10,
+            emotional_tones=[EmotionalTone.JOY],
+            intensity_score=0.8,
+            context="test context"
+        )
+        illustration_prompt = IllustrationPrompt(
+            provider=ImageProvider.DALLE,
+            prompt="test prompt",
+            style_modifiers=["digital art"],
+            technical_params={}
+        )
+
+        return ChapterAnalysis(
+            chapter=chapter,
+            emotional_moments=[emotional_moment],
+            dominant_themes=["test theme"],
+            setting_description="test setting",
+            character_emotions={},
+            illustration_prompts=[illustration_prompt]
+        )
+
     @pytest.mark.asyncio
     async def test_analyze_chapter_concurrency_limits(self, mock_runtime):
         """Test that analyze_chapter respects concurrency limits."""
@@ -713,10 +762,15 @@ class TestAsyncConcurrency:
         ]
 
         with patch('illustrator.graph.split_model_and_provider'), \
-             patch('illustrator.graph.init_chat_model'), \
+             patch('illustrator.graph.init_chat_model') as mock_init_chat_model, \
              patch('illustrator.graph.EmotionalAnalyzer') as mock_analyzer, \
              patch('illustrator.graph.ProviderFactory') as mock_provider_factory, \
              patch('asyncio.Semaphore') as mock_semaphore:
+
+            # Mock the LLM that is returned by init_chat_model
+            mock_llm = AsyncMock()
+            mock_llm.ainvoke.return_value.content = '{"dominant_themes": ["test theme"], "setting_description": "test setting", "character_emotions": {}}'
+            mock_init_chat_model.return_value = mock_llm
 
             mock_analyzer_instance = AsyncMock()
             mock_analyzer.return_value = mock_analyzer_instance
@@ -726,7 +780,10 @@ class TestAsyncConcurrency:
             mock_provider_factory.create_provider.return_value = mock_provider
             mock_provider.generate_prompt.return_value = "test prompt"
 
-            mock_runtime.store = AsyncMock()
+            mock_store = AsyncMock()
+            mock_store.aput = AsyncMock()
+            mock_store.aget = AsyncMock(return_value=None)
+            mock_runtime.store = mock_store
 
             await analyze_chapter(state, mock_runtime)
 

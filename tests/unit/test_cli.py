@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, Mock, patch, mock_open
 from uuid import uuid4
 
 from illustrator.cli import ManuscriptCLI
-from illustrator.models import Chapter, ChapterAnalysis, ManuscriptMetadata, SavedManuscript, EmotionalMoment, EmotionalTone
+from illustrator.models import Chapter, ChapterAnalysis, ManuscriptMetadata, SavedManuscript, EmotionalMoment, EmotionalTone, ImageProvider
 
 
 class TestManuscriptCLI:

@@ -4,7 +4,7 @@ import re
 import json
 import logging
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Tuple, Set, Any
 from enum import Enum
 
 from langchain_core.language_models import BaseChatModel
@@ -736,3 +736,454 @@ class NarrativeAnalyzer:
             return "dramatic_arc"
         else:
             return "episodic_structure"
+
+
+class GenreClassifier:
+    """Classifier for automatically identifying literary genres from text."""
+
+    def __init__(self, llm: BaseChatModel):
+        """Initialize the genre classifier.
+
+        Args:
+            llm: Language model for classification tasks
+        """
+        self.llm = llm
+
+        # Genre-specific keywords
+        self._genre_keywords = {
+            Genre.FANTASY: ["wizard", "magic", "dragon", "spell", "enchant", "mystical", "realm", "quest"],
+            Genre.MYSTERY: ["detective", "crime", "clues", "investigation", "murder", "suspect", "evidence"],
+            Genre.ROMANCE: ["love", "hearts", "kiss", "romantic", "passion", "romance", "relationship"],
+            Genre.SCIENCE_FICTION: ["space", "technology", "future", "alien", "robot", "scientific", "galaxy"],
+            Genre.HORROR: ["terror", "fear", "ghost", "monster", "scary", "nightmare", "darkness"],
+            Genre.THRILLER: ["suspense", "danger", "chase", "tension", "threat", "escape", "pursuit"],
+            Genre.ADVENTURE: ["journey", "exploration", "discovery", "adventure", "expedition", "treasure"],
+            Genre.DRAMA: ["emotion", "conflict", "relationship", "struggle", "character", "development"],
+            Genre.HISTORICAL_FICTION: ["period", "historical", "era", "ancient", "century", "past", "tradition"],
+            Genre.LITERARY_FICTION: ["literary", "modern", "contemporary", "character", "style", "prose"],
+            Genre.YOUNG_ADULT: ["youth", "teen", "coming", "age", "school", "adolescent", "growing"],
+            Genre.COMEDY: ["funny", "humor", "laugh", "comedy", "amusing", "wit", "satire"]
+        }
+
+    def _extract_genre_keywords(self, text: str) -> List[str]:
+        """Extract genre-relevant keywords from text.
+
+        Args:
+            text: The text to analyze
+
+        Returns:
+            List of relevant keywords found in text
+        """
+        text_lower = text.lower()
+        found_keywords = []
+
+        for genre, keywords in self._genre_keywords.items():
+            for keyword in keywords:
+                if keyword in text_lower:
+                    found_keywords.append(keyword)
+
+        return found_keywords
+
+    def _calculate_genre_scores(self, keywords: List[str]) -> Dict[Genre, float]:
+        """Calculate genre probability scores based on keywords.
+
+        Args:
+            keywords: List of keywords found in text
+
+        Returns:
+            Dictionary mapping genres to their probability scores
+        """
+        scores = {genre: 0.0 for genre in Genre}
+
+        for keyword in keywords:
+            for genre, genre_keywords in self._genre_keywords.items():
+                if keyword in genre_keywords:
+                    scores[genre] += 1.0
+
+        # Normalize scores
+        total_score = sum(scores.values())
+        if total_score > 0:
+            scores = {genre: score / total_score for genre, score in scores.items()}
+
+        return scores
+
+    async def _classify_with_llm(self, text: str) -> Dict[str, Any]:
+        """Use LLM to classify genre with reasoning.
+
+        Args:
+            text: Text to classify
+
+        Returns:
+            Classification result with confidence and reasoning
+        """
+        try:
+            messages = [
+                SystemMessage(content="""You are a literary genre classification expert.
+                Analyze the given text and determine its primary and secondary genres.
+
+                Available genres: Fantasy, Mystery, Romance, Science Fiction, Horror,
+                Thriller, Adventure, Drama, Historical, Contemporary
+
+                Respond in this exact format:
+                Primary Genre: [genre]
+                Secondary Genres: [genre1, genre2, ...]
+                Confidence: [0.0-1.0]
+                Reasoning: [brief explanation]"""),
+                HumanMessage(content=f"Classify this text: {text}")
+            ]
+
+            response = await self.llm.ainvoke(messages)
+
+            # Parse the response
+            lines = response.content.strip().split('\n')
+            result = {
+                'primary_genre': None,
+                'secondary_genres': [],
+                'confidence': 0.5,
+                'reasoning': ''
+            }
+
+            for line in lines:
+                if line.startswith('Primary Genre:'):
+                    result['primary_genre'] = line.split(':', 1)[1].strip()
+                elif line.startswith('Secondary Genres:'):
+                    secondary = line.split(':', 1)[1].strip()
+                    result['secondary_genres'] = [g.strip() for g in secondary.split(',') if g.strip()]
+                elif line.startswith('Confidence:'):
+                    try:
+                        result['confidence'] = float(line.split(':', 1)[1].strip())
+                    except ValueError:
+                        result['confidence'] = 0.5
+                elif line.startswith('Reasoning:'):
+                    result['reasoning'] = line.split(':', 1)[1].strip()
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in LLM genre classification: {e}")
+            return {
+                'primary_genre': 'Unknown',
+                'secondary_genres': [],
+                'confidence': 0.0,
+                'reasoning': f'Classification failed: {str(e)}'
+            }
+
+    async def classify_genre(self, text: str) -> Dict[str, Any]:
+        """Classify the genre of the given text.
+
+        Args:
+            text: Text to classify
+
+        Returns:
+            Classification result with genre, confidence, and reasoning
+        """
+        # Extract keywords and calculate initial scores
+        keywords = self._extract_genre_keywords(text)
+        keyword_scores = self._calculate_genre_scores(keywords)
+
+        # Get LLM classification
+        llm_result = await self._classify_with_llm(text)
+
+        # Combine results
+        return {
+            'primary_genre': llm_result['primary_genre'],
+            'secondary_genres': llm_result['secondary_genres'],
+            'confidence': llm_result['confidence'],
+            'reasoning': llm_result['reasoning'],
+            'keyword_scores': keyword_scores,
+            'keywords_found': keywords
+        }
+
+
+class ThematicAnalyzer:
+    """Analyzer for identifying themes and symbolic elements in text."""
+
+    def __init__(self, llm: BaseChatModel):
+        """Initialize the thematic analyzer.
+
+        Args:
+            llm: Language model for analysis tasks
+        """
+        self.llm = llm
+
+        # Common thematic keywords
+        self._thematic_keywords = {
+            'love': ['love', 'affection', 'romance', 'devotion', 'passion'],
+            'death': ['death', 'mortality', 'dying', 'grave', 'funeral'],
+            'power': ['power', 'control', 'authority', 'dominance', 'influence'],
+            'freedom': ['freedom', 'liberty', 'independence', 'escape', 'release'],
+            'identity': ['identity', 'self', 'who', 'being', 'existence'],
+            'justice': ['justice', 'fairness', 'right', 'wrong', 'moral'],
+            'redemption': ['redemption', 'forgiveness', 'salvation', 'atonement'],
+            'sacrifice': ['sacrifice', 'giving', 'offering', 'loss', 'surrender'],
+            'betrayal': ['betrayal', 'deception', 'lies', 'trust', 'broken'],
+            'hope': ['hope', 'optimism', 'future', 'possibility', 'faith']
+        }
+
+    def _extract_thematic_keywords(self, text: str) -> List[str]:
+        """Extract theme-related keywords from text.
+
+        Args:
+            text: Text to analyze
+
+        Returns:
+            List of thematic keywords found
+        """
+        text_lower = text.lower()
+        found_keywords = []
+
+        for theme, keywords in self._thematic_keywords.items():
+            for keyword in keywords:
+                if keyword in text_lower:
+                    found_keywords.append(keyword)
+
+        return found_keywords
+
+    def _identify_common_themes(self, keywords: List[str]) -> List[str]:
+        """Identify common themes based on keywords.
+
+        Args:
+            keywords: List of thematic keywords
+
+        Returns:
+            List of identified themes
+        """
+        theme_scores = {}
+
+        for keyword in keywords:
+            for theme, theme_keywords in self._thematic_keywords.items():
+                if keyword in theme_keywords:
+                    theme_scores[theme] = theme_scores.get(theme, 0) + 1
+
+        # Return themes with at least 2 keyword matches
+        return [theme for theme, score in theme_scores.items() if score >= 2]
+
+    async def _analyze_themes_with_llm(self, text: str) -> Dict[str, Any]:
+        """Use LLM to analyze themes in depth.
+
+        Args:
+            text: Text to analyze
+
+        Returns:
+            Thematic analysis result
+        """
+        try:
+            messages = [
+                SystemMessage(content="""You are a literary thematic analysis expert.
+                Analyze the given text and identify the major themes, symbols, and motifs.
+
+                Respond in this format:
+                Major Themes: [theme1, theme2, ...]
+                Symbols: [symbol1, symbol2, ...]
+                Motifs: [motif1, motif2, ...]
+                Analysis: [detailed thematic analysis]"""),
+                HumanMessage(content=f"Analyze themes in this text: {text}")
+            ]
+
+            response = await self.llm.ainvoke(messages)
+
+            # Parse response
+            lines = response.content.strip().split('\n')
+            result = {
+                'major_themes': [],
+                'symbols': [],
+                'motifs': [],
+                'analysis': ''
+            }
+
+            for line in lines:
+                if line.startswith('Major Themes:'):
+                    themes = line.split(':', 1)[1].strip()
+                    result['major_themes'] = [t.strip() for t in themes.split(',') if t.strip()]
+                elif line.startswith('Symbols:'):
+                    symbols = line.split(':', 1)[1].strip()
+                    result['symbols'] = [s.strip() for s in symbols.split(',') if s.strip()]
+                elif line.startswith('Motifs:'):
+                    motifs = line.split(':', 1)[1].strip()
+                    result['motifs'] = [m.strip() for m in motifs.split(',') if m.strip()]
+                elif line.startswith('Analysis:'):
+                    result['analysis'] = line.split(':', 1)[1].strip()
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in LLM thematic analysis: {e}")
+            return {
+                'major_themes': [],
+                'symbols': [],
+                'motifs': [],
+                'analysis': f'Analysis failed: {str(e)}'
+            }
+
+    async def analyze_themes(self, text: str) -> Dict[str, Any]:
+        """Analyze themes in the given text.
+
+        Args:
+            text: Text to analyze
+
+        Returns:
+            Comprehensive thematic analysis
+        """
+        # Extract keywords and identify common themes
+        keywords = self._extract_thematic_keywords(text)
+        common_themes = self._identify_common_themes(keywords)
+
+        # Get detailed LLM analysis
+        llm_analysis = await self._analyze_themes_with_llm(text)
+
+        return {
+            'keywords_found': keywords,
+            'common_themes': common_themes,
+            'major_themes': llm_analysis['major_themes'],
+            'symbols': llm_analysis['symbols'],
+            'motifs': llm_analysis['motifs'],
+            'detailed_analysis': llm_analysis['analysis']
+        }
+
+
+class CharacterArcAnalyzer:
+    """Analyzer for identifying character development patterns and arcs."""
+
+    def __init__(self, llm: BaseChatModel):
+        """Initialize the character arc analyzer.
+
+        Args:
+            llm: Language model for analysis tasks
+        """
+        self.llm = llm
+
+        # Character arc types
+        self._arc_types = {
+            'hero_journey': ['call', 'adventure', 'mentor', 'trials', 'transformation', 'return'],
+            'tragic_fall': ['hubris', 'downfall', 'consequence', 'destruction', 'tragic'],
+            'redemption': ['mistake', 'guilt', 'journey', 'redemption', 'forgiveness'],
+            'coming_of_age': ['youth', 'innocence', 'growth', 'maturity', 'responsibility'],
+            'villain_arc': ['corruption', 'evil', 'power', 'darkness', 'antagonist']
+        }
+
+    def _identify_character_mentions(self, text: str) -> List[str]:
+        """Identify potential character mentions in text.
+
+        Args:
+            text: Text to analyze
+
+        Returns:
+            List of potential character names/pronouns
+        """
+        import re
+
+        # Simple pattern to find capitalized words (potential names)
+        names = re.findall(r'\b[A-Z][a-z]+\b', text)
+
+        # Add common pronouns
+        pronouns = re.findall(r'\b(?:he|she|him|her|his|hers|they|them|their)\b', text.lower())
+
+        return list(set(names + pronouns))
+
+    def _classify_arc_type(self, text: str) -> str:
+        """Classify the type of character arc based on text content.
+
+        Args:
+            text: Text to analyze
+
+        Returns:
+            Most likely arc type
+        """
+        text_lower = text.lower()
+        arc_scores = {}
+
+        for arc_type, keywords in self._arc_types.items():
+            score = sum(1 for keyword in keywords if keyword in text_lower)
+            if score > 0:
+                arc_scores[arc_type] = score
+
+        if arc_scores:
+            return max(arc_scores.items(), key=lambda x: x[1])[0]
+        return 'undefined'
+
+    async def _analyze_character_development(self, text: str, character: str) -> Dict[str, Any]:
+        """Analyze character development using LLM.
+
+        Args:
+            text: Text containing character
+            character: Character to analyze
+
+        Returns:
+            Character development analysis
+        """
+        try:
+            messages = [
+                SystemMessage(content=f"""You are a character development analyst.
+                Analyze the character development for '{character}' in the given text.
+
+                Respond in this format:
+                Character: {character}
+                Arc Type: [hero_journey/tragic_fall/redemption/coming_of_age/villain_arc/other]
+                Development: [description of character growth/change]
+                Key Moments: [moment1, moment2, ...]
+                Traits: [trait1, trait2, ...]"""),
+                HumanMessage(content=f"Analyze character development in: {text}")
+            ]
+
+            response = await self.llm.ainvoke(messages)
+
+            # Parse response
+            lines = response.content.strip().split('\n')
+            result = {
+                'character': character,
+                'arc_type': 'undefined',
+                'development': '',
+                'key_moments': [],
+                'traits': []
+            }
+
+            for line in lines:
+                if line.startswith('Arc Type:'):
+                    result['arc_type'] = line.split(':', 1)[1].strip()
+                elif line.startswith('Development:'):
+                    result['development'] = line.split(':', 1)[1].strip()
+                elif line.startswith('Key Moments:'):
+                    moments = line.split(':', 1)[1].strip()
+                    result['key_moments'] = [m.strip() for m in moments.split(',') if m.strip()]
+                elif line.startswith('Traits:'):
+                    traits = line.split(':', 1)[1].strip()
+                    result['traits'] = [t.strip() for t in traits.split(',') if t.strip()]
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error in character development analysis: {e}")
+            return {
+                'character': character,
+                'arc_type': 'undefined',
+                'development': f'Analysis failed: {str(e)}',
+                'key_moments': [],
+                'traits': []
+            }
+
+    async def analyze_character_arcs(self, text: str) -> Dict[str, Any]:
+        """Analyze character arcs in the given text.
+
+        Args:
+            text: Text to analyze
+
+        Returns:
+            Character arc analysis results
+        """
+        # Identify potential characters
+        characters = self._identify_character_mentions(text)
+
+        # Classify overall arc type
+        arc_type = self._classify_arc_type(text)
+
+        # Analyze development for main characters (limit to first 3)
+        character_analyses = []
+        for character in characters[:3]:
+            analysis = await self._analyze_character_development(text, character)
+            character_analyses.append(analysis)
+
+        return {
+            'overall_arc_type': arc_type,
+            'characters_identified': characters,
+            'character_analyses': character_analyses
+        }

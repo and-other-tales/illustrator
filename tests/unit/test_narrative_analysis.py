@@ -12,7 +12,10 @@ from illustrator.narrative_analysis import (
     ThematicElement,
     CharacterArc,
     NarrativeArc,
-    LiteraryDevice
+    LiteraryDevice,
+    GenreClassifier,
+    ThematicAnalyzer,
+    CharacterArcAnalyzer
 )
 from illustrator.models import Chapter, EmotionalMoment, EmotionalTone
 

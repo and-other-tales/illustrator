@@ -185,12 +185,71 @@ def parse_llm_json(text: str) -> Any:
     candidate = extract_json_from_text(text)
     if candidate is None:
         raise ValueError("No JSON found in LLM output")
+
     try:
         return json.loads(candidate)
     except json.JSONDecodeError as e:
-        # Attempt minor cleanup: remove trailing ellipses or stray characters
-        cleaned = candidate.strip().rstrip('.').rstrip()
-        return json.loads(cleaned)
+        # Attempt progressive cleanup strategies
+
+        # Strategy 1: Remove trailing ellipses or stray characters
+        try:
+            cleaned = candidate.strip().rstrip('.').rstrip()
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 2: Fix unterminated strings by finding and closing them
+        try:
+            # Find the position of the JSON decode error
+            lines = candidate.split('\n')
+            if hasattr(e, 'lineno') and hasattr(e, 'colno'):
+                line_idx = e.lineno - 1
+                col_idx = e.colno - 1
+
+                if line_idx < len(lines):
+                    line = lines[line_idx]
+                    # Check if we have an unterminated string
+                    if col_idx < len(line) and '"' in line[:col_idx]:
+                        # Count unmatched quotes before the error position
+                        quote_count = 0
+                        escaped = False
+                        for i, char in enumerate(line[:col_idx + 1]):
+                            if char == '\\' and not escaped:
+                                escaped = True
+                            elif char == '"' and not escaped:
+                                quote_count += 1
+                            else:
+                                escaped = False
+
+                        # If we have an odd number of quotes, we have an unterminated string
+                        if quote_count % 2 == 1:
+                            # Try to close the unterminated string
+                            lines[line_idx] = line[:col_idx] + '"' + line[col_idx:]
+                            fixed_candidate = '\n'.join(lines)
+                            return json.loads(fixed_candidate)
+        except (json.JSONDecodeError, AttributeError, IndexError):
+            pass
+
+        # Strategy 3: Try to salvage partial JSON by truncating at the error point
+        try:
+            if hasattr(e, 'pos'):
+                truncated = candidate[:e.pos]
+                # Try to close any open structures
+                open_braces = truncated.count('{') - truncated.count('}')
+                open_brackets = truncated.count('[') - truncated.count(']')
+
+                # Add closing brackets/braces as needed
+                for _ in range(open_brackets):
+                    truncated += ']'
+                for _ in range(open_braces):
+                    truncated += '}'
+
+                return json.loads(truncated)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+        # If all strategies fail, raise the original error
+        raise ValueError(f"Failed to parse JSON after cleanup attempts: {e}")
 
 
 def enforce_prompt_length(provider: str, prompt: str) -> str:

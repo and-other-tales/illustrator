@@ -813,40 +813,107 @@ class WebSocketIllustrationGenerator:
                                               style_config.get("art_style", "digital painting"))
 
     def _create_fallback_prompt(self, text_excerpt, emotional_tone, chapter_title, art_style):
-        """Create a fallback prompt when AI prompt generation fails."""
-        from illustrator.models import IllustrationPrompt
+        """Create an instructive, high-quality fallback prompt (string).
 
-        # Create a simple but effective fallback prompt
-        fallback_text = f"A {art_style} illustration depicting a scene from '{chapter_title}'. "
+        This avoids vague phrasing (e.g., "depicting a scene") and
+        instead gives concrete, directive guidance suitable for
+        text-to-image models, tailored by tone and style.
+        """
+        # Normalize inputs
+        style = (art_style or "digital painting").lower()
+        tone_key = str(emotional_tone).split('.')[-1].upper() if emotional_tone else "NEUTRAL"
+        excerpt = (text_excerpt or "").strip()
 
-        # Add emotional tone context
-        if emotional_tone:
-            tone_descriptions = {
-                'JOY': 'bright, uplifting, cheerful atmosphere',
-                'SADNESS': 'melancholic, somber, emotional atmosphere',
-                'FEAR': 'dark, tense, mysterious atmosphere',
-                'ANGER': 'intense, dramatic, fierce atmosphere',
-                'TENSION': 'suspenseful, gripping, charged atmosphere',
-                'MYSTERY': 'enigmatic, shadowy, intriguing atmosphere',
-                'NEUTRAL': 'balanced, natural atmosphere'
-            }
-            tone_desc = tone_descriptions.get(str(emotional_tone).split('.')[-1], 'atmospheric')
-            fallback_text += f"The scene has a {tone_desc}. "
+        # Media/style-specific lead-in
+        if any(k in style for k in ["pencil", "shepard"]):
+            lead = "A natural pencil sketch illustration in the classic E.H. Shepard style."
+            technique = (
+                "The sketch should balance subtle emotion and charm, with fine crosshatching, "
+                "gentle graphite shading, and expressive, characterful linework."
+            )
+        elif "watercolor" in style:
+            lead = "A delicate watercolor illustration with soft edges and layered washes."
+            technique = "Use gentle color transitions, reserved whites, and restrained detail for a book-illustration feel."
+        elif "oil" in style:
+            lead = "A traditional oil painting with classic book-illustration sensibility."
+            technique = "Employ controlled brushwork, clear focal hierarchy, and warm, cohesive tones."
+        elif "digital" in style:
+            lead = "A cinematic digital painting with classic book-illustration clarity."
+            technique = "Use clean rendering, atmospheric lighting, and a readable focal point with restrained detailing."
+        else:
+            lead = f"A detailed {art_style} illustration in a classic book-illustration style."
+            technique = "Maintain clear focal hierarchy, readable forms, and tasteful, story-forward detailing."
 
-        # Add content from text excerpt if available
-        if text_excerpt and len(text_excerpt.strip()) > 10:
-            # Extract key visual elements from the excerpt
-            fallback_text += f"The scene captures the essence of: '{text_excerpt[:100]}'"
+        # Tone-to-direction mapping (kept concise, model-friendly)
+        tone_cues = {
+            "JOY": "light, open posture; soft, warm lighting; relaxed expressions",
+            "SADNESS": "slumped shoulders; downcast eyes; muted tones; gentle shadows",
+            "FEAR": "stiff smile, wide eyes, tense shoulders; close, intimate framing; subtle unease",
+            "ANGER": "tight jaw; furrowed brow; energetic angle; bold contrasts",
+            "TENSION": "held breath; careful spacing between figures; controlled, taut poses",
+            "MYSTERY": "soft shadows; partially obscured details; suggestive, not explicit cues",
+            "ANTICIPATION": "forward lean; alert eyes; restrained motion; poised tension",
+            "SUSPENSE": "stillness; withheld action; compressed spacing; shadow accents",
+            "MELANCHOLY": "soft posture; thoughtful gaze; cool, quiet atmosphere",
+            "PEACE": "relaxed stance; gentle light; uncluttered forms",
+            "ROMANCE": "gentle posture; softened expressions; warm, intimate spacing",
+            "NEUTRAL": "balanced posture; natural lighting; calm, observational framing"
+        }
+        tone_dir = tone_cues.get(tone_key, "balanced posture; natural lighting; calm framing")
 
-        fallback_text += f". High quality {art_style}, detailed, professional illustration."
+        # Build the directive scene line
+        if excerpt:
+            # Keep excerpt content but in an instructive format
+            scene_line = (
+                f"Depict the specific moment described — \"{excerpt[:220]}\" — "
+                f"as a clear, readable scene."
+            )
+        else:
+            scene_line = (
+                f"Depict a key moment from '{chapter_title}', focusing on a clear action and reaction."  # fallback when no excerpt
+            )
 
-        return IllustrationPrompt(
-            provider=self.generator.provider,
-            prompt=fallback_text,
-            style_modifiers=[],
-            negative_prompt="blurry, low quality, distorted",
-            technical_params={}
-        )
+        # Composition guidance by tone
+        comp_by_tone = {
+            "FEAR": "Use intimate, slightly off-center framing to heighten unease.",
+            "TENSION": "Favor a medium, close, or three-quarter view that emphasizes body language.",
+            "SADNESS": "Choose a quiet, balanced composition; leave gentle breathing space around the subject.",
+            "ANGER": "Consider a dynamic angle with directional lines leading into the focal point.",
+            "MYSTERY": "Let soft shadow shapes and partial occlusion guide the eye to the focal area.",
+            "JOY": "Use an open composition with soft, welcoming shapes.",
+            "ANTICIPATION": "Place the subject slightly off-center; leave room in the direction of attention.",
+            "SUSPENSE": "Keep a controlled, symmetrical base with a small destabilizing element.",
+            "MELANCHOLY": "Widen the framing slightly; allow negative space to carry feeling.",
+            "PEACE": "Use an even, centered composition with gentle overlaps and clear separation.",
+            "ROMANCE": "Favor a two-shot with soft triangulation and gentle overlap for intimacy.",
+            "NEUTRAL": "Keep a balanced medium shot with clear focal hierarchy."
+        }
+        comp = comp_by_tone.get(tone_key, comp_by_tone["NEUTRAL"])
+
+        # Optional environment hints based on common manuscript settings
+        env_hints = []
+        lower_all = f"{chapter_title} {excerpt}".lower()
+        if any(k in lower_all for k in ["room", "hall", "hallway", "stair", "kitchen", "living room", "house", "home", "bedroom"]):
+            env_hints.append("Interior domestic setting; suggest doorframes, window light, wall textures, and floor patterns.")
+        if any(k in lower_all for k in ["phone", "call", "receiver", "hang up", "dial"]):
+            env_hints.append("Include a phone or receiver as a subtle prop if appropriate.")
+        if any(k in lower_all for k in ["night", "dark", "shadow", "dim", "lamp"]):
+            env_hints.append("Low ambient light; soft lamp glow; readable shadow shapes.")
+
+        # Assemble prompt in the instructive style
+        parts = [
+            lead,
+            scene_line,
+            f"Focus cues: {tone_dir}.",
+            comp,
+            "Include specific environmental cues suggested by the text (doors, windows, light sources, textures).",
+            technique
+        ]
+
+        if env_hints:
+            parts.insert(4, " ".join(env_hints))
+
+        return " ".join(parts)
 
     async def generate_images(self, prompts, chapter):
         """Generate images with WebSocket progress updates."""

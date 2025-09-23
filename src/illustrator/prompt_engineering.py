@@ -205,7 +205,13 @@ Extract the most important visual elements for illustration.""")
             ]
 
             response = await self.llm.ainvoke(messages)
-            elements_data = parse_llm_json(response.content)
+
+            try:
+                elements_data = parse_llm_json(response.content)
+            except ValueError as json_error:
+                logger.warning(f"JSON parsing failed: {json_error}. Using fallback visual element extraction.")
+                # Fallback: create basic visual elements from the text content
+                return self._create_fallback_visual_elements(text, context, chapter)
 
             visual_elements = []
             for elem_data in elements_data:
@@ -221,8 +227,63 @@ Extract the most important visual elements for illustration.""")
 
         except Exception as e:
             logger.error(f"Visual element extraction failed: {e}")
-            raise ValueError(f"Failed to extract visual elements from scene: {str(e)}")
+            logger.info("Attempting fallback visual element extraction...")
+            try:
+                return self._create_fallback_visual_elements(text, context, chapter)
+            except Exception as fallback_error:
+                logger.error(f"Fallback extraction also failed: {fallback_error}")
+                raise ValueError(f"Failed to extract visual elements from scene: {str(e)}")
 
+    def _create_fallback_visual_elements(self, text: str, context: str, chapter: Chapter) -> List[VisualElement]:
+        """Create fallback visual elements using pattern matching when LLM parsing fails."""
+        visual_elements = []
+
+        # Basic pattern matching for characters
+        character_indicators = ['he ', 'she ', 'they ', 'character', 'protagonist', 'person', 'man', 'woman']
+        for indicator in character_indicators:
+            if indicator.lower() in text.lower():
+                visual_elements.append(VisualElement(
+                    element_type="character",
+                    description=f"Character from scene: {context}",
+                    importance=0.8,
+                    attributes={"context": context, "fallback": True}
+                ))
+                break
+
+        # Basic pattern matching for objects/props
+        object_patterns = ['sword', 'book', 'door', 'window', 'table', 'chair', 'lamp', 'fire', 'candle', 'mirror']
+        found_objects = [obj for obj in object_patterns if obj.lower() in text.lower()]
+        for obj in found_objects[:3]:  # Limit to 3 objects
+            visual_elements.append(VisualElement(
+                element_type="object",
+                description=f"{obj} mentioned in scene",
+                importance=0.6,
+                attributes={"object_type": obj, "fallback": True}
+            ))
+
+        # Basic environment detection
+        environment_keywords = ['room', 'house', 'forest', 'street', 'garden', 'castle', 'shop', 'inn', 'tavern']
+        for env in environment_keywords:
+            if env.lower() in text.lower():
+                visual_elements.append(VisualElement(
+                    element_type="environment",
+                    description=f"Scene set in {env}",
+                    importance=0.7,
+                    attributes={"setting": env, "fallback": True}
+                ))
+                break
+
+        # If no elements found, create a generic scene element
+        if not visual_elements:
+            visual_elements.append(VisualElement(
+                element_type="atmosphere",
+                description=f"Scene from chapter {chapter.number}: {chapter.title}",
+                importance=0.5,
+                attributes={"context": context, "chapter": chapter.number, "fallback": True}
+            ))
+
+        logger.info(f"Created {len(visual_elements)} fallback visual elements")
+        return visual_elements
 
     async def _analyze_composition(
         self,
