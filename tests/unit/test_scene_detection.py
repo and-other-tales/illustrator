@@ -91,9 +91,9 @@ class TestLiterarySceneDetector:
         """Test basic scene detection."""
         chapter = Chapter(
             title="Test Chapter",
-            content="Scene one content here. Later that day, scene two began. Finally, the evening brought scene three.",
+            content="Scene one content here with much more detailed description of what happened in the morning when everything was peaceful and calm. The birds were singing and the sun was shining brightly across the meadow. Later that day, scene two began with dramatic changes as storm clouds gathered overhead and the wind picked up significantly. The atmosphere became tense and foreboding as characters prepared for what was coming next. Finally, the evening brought scene three with its own unique atmosphere and completely different emotional tone from the previous scenes.",
             number=1,
-            word_count=18
+            word_count=85
         )
 
         # Mock LLM response
@@ -103,7 +103,7 @@ class TestLiterarySceneDetector:
         Boundary at position 65 - Time transition: "Finally, the evening"
         """
 
-        scenes = await self.detector.detect_scenes(chapter)
+        scenes = await self.detector.extract_scenes(chapter.content)
 
         # Should detect multiple scenes
         assert isinstance(scenes, list)
@@ -114,26 +114,26 @@ class TestLiterarySceneDetector:
     async def test_detect_scenes_empty_content(self):
         """Test scene detection with empty content."""
         chapter = Chapter(
-            id="empty",
             title="Empty Chapter",
             content="",
-            emotional_moments=[]
+            number=1,
+            word_count=0
         )
 
-        scenes = await self.detector.detect_scenes(chapter)
+        scenes = await self.detector.extract_scenes(chapter.content)
         assert scenes == []
 
     @pytest.mark.asyncio
     async def test_detect_scenes_short_content(self):
         """Test scene detection with very short content."""
         chapter = Chapter(
-            id="short",
             title="Short Chapter",
             content="Brief content.",
-            emotional_moments=[]
+            number=1,
+            word_count=2
         )
 
-        scenes = await self.detector.detect_scenes(chapter)
+        scenes = await self.detector.extract_scenes(chapter.content)
 
         # Should return at least one scene for any content
         assert len(scenes) >= 1
@@ -144,28 +144,26 @@ class TestLiterarySceneDetector:
     async def test_detect_scenes_with_emotional_moments(self):
         """Test scene detection considering existing emotional moments."""
         emotional_moment = EmotionalMoment(
-            id="em-1",
-            chapter_id="test-1",
             start_position=10,
             end_position=30,
             text_excerpt="emotional content",
-            primary_emotion=EmotionalTone.JOY,
+            emotional_tones=[EmotionalTone.JOY],
             intensity_score=0.8,
             context="happy moment"
         )
 
         chapter = Chapter(
-            id="test-1",
             title="Test Chapter",
             content="The day began with emotional content that filled hearts with joy. Later, sadness crept in.",
-            emotional_moments=[emotional_moment]
+            number=1,
+            word_count=17
         )
 
         self.mock_llm.ainvoke.return_value.content = """
         Scene boundaries detected at positions based on emotional transitions.
         """
 
-        scenes = await self.detector.detect_scenes(chapter)
+        scenes = await self.detector.extract_scenes(chapter.content)
         assert len(scenes) > 0
 
     @pytest.mark.asyncio
@@ -174,14 +172,14 @@ class TestLiterarySceneDetector:
         self.mock_llm.ainvoke.side_effect = Exception("API Error")
 
         chapter = Chapter(
-            id="test-error",
             title="Error Test",
             content="Content that should be processed despite LLM error.",
-            emotional_moments=[]
+            number=1,
+            word_count=9
         )
 
         # Should still return scenes even with LLM failure
-        scenes = await self.detector.detect_scenes(chapter)
+        scenes = await self.detector.extract_scenes(chapter.content)
         assert isinstance(scenes, list)
 
     @pytest.mark.asyncio
@@ -207,10 +205,10 @@ class TestLiterarySceneDetector:
         """
 
         chapter = Chapter(
-            id="complex",
             title="Complex Chapter",
             content=complex_content,
-            emotional_moments=[]
+            number=1,
+            word_count=150
         )
 
         self.mock_llm.ainvoke.return_value.content = """
@@ -220,7 +218,7 @@ class TestLiterarySceneDetector:
         - Tension escalation at position 800 (storm arrival)
         """
 
-        scenes = await self.detector.detect_scenes(chapter)
+        scenes = await self.detector.extract_scenes(chapter.content)
 
         assert len(scenes) >= 2  # Should detect multiple scenes
 
