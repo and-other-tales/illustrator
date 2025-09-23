@@ -18,7 +18,7 @@
 {% block content %}
 <!-- Manuscript Header -->
 <div class="row mb-4">
-    <div class="col-12">
+    <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
         <div class="card shadow-lg border-0">
             <div class="card-header bg-gradient text-white">
                 <div class="d-flex justify-content-between align-items-start">
@@ -91,12 +91,12 @@
 
 <!-- Chapters Section -->
 <div class="row">
-    <div class="col-12">
+    <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
         <div class="card shadow">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h4 class="mb-0 fw-bold">
+                <h3 class="mb-0 fw-bold">
                     <i class="bi bi-book me-2"></i>Chapters
-                </h4>
+                </h3>
                 <button class="btn btn-success btn-sm" onclick="addNewChapter()">
                     <i class="bi bi-plus-circle me-1"></i>Add Chapter
                 </button>
@@ -180,9 +180,9 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="chapterAnalysisModalLabel">
+                <h4 class="modal-title fw-bold" id="chapterAnalysisModalLabel">
                     <i class="bi bi-search me-2"></i>Chapter Analysis
-                </h5>
+                </h4>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -349,19 +349,23 @@ async function loadManuscriptDetails() {
     try {
         showLoadingOverlay('Loading manuscript details...');
 
-        // Load manuscript metadata
-        const manuscriptResponse = await fetch(`/api/manuscripts/${currentManuscriptId}`);
+        // Load manuscript metadata and chapters in parallel
+        const [manuscriptResponse, chaptersResponse] = await Promise.all([
+            fetch(`/api/manuscripts/${currentManuscriptId}`),
+            fetch(`/api/chapters/${currentManuscriptId}`)
+        ]);
+
         if (!manuscriptResponse.ok) {
             throw new Error('Failed to load manuscript');
         }
-        manuscriptData = await manuscriptResponse.json();
-
-        // Load chapters
-        const chaptersResponse = await fetch(`/api/chapters/${currentManuscriptId}`);
         if (!chaptersResponse.ok) {
             throw new Error('Failed to load chapters');
         }
-        chapters = await chaptersResponse.json();
+
+        [manuscriptData, chapters] = await Promise.all([
+            manuscriptResponse.json(),
+            chaptersResponse.json()
+        ]);
 
         // Update UI
         updateManuscriptHeader();

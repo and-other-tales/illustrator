@@ -50,22 +50,55 @@ def get_manuscript_processing_status(manuscript_id: str) -> str:
         return "draft"
 
 
+# Cache for manuscripts to avoid repeated file system scans
+_manuscripts_cache = {}
+_cache_timestamp = None
+
 def get_saved_manuscripts() -> List[SavedManuscript]:
-    """Load all saved manuscripts from disk."""
-    manuscripts = []
+    """Load all saved manuscripts from disk with caching."""
+    global _manuscripts_cache, _cache_timestamp
 
     if not SAVED_MANUSCRIPTS_DIR.exists():
-        return manuscripts
+        return []
+
+    # Check if cache is still valid (cache for 30 seconds)
+    import time
+    current_time = time.time()
+
+    if _cache_timestamp and current_time - _cache_timestamp < 30:
+        return list(_manuscripts_cache.values())
+
+    manuscripts = []
+    new_cache = {}
 
     for file_path in SAVED_MANUSCRIPTS_DIR.glob("*.json"):
         try:
+            # Check file modification time to see if we need to reload
+            file_mtime = file_path.stat().st_mtime
+            cache_key = str(file_path)
+
+            # Use cached version if file hasn't changed
+            if cache_key in _manuscripts_cache:
+                cached_manuscript, cached_mtime = _manuscripts_cache[cache_key]
+                if file_mtime <= cached_mtime:
+                    new_cache[cache_key] = (cached_manuscript, cached_mtime)
+                    manuscripts.append(cached_manuscript)
+                    continue
+
+            # Load from file
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             manuscript = SavedManuscript(**data)
+            new_cache[cache_key] = (manuscript, file_mtime)
             manuscripts.append(manuscript)
+
         except Exception as e:
             print(f"Error loading manuscript {file_path}: {e}")
             continue
+
+    # Update cache
+    _manuscripts_cache = new_cache
+    _cache_timestamp = current_time
 
     # Sort by saved date (newest first)
     manuscripts.sort(key=lambda m: m.saved_at, reverse=True)

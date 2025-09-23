@@ -18,6 +18,8 @@
 {% block content %}
 <!-- Stats Cards -->
 <div class="row mb-5 g-4">
+    <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
+        <div class="row g-4">
     <div class="col-lg-3 col-md-6">
         <div class="card stats-card modern-stats-card bg-primary text-white h-100 bounce-in">
             <div class="card-body position-relative">
@@ -116,17 +118,18 @@
                 <div class="stats-wave processing-wave"></div>
             </div>
         </div>
+        </div>
     </div>
 </div>
 
 <!-- Recent Manuscripts -->
 <div class="row">
-    <div class="col-12">
+    <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
+                <h3 class="card-title mb-0 fw-bold">
                     <i class="bi bi-clock-history me-2"></i>Recent Manuscripts
-                </h5>
+                </h3>
                 <div class="btn-group btn-group-sm" role="group">
                     <button type="button" class="btn btn-outline-secondary" onclick="setManuscriptView('grid')" id="gridViewBtn">
                         <i class="bi bi-grid"></i>

@@ -31,12 +31,12 @@
 {% block content %}
 <!-- Processing Status Overview -->
 <div class="row mb-4">
-    <div class="col-12">
+    <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
+                <h4 class="card-title mb-0 fw-bold">
                     <i class="bi bi-activity me-2"></i>Processing Status
-                </h5>
+                </h4>
                 <div class="d-flex align-items-center">
                     <div class="spinner-border spinner-border-sm text-primary me-2" role="status" id="processingSpinner">
                         <span class="visually-hidden">Processing...</span>
@@ -108,7 +108,7 @@
                         <!-- Processing Stats -->
                         <div class="card bg-light">
                             <div class="card-body">
-                                <h6 class="card-title">Processing Statistics</h6>
+                                <h5 class="card-title fw-bold">Processing Statistics</h5>
                                 <div class="row text-center">
                                     <div class="col-6">
                                         <div class="fw-bold fs-4 text-primary" id="chaptersProcessed">0</div>
@@ -132,7 +132,7 @@
                         <!-- Session Info -->
                         <div class="card mt-3">
                             <div class="card-body">
-                                <h6 class="card-title">Session Information</h6>
+                                <h5 class="card-title fw-bold">Session Information</h5>
                                 <div class="small">
                                     <div class="mb-1">
                                         <strong>Session ID:</strong>
@@ -158,20 +158,20 @@
 
 <!-- Processing Log -->
 <div class="row mb-4">
-    <div class="col-12">
+    <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
+                <h4 class="card-title mb-0 fw-bold">
                     <i class="bi bi-terminal me-2"></i>Processing Log
-                </h5>
+                </h4>
                 <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-secondary" onclick="toggleAutoScroll()" id="autoScrollBtn">
+                    <button type="button" class="btn btn-info text-white" onclick="toggleAutoScroll()" id="autoScrollBtn">
                         <i class="bi bi-arrow-down"></i> Auto-scroll
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="toggleMaximizeLog()" id="maximizeLogBtn">
+                    <button type="button" class="btn btn-primary" onclick="toggleMaximizeLog()" id="maximizeLogBtn">
                         <i class="bi bi-arrows-fullscreen"></i> Maximize
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="clearLog()">
+                    <button type="button" class="btn btn-warning" onclick="clearLog()">
                         <i class="bi bi-trash"></i> Clear
                     </button>
                 </div>
@@ -187,12 +187,12 @@
 
 <!-- Generated Images Preview -->
 <div class="row" id="imagesPreview" style="display: none;">
-    <div class="col-12">
+    <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
         <div class="card">
             <div class="card-header">
-                <h5 class="card-title mb-0">
+                <h4 class="card-title mb-0 fw-bold">
                     <i class="bi bi-images me-2"></i>Generated Images
-                </h5>
+                </h4>
             </div>
             <div class="card-body">
                 <div class="row" id="imagesList">
@@ -208,9 +208,9 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title">
+                <h4 class="modal-title fw-bold">
                     <i class="bi bi-exclamation-triangle me-2"></i>Processing Error
-                </h5>
+                </h4>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -677,7 +677,13 @@ function startTimeTracking() {
 function toggleAutoScroll() {
     autoScroll = !autoScroll;
     const btn = document.getElementById('autoScrollBtn');
-    btn.classList.toggle('active', autoScroll);
+    if (autoScroll) {
+        btn.className = 'btn btn-success text-white';
+        btn.innerHTML = '<i class="bi bi-arrow-down"></i> Auto-scroll ON';
+    } else {
+        btn.className = 'btn btn-info text-white';
+        btn.innerHTML = '<i class="bi bi-arrow-down"></i> Auto-scroll';
+    }
 }
 
 function clearLog() {
@@ -693,14 +699,14 @@ function toggleMaximizeLog() {
     if (!logMaximized) {
         // Maximize: double the height
         log.style.height = '600px';
+        btn.className = 'btn btn-success';
         btn.innerHTML = '<i class="bi bi-arrows-collapse"></i> Minimize';
-        btn.classList.add('active');
         logMaximized = true;
     } else {
         // Minimize: return to original height
         log.style.height = '300px';
+        btn.className = 'btn btn-primary';
         btn.innerHTML = '<i class="bi bi-arrows-fullscreen"></i> Maximize';
-        btn.classList.remove('active');
         logMaximized = false;
     }
 }
