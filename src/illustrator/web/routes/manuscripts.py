@@ -405,7 +405,7 @@ async def preview_style_image(
 async def list_manuscript_images(manuscript_id: str) -> Dict[str, Any]:
     """List all generated images for a manuscript from the database."""
     try:
-        from ..services.illustration_service import IllustrationService
+        from illustrator.services.illustration_service import IllustrationService
 
         # Initialize illustration service
         illustration_service = IllustrationService()
@@ -554,7 +554,7 @@ async def list_manuscript_images(manuscript_id: str) -> Dict[str, Any]:
 async def delete_manuscript_image(manuscript_id: str, image_id: str) -> SuccessResponse:
     """Delete a specific image for a manuscript."""
     try:
-        from ..services.illustration_service import IllustrationService
+        from illustrator.services.illustration_service import IllustrationService
 
         # Initialize illustration service
         illustration_service = IllustrationService()
