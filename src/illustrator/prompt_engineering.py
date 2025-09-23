@@ -2,6 +2,7 @@
 
 import json
 import re
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -9,6 +10,8 @@ from enum import Enum
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+
+logger = logging.getLogger(__name__)
 
 from illustrator.models import (
     EmotionalMoment,
@@ -1203,6 +1206,10 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         """Create a detailed fallback description when AI enhancement fails."""
         parts = []
 
+        # Enhanced fallback for E.H. Shepard style illustration
+        # Start with a rich scene description
+        parts.append(f"Classic book illustration showing: {original_text}")
+
         # Determine scene type and setting
         character_elements = [elem for elem in visual_elements if elem.element_type == "character"]
         environment_elements = [elem for elem in visual_elements if elem.element_type == "environment"]
@@ -1212,6 +1219,14 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         if environment_elements:
             setting = environment_elements[0].description
             parts.append(f"Scene set in {setting}")
+        else:
+            # Infer setting from text
+            if "house" in original_text.lower() or "room" in original_text.lower():
+                parts.append("Interior domestic setting with period details")
+            elif "door" in original_text.lower() or "doorway" in original_text.lower():
+                parts.append("Architectural framing with doorway as focal point")
+            else:
+                parts.append("Detailed environmental setting")
 
         if character_elements:
             char_descriptions = []
@@ -1223,6 +1238,12 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 else:
                     char_descriptions.append(char.description)
             parts.append(f"featuring {', '.join(char_descriptions)}")
+        else:
+            # Infer character details from text
+            if "lukas" in original_text.lower():
+                parts.append("featuring male character Lukas with expressive face and thoughtful pose")
+            else:
+                parts.append("featuring character with detailed facial expression and body language")
 
         # Add composition details
         parts.append(f"{scene_composition.composition_type.value} composition focusing on {scene_composition.focal_point}")
@@ -1232,9 +1253,17 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             parts.append(f"with {atmosphere_elements[0].description}")
         elif hasattr(scene_composition, 'atmosphere') and scene_composition.atmosphere:
             parts.append(f"creating {scene_composition.atmosphere} atmosphere")
+        else:
+            # Infer atmosphere from emotional tones in the text
+            if "mysterious" in original_text.lower() or "mystery" in original_text.lower():
+                parts.append("creating mysterious, atmospheric mood")
+            elif "curious" in original_text.lower() or "watching" in original_text.lower():
+                parts.append("creating sense of anticipation and watchful atmosphere")
+            else:
+                parts.append("creating emotionally resonant atmosphere")
 
-        # Add the original emotional context
-        parts.append(f"Captures the moment: {original_text}")
+        # Add E.H. Shepard specific visual elements
+        parts.append("Delicate pencil work with expressive linework, gentle shading, and classic book illustration composition")
 
         return ". ".join(parts)
 

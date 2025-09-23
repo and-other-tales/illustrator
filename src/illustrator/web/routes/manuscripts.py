@@ -401,6 +401,155 @@ async def preview_style_image(
         )
 
 
+@router.get("/{manuscript_id}/images")
+async def list_manuscript_images(manuscript_id: str) -> Dict[str, Any]:
+    """List all generated images for a manuscript from the database."""
+    try:
+        from ..services.illustration_service import IllustrationService
+
+        # Initialize illustration service
+        illustration_service = IllustrationService()
+
+        try:
+            # Get illustrations from database
+            illustrations = illustration_service.get_illustrations_by_manuscript(manuscript_id)
+
+            # Convert to API format
+            images = []
+            for illustration in illustrations:
+                # Get chapter information
+                chapter_info = f"Chapter {illustration.chapter.number}" if illustration.chapter else "Unknown Chapter"
+
+                image_data = {
+                    "id": str(illustration.id),
+                    "url": illustration.web_url,
+                    "filename": illustration.filename,
+                    "title": illustration.title or f"{chapter_info} - Scene {illustration.scene_number}",
+                    "description": illustration.description or f"Generated illustration for {chapter_info}, Scene {illustration.scene_number}",
+                    "chapter": chapter_info,
+                    "scene": f"Scene {illustration.scene_number}",
+                    "style": illustration.image_provider,
+                    "emotional_tones": illustration.emotional_tones.split(",") if illustration.emotional_tones else [],
+                    "intensity_score": illustration.intensity_score,
+                    "prompt": illustration.prompt,
+                    "text_excerpt": illustration.text_excerpt,
+                    "size": illustration.file_size,
+                    "width": illustration.width,
+                    "height": illustration.height,
+                    "created_at": illustration.created_at.isoformat() if illustration.created_at else None,
+                    "generation_status": illustration.generation_status
+                }
+                images.append(image_data)
+
+            # Get manuscript title (fallback to file-based system for now)
+            manuscript_title = "Unknown Manuscript"
+            try:
+                manuscripts = get_saved_manuscripts()
+                for manuscript in manuscripts:
+                    generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path))
+                    if generated_id == manuscript_id:
+                        manuscript_title = manuscript.metadata.title
+                        break
+            except Exception:
+                pass
+
+            return {
+                "images": images,
+                "total_count": len(images),
+                "manuscript_id": manuscript_id,
+                "manuscript_title": manuscript_title
+            }
+
+        finally:
+            illustration_service.close()
+
+    except Exception as e:
+        # Fallback to filesystem scanning if database fails
+        print(f"Database query failed, falling back to filesystem: {e}")
+
+        manuscripts = get_saved_manuscripts()
+
+        # Find the manuscript
+        manuscript_found = None
+        for manuscript in manuscripts:
+            generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path))
+            if generated_id == manuscript_id:
+                manuscript_found = manuscript
+                break
+
+        if not manuscript_found:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Manuscript not found"
+            )
+
+        # Fallback to filesystem scanning
+        generated_images_dir = Path("illustrator_output") / "generated_images"
+        images = []
+
+        if generated_images_dir.exists():
+            image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'}
+
+            for image_file in generated_images_dir.iterdir():
+                if image_file.is_file() and image_file.suffix.lower() in image_extensions:
+                    filename = image_file.name
+                    chapter_info = "Unknown"
+                    scene_info = "Unknown"
+
+                    if "chapter_" in filename and "scene_" in filename:
+                        try:
+                            parts = filename.split("_")
+                            chapter_idx = next(i for i, part in enumerate(parts) if part == "chapter")
+                            scene_idx = next(i for i, part in enumerate(parts) if part == "scene")
+
+                            if chapter_idx + 1 < len(parts) and scene_idx + 1 < len(parts):
+                                chapter_num = parts[chapter_idx + 1]
+                                scene_num = parts[scene_idx + 1].split(".")[0]
+                                chapter_info = f"Chapter {int(chapter_num)}"
+                                scene_info = f"Scene {int(scene_num)}"
+                        except (ValueError, IndexError, StopIteration):
+                            pass
+
+                    image_data = {
+                        "url": f"/generated/{image_file.name}",
+                        "filename": image_file.name,
+                        "title": f"{chapter_info} - {scene_info}",
+                        "description": f"Generated illustration for {chapter_info}, {scene_info}",
+                        "chapter": chapter_info,
+                        "scene": scene_info,
+                        "style": "Generated illustration",
+                        "size": image_file.stat().st_size,
+                        "created_at": datetime.fromtimestamp(image_file.stat().st_mtime).isoformat()
+                    }
+                    images.append(image_data)
+
+        # Sort images by chapter and scene
+        def sort_key(img):
+            try:
+                filename = img["filename"]
+                if "chapter_" in filename and "scene_" in filename:
+                    parts = filename.split("_")
+                    chapter_idx = next(i for i, part in enumerate(parts) if part == "chapter")
+                    scene_idx = next(i for i, part in enumerate(parts) if part == "scene")
+
+                    if chapter_idx + 1 < len(parts) and scene_idx + 1 < len(parts):
+                        chapter_num = int(parts[chapter_idx + 1])
+                        scene_num = int(parts[scene_idx + 1].split(".")[0])
+                        return (chapter_num, scene_num)
+            except (ValueError, IndexError, StopIteration):
+                pass
+            return (999, 999)
+
+        images.sort(key=sort_key)
+
+        return {
+            "images": images,
+            "total_count": len(images),
+            "manuscript_id": manuscript_id,
+            "manuscript_title": manuscript_found.metadata.title
+        }
+
+
 @router.delete("/{manuscript_id}")
 async def delete_manuscript(manuscript_id: str) -> SuccessResponse:
     """Delete a manuscript."""

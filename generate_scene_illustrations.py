@@ -585,11 +585,29 @@ This script will:
     output_dir.mkdir(parents=True, exist_ok=True)
     console.print(f"[green]📁 Output directory: {output_dir}[/green]")
 
-    # Style preferences
+    # Style preferences from environment
+    default_style = os.getenv('DEFAULT_ILLUSTRATION_STYLE', 'hand-drawn pencil sketch in the style of E.H. Shepard and Tove Jansson, classic children\'s book illustration, delicate line work, cross-hatching, whimsical characters')
+
     style_preferences = {
-        'art_style': 'cinematic digital painting',
-        'color_palette': 'rich and atmospheric',
-        'artistic_influences': 'Greg Rutkowski, Concept Art'
+        'art_style': 'pencil sketch',
+        'style_name': 'E.H. Shepard',
+        'base_prompt_modifiers': [
+            'hand-drawn pencil sketch',
+            'in the style of E.H. Shepard and Tove Jansson',
+            'classic children\'s book illustration',
+            'delicate line work',
+            'cross-hatching',
+            'whimsical characters',
+            'gentle shading',
+            'expressive facial features',
+            'soft pencil textures'
+        ],
+        'color_palette': 'monochrome pencil with subtle shading',
+        'artistic_influences': 'E.H. Shepard, Tove Jansson, classic book illustration',
+        'technical_params': {
+            'style': 'artistic',
+            'quality': 'high'
+        }
     }
 
     # Initialize components

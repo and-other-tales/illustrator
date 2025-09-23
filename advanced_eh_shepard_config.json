@@ -1,168 +1,122 @@
 {
-  "style_name": "E.H. Shepard Enhanced Pencil Illustration",
-  "description": "Advanced E.H. Shepard style with enhanced emotional mapping and scene-specific adaptations",
+  "style_name": "Advanced E.H. Shepard Style",
+  "description": "Comprehensive style configuration for generating illustrations in the style of E.H. Shepard, famous for Winnie-the-Pooh illustrations",
   "base_prompt_modifiers": [
-    "pencil sketch",
-    "E.H. Shepard style",
+    "hand-drawn pencil sketch",
+    "in the style of E.H. Shepard",
     "classic children's book illustration",
-    "soft graphite strokes",
-    "delicate cross-hatching",
-    "expressive line work",
-    "charming and whimsical",
-    "traditional hand-drawn quality",
-    "gentle artistic technique",
-    "timeless illustration style"
+    "delicate line work with cross-hatching",
+    "expressive character faces",
+    "gentle pencil shading",
+    "whimsical yet detailed illustration",
+    "soft graphite textures",
+    "traditional book illustration aesthetic"
   ],
   "negative_prompt": [
-    "photographic",
-    "digital art",
-    "color photography",
-    "painted",
-    "overly detailed",
-    "modern style",
-    "realistic photography",
-    "3D render",
-    "anime",
-    "cartoon style",
-    "computer graphics",
-    "harsh lines"
+    "photorealistic",
+    "digital painting",
+    "color",
+    "modern art style",
+    "abstract",
+    "low quality",
+    "blurry",
+    "distorted",
+    "amateur",
+    "text",
+    "watermarks"
   ],
   "technical_params": {
-    "model": "dall-e-3",
-    "size": "1024x1024",
-    "quality": "hd",
-    "style": "natural"
+    "style": "artistic",
+    "quality": "high",
+    "artistic_technique": "pencil sketch",
+    "line_quality": "delicate and expressive",
+    "shading_style": "cross-hatching and soft gradients"
   },
   "emotional_adaptations": {
     "joy": {
       "style_modifiers": [
-        "light, flowing pencil strokes",
-        "gentle upward curves",
-        "bright expression lines",
-        "cheerful composition"
+        "bright expressive eyes",
+        "gentle smiles",
+        "light cross-hatching",
+        "uplifting character poses"
       ],
-      "composition_hints": [
-        "open, airy spacing",
-        "characters in relaxed poses",
-        "environmental elements suggesting warmth"
-      ]
+      "atmosphere_adjustments": "lighter pencil strokes, more open composition"
     },
     "sadness": {
       "style_modifiers": [
-        "heavier pencil strokes",
-        "subtle shading around eyes",
-        "drooping line work",
-        "contemplative mood"
+        "downcast expressions",
+        "heavier shading",
+        "melancholic character poses",
+        "gentle emotional depth"
       ],
-      "composition_hints": [
-        "intimate close-up focus",
-        "soft background elements",
-        "character poses suggesting introspection"
-      ]
+      "atmosphere_adjustments": "deeper shadows with soft edges"
     },
     "fear": {
       "style_modifiers": [
-        "sharp, angular strokes in background",
-        "increased contrast",
-        "tense line quality",
-        "dramatic shadowing"
+        "wide eyes",
+        "tense body language",
+        "dramatic shadows",
+        "unsettling atmosphere while maintaining classic style"
       ],
-      "composition_hints": [
-        "characters in protective poses",
-        "environmental elements suggesting danger",
-        "negative space to create tension"
-      ]
+      "atmosphere_adjustments": "strategic use of dark areas and contrast"
     },
     "mystery": {
       "style_modifiers": [
-        "atmospheric cross-hatching",
-        "subtle gradations",
-        "hint of concealed elements",
-        "enigmatic composition"
+        "atmospheric shadows",
+        "subtle environmental details",
+        "intriguing character expressions",
+        "mysterious background elements"
       ],
-      "composition_hints": [
-        "partial views and suggestions",
-        "play of light and shadow",
-        "elements partially hidden or obscured"
-      ]
+      "atmosphere_adjustments": "selective shading to create intrigue"
     },
     "adventure": {
       "style_modifiers": [
-        "dynamic line work",
-        "energetic stroke patterns",
-        "movement-suggesting techniques",
-        "bold composition elements"
+        "dynamic character poses",
+        "detailed environmental elements",
+        "sense of movement in line work",
+        "expressive action"
       ],
-      "composition_hints": [
-        "characters in active poses",
-        "diagonal composition elements",
-        "environmental details suggesting journey"
-      ]
-    }
-  },
-  "character_guidelines": {
-    "human_characters": {
-      "style_notes": "Simple, expressive features with emphasis on emotion over detail",
-      "line_quality": "Soft, rounded forms with gentle expression lines",
-      "proportion_style": "Slightly stylized proportions emphasizing character personality"
-    },
-    "animal_characters": {
-      "style_notes": "Anthropomorphic qualities balanced with natural animal characteristics",
-      "line_quality": "Organic curves following natural animal forms",
-      "expression_technique": "Emotional expression through posture and simple facial features"
-    }
-  },
-  "environment_adaptations": {
-    "indoor_scenes": {
-      "style_approach": "Minimal furniture outlines, cozy domestic details",
-      "line_technique": "Simple architectural elements, emphasis on character interaction",
-      "atmospheric_notes": "Warm, enclosed feeling through soft background treatment"
-    },
-    "outdoor_scenes": {
-      "style_approach": "Sparse landscape elements, suggestion over detail",
-      "line_technique": "Natural organic shapes, minimal background complexity",
-      "atmospheric_notes": "Open, pastoral feeling with generous white space"
-    },
-    "forest_scenes": {
-      "style_approach": "Tree trunks and foliage suggestions, dappled lighting effects",
-      "line_technique": "Organic, flowing lines for natural elements",
-      "atmospheric_notes": "Mysterious depth through selective detail placement"
-    }
-  },
-  "composition_strategies": {
-    "emotional_focus": {
-      "close_up": "Concentrate on character expression, minimal background",
-      "medium_shot": "Balance character and environment for context",
-      "wide_shot": "Character as part of larger environmental story"
-    },
-    "narrative_emphasis": {
-      "character_interaction": "Position characters to show relationship dynamics",
-      "story_moment": "Emphasize key narrative elements through composition weight",
-      "atmospheric_mood": "Use environmental elements to reinforce emotional tone"
+      "atmosphere_adjustments": "energetic line work and composition"
     }
   },
   "provider_optimizations": {
     "dalle": {
-      "prompt_length": "Keep descriptions concise but emotionally rich",
-      "emphasis_technique": "Use artistic terminology DALL-E recognizes",
-      "style_consistency": "Reinforce pencil sketch style throughout prompt"
+      "style_emphasis": "E.H. Shepard pencil sketch style",
+      "quality_modifiers": [
+        "detailed line work",
+        "classic book illustration",
+        "artistic pencil drawing"
+      ],
+      "technical_adjustments": {
+        "style": "vivid",
+        "size": "1024x1024"
+      }
     },
     "imagen4": {
-      "cinematic_approach": "Frame descriptions like classic illustration cinematography",
-      "lighting_emphasis": "Describe pencil sketch lighting as photographic equivalent",
-      "quality_modifiers": "Use professional illustration terminology"
+      "style_emphasis": "E.H. Shepard classic illustration technique",
+      "quality_modifiers": [
+        "masterful pencil technique",
+        "professional book illustration",
+        "detailed crosshatching",
+        "expressive character art"
+      ],
+      "technical_adjustments": {
+        "guidance_scale": 12,
+        "aspect_ratio": "1:1"
+      }
     },
     "flux": {
-      "artistic_detail": "Emphasize traditional illustration techniques",
-      "style_flexibility": "Allow for artistic interpretation within Shepard constraints",
-      "technique_emphasis": "Highlight specific pencil and paper techniques"
+      "style_emphasis": "Traditional E.H. Shepard pencil illustration",
+      "quality_modifiers": [
+        "detailed artistic technique",
+        "classic illustration mastery",
+        "expressive pencil work",
+        "children's book art excellence"
+      ],
+      "technical_adjustments": {
+        "guidance_scale": 7.5,
+        "num_inference_steps": 30
+      }
     }
-  },
-  "quality_standards": {
-    "line_quality": "Soft, expressive, hand-drawn appearance",
-    "emotional_authenticity": "Clear emotional communication through simple means",
-    "style_consistency": "Maintained E.H. Shepard aesthetic throughout",
-    "narrative_clarity": "Story elements clearly communicated through composition",
-    "artistic_charm": "Timeless, whimsical quality appropriate to classic illustration"
   }
 }
