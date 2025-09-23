@@ -36,6 +36,42 @@
         <!-- Gallery Controls -->
         <div class="row mb-4">
             <div class="col-12">
+                <!-- Search and Filter Row -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="text" class="form-control" id="searchInput" placeholder="Search images..." onkeyup="filterImages()">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="chapterFilter" onchange="filterImages()">
+                            <option value="">All Chapters</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="styleFilter" onchange="filterImages()">
+                            <option value="">All Styles</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="sortFilter" onchange="filterImages()">
+                            <option value="newest">Newest First</option>
+                            <option value="oldest">Oldest First</option>
+                            <option value="chapter">By Chapter</option>
+                            <option value="rating">By Rating</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                            <i class="bi bi-funnel me-1"></i>Clear Filters
+                        </button>
+                    </div>
+                </div>
+
+                <!-- View Controls Row -->
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                     <div class="btn-group" role="group" aria-label="View options">
                         <button class="btn btn-outline-primary btn-sm active" id="masonryViewBtn" onclick="setGalleryView('masonry')">
@@ -48,7 +84,8 @@
                             <i class="bi bi-list me-1"></i>List
                         </button>
                     </div>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <small class="text-muted" id="imageCount">0 images</small>
                         <div class="btn-group" role="group">
                             <button class="btn btn-outline-secondary btn-sm" onclick="downloadAllImages()">
                                 <i class="bi bi-download me-1"></i>Download All
@@ -189,18 +226,25 @@ async function loadGallery() {
 
             if (images.length === 0) {
                 emptyState.style.display = 'block';
+                updateImageCount(0);
             } else {
+                // Store images globally for filtering
+                window.allImages = images;
+                populateFilters(images);
                 displayImages(images);
+                updateImageCount(images.length);
             }
         } else {
             // API endpoint doesn't exist yet, show empty state
             loadingState.style.display = 'none';
             emptyState.style.display = 'block';
+            updateImageCount(0);
         }
     } catch (error) {
         console.error('Error loading gallery:', error);
         loadingState.style.display = 'none';
         emptyState.style.display = 'block';
+        updateImageCount(0);
     }
 }
 
@@ -502,6 +546,108 @@ function deleteCurrentModalImage() {
 
         // Then delete the image
         deleteImage(imageId, imageTitle);
+    }
+}
+
+function populateFilters(images) {
+    const chapterFilter = document.getElementById('chapterFilter');
+    const styleFilter = document.getElementById('styleFilter');
+
+    // Clear existing options (except "All" options)
+    chapterFilter.innerHTML = '<option value="">All Chapters</option>';
+    styleFilter.innerHTML = '<option value="">All Styles</option>';
+
+    // Get unique chapters and styles
+    const chapters = [...new Set(images.map(img => img.chapter).filter(Boolean))].sort();
+    const styles = [...new Set(images.map(img => img.style).filter(Boolean))].sort();
+
+    // Populate chapter filter
+    chapters.forEach(chapter => {
+        const option = document.createElement('option');
+        option.value = chapter;
+        option.textContent = chapter;
+        chapterFilter.appendChild(option);
+    });
+
+    // Populate style filter
+    styles.forEach(style => {
+        const option = document.createElement('option');
+        option.value = style;
+        option.textContent = style;
+        styleFilter.appendChild(option);
+    });
+}
+
+function filterImages() {
+    if (!window.allImages) return;
+
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const chapterFilter = document.getElementById('chapterFilter').value;
+    const styleFilter = document.getElementById('styleFilter').value;
+    const sortFilter = document.getElementById('sortFilter').value;
+
+    let filteredImages = window.allImages.filter(image => {
+        // Search filter
+        const matchesSearch = searchTerm === '' ||
+            (image.title && image.title.toLowerCase().includes(searchTerm)) ||
+            (image.description && image.description.toLowerCase().includes(searchTerm)) ||
+            (image.chapter && image.chapter.toLowerCase().includes(searchTerm)) ||
+            (image.prompt && image.prompt.toLowerCase().includes(searchTerm));
+
+        // Chapter filter
+        const matchesChapter = chapterFilter === '' || image.chapter === chapterFilter;
+
+        // Style filter
+        const matchesStyle = styleFilter === '' || image.style === styleFilter;
+
+        return matchesSearch && matchesChapter && matchesStyle;
+    });
+
+    // Sort filtered images
+    filteredImages.sort((a, b) => {
+        switch (sortFilter) {
+            case 'oldest':
+                return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+            case 'newest':
+                return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+            case 'chapter':
+                const aChapter = parseInt((a.chapter || 'Chapter 0').replace('Chapter ', ''));
+                const bChapter = parseInt((b.chapter || 'Chapter 0').replace('Chapter ', ''));
+                return aChapter - bChapter;
+            case 'rating':
+                return (b.rating || 0) - (a.rating || 0);
+            default:
+                return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        }
+    });
+
+    // Clear gallery and display filtered images
+    const galleryGrid = document.getElementById('galleryGrid');
+    galleryGrid.innerHTML = '';
+    displayImages(filteredImages);
+    updateImageCount(filteredImages.length);
+
+    // Show empty state if no images match filters
+    const emptyState = document.getElementById('emptyState');
+    if (filteredImages.length === 0) {
+        emptyState.style.display = 'block';
+    } else {
+        emptyState.style.display = 'none';
+    }
+}
+
+function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('chapterFilter').value = '';
+    document.getElementById('styleFilter').value = '';
+    document.getElementById('sortFilter').value = 'newest';
+    filterImages();
+}
+
+function updateImageCount(count) {
+    const imageCountElement = document.getElementById('imageCount');
+    if (imageCountElement) {
+        imageCountElement.textContent = `${count} ${count === 1 ? 'image' : 'images'}`;
     }
 }
 

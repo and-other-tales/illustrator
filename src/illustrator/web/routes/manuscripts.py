@@ -35,6 +35,21 @@ def generate_manuscript_id() -> str:
     return str(uuid.uuid4())
 
 
+def get_manuscript_processing_status(manuscript_id: str) -> str:
+    """Get the current processing status of a manuscript."""
+    try:
+        from illustrator.web.app import connection_manager
+        if hasattr(connection_manager, 'sessions'):
+            for session_id, session_data in connection_manager.sessions.items():
+                if session_data.manuscript_id == manuscript_id:
+                    if hasattr(session_data, 'status') and session_data.status:
+                        return session_data.status.status
+                    return "processing"
+        return "draft"
+    except:
+        return "draft"
+
+
 def get_saved_manuscripts() -> List[SavedManuscript]:
     """Load all saved manuscripts from disk."""
     manuscripts = []
@@ -101,7 +116,16 @@ async def get_dashboard_stats() -> DashboardStats:
 
     total_chapters = sum(len(m.chapters) for m in manuscripts)
     total_images = sum(count_generated_images(m.metadata.title) for m in manuscripts)
-    processing_count = 0  # TODO: Track active processing sessions
+    # Track active processing sessions by checking connection manager
+    from illustrator.web.models.web_models import ConnectionManager
+    try:
+        # Check for active processing sessions
+        processing_count = 0
+        from illustrator.web.app import connection_manager
+        if hasattr(connection_manager, 'sessions'):
+            processing_count = len(connection_manager.sessions)
+    except:
+        processing_count = 0
 
     # Get recent manuscripts (last 10)
     recent_manuscripts = []
@@ -111,7 +135,7 @@ async def get_dashboard_stats() -> DashboardStats:
             metadata=manuscript.metadata,
             chapters=manuscript.chapters,
             total_images=count_generated_images(manuscript.metadata.title),
-            processing_status="draft",  # TODO: Determine actual status
+            processing_status=get_manuscript_processing_status(generated_id),
             created_at=manuscript.metadata.created_at,
             updated_at=manuscript.saved_at
         ))
@@ -137,7 +161,7 @@ async def list_manuscripts() -> List[ManuscriptResponse]:
             metadata=manuscript.metadata,
             chapters=manuscript.chapters,
             total_images=count_generated_images(manuscript.metadata.title),
-            processing_status="draft",  # TODO: Determine actual status
+            processing_status=get_manuscript_processing_status(generated_id),
             created_at=manuscript.metadata.created_at,
             updated_at=manuscript.saved_at
         ))
@@ -159,7 +183,7 @@ async def get_manuscript(manuscript_id: str) -> ManuscriptResponse:
                 metadata=manuscript.metadata,
                 chapters=manuscript.chapters,
                 total_images=count_generated_images(manuscript.metadata.title),
-                processing_status="draft",  # TODO: Determine actual status
+                processing_status=get_manuscript_processing_status(generated_id),
                 created_at=manuscript.metadata.created_at,
                 updated_at=manuscript.saved_at
             )
@@ -655,3 +679,373 @@ async def delete_manuscript(manuscript_id: str) -> SuccessResponse:
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Manuscript not found"
     )
+
+
+@router.post("/{manuscript_id}/export")
+async def export_manuscript(
+    manuscript_id: str,
+    export_format: str = "pdf"
+) -> Dict[str, Any]:
+    """Export manuscript in various formats (PDF, DOCX, HTML, JSON)."""
+
+    # Find the manuscript
+    manuscripts = get_saved_manuscripts()
+    manuscript = None
+
+    for saved_manuscript in manuscripts:
+        generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, saved_manuscript.file_path))
+        if generated_id == manuscript_id:
+            manuscript = saved_manuscript
+            break
+
+    if not manuscript:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Manuscript not found"
+        )
+
+    # Validate export format
+    supported_formats = ["pdf", "docx", "html", "json"]
+    if export_format.lower() not in supported_formats:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported export format. Supported formats: {', '.join(supported_formats)}"
+        )
+
+    try:
+        # Create exports directory
+        exports_dir = Path("illustrator_output") / "exports"
+        exports_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate filename
+        safe_title = "".join(c for c in manuscript.metadata.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_title = safe_title.replace(" ", "_")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        export_format_lower = export_format.lower()
+
+        if export_format_lower == "json":
+            # JSON Export - raw data
+            filename = f"{safe_title}_{timestamp}.json"
+            file_path = exports_dir / filename
+
+            export_data = {
+                "manuscript_id": manuscript_id,
+                "metadata": manuscript.metadata.model_dump(),
+                "chapters": [chapter.model_dump() for chapter in manuscript.chapters],
+                "export_info": {
+                    "format": "json",
+                    "exported_at": datetime.now().isoformat(),
+                    "total_chapters": len(manuscript.chapters),
+                    "total_words": sum(len(chapter.content.split()) for chapter in manuscript.chapters)
+                }
+            }
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
+
+        elif export_format_lower == "html":
+            # HTML Export
+            filename = f"{safe_title}_{timestamp}.html"
+            file_path = exports_dir / filename
+
+            html_content = generate_html_export(manuscript)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+
+        elif export_format_lower == "pdf":
+            # PDF Export
+            filename = f"{safe_title}_{timestamp}.pdf"
+            file_path = exports_dir / filename
+
+            await generate_pdf_export(manuscript, file_path)
+
+        elif export_format_lower == "docx":
+            # DOCX Export
+            filename = f"{safe_title}_{timestamp}.docx"
+            file_path = exports_dir / filename
+
+            generate_docx_export(manuscript, file_path)
+
+        # Return download info
+        return {
+            "success": True,
+            "export_format": export_format.upper(),
+            "filename": filename,
+            "download_url": f"/api/manuscripts/{manuscript_id}/download/{filename}",
+            "file_size": file_path.stat().st_size,
+            "exported_at": datetime.now().isoformat(),
+            "manuscript_title": manuscript.metadata.title
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"Export error: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export manuscript: {str(e)}"
+        )
+
+
+def generate_html_export(manuscript: SavedManuscript) -> str:
+    """Generate HTML export of the manuscript."""
+    html_template = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{title} by {author}</title>
+        <style>
+            body {{
+                font-family: 'Times New Roman', serif;
+                line-height: 1.6;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 2rem;
+                background-color: #f8f9fa;
+            }}
+            .manuscript-header {{
+                text-align: center;
+                margin-bottom: 3rem;
+                padding: 2rem;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }}
+            .manuscript-title {{
+                font-size: 2.5rem;
+                margin-bottom: 0.5rem;
+                color: #2c3e50;
+            }}
+            .manuscript-author {{
+                font-size: 1.2rem;
+                color: #6c757d;
+                margin-bottom: 1rem;
+            }}
+            .manuscript-meta {{
+                font-size: 0.9rem;
+                color: #868e96;
+            }}
+            .chapter {{
+                background: white;
+                margin: 2rem 0;
+                padding: 2rem;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }}
+            .chapter-title {{
+                font-size: 1.8rem;
+                margin-bottom: 1.5rem;
+                color: #2c3e50;
+                border-bottom: 2px solid #3498db;
+                padding-bottom: 0.5rem;
+            }}
+            .chapter-content {{
+                text-align: justify;
+                text-indent: 2rem;
+            }}
+            .chapter-content p {{
+                margin-bottom: 1rem;
+            }}
+            @media print {{
+                body {{
+                    background-color: white;
+                    max-width: none;
+                }}
+                .manuscript-header, .chapter {{
+                    box-shadow: none;
+                    border: 1px solid #ddd;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="manuscript-header">
+            <h1 class="manuscript-title">{title}</h1>
+            <p class="manuscript-author">by {author}</p>
+            <div class="manuscript-meta">
+                <p>Genre: {genre} | Chapters: {chapter_count} | Words: {word_count:,}</p>
+                <p>Exported: {export_date}</p>
+            </div>
+        </div>
+
+        {chapters_html}
+    </body>
+    </html>
+    """
+
+    # Generate chapters HTML
+    chapters_html = ""
+    for chapter in manuscript.chapters:
+        # Convert line breaks to paragraphs
+        content_paragraphs = [p.strip() for p in chapter.content.split('\n\n') if p.strip()]
+        content_html = '\n'.join([f'<p>{p}</p>' for p in content_paragraphs])
+
+        chapters_html += f"""
+        <div class="chapter">
+            <h2 class="chapter-title">Chapter {chapter.number}: {chapter.title}</h2>
+            <div class="chapter-content">
+                {content_html}
+            </div>
+        </div>
+        """
+
+    return html_template.format(
+        title=manuscript.metadata.title,
+        author=manuscript.metadata.author or "Unknown Author",
+        genre=manuscript.metadata.genre or "Fiction",
+        chapter_count=len(manuscript.chapters),
+        word_count=sum(len(chapter.content.split()) for chapter in manuscript.chapters),
+        export_date=datetime.now().strftime("%B %d, %Y"),
+        chapters_html=chapters_html
+    )
+
+
+async def generate_pdf_export(manuscript: SavedManuscript, file_path: Path):
+    """Generate PDF export using reportlab."""
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+        from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    except ImportError:
+        # Fallback: generate HTML and convert to PDF using weasyprint if available
+        try:
+            import weasyprint
+            html_content = generate_html_export(manuscript)
+            weasyprint.HTML(string=html_content).write_pdf(str(file_path))
+            return
+        except ImportError:
+            raise Exception("PDF generation requires 'reportlab' or 'weasyprint' package. Install with: pip install reportlab")
+
+    # Create PDF document
+    doc = SimpleDocTemplate(str(file_path), pagesize=letter, topMargin=1*inch)
+    story = []
+    styles = getSampleStyleSheet()
+
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+
+    author_style = ParagraphStyle(
+        'CustomAuthor',
+        parent=styles['Normal'],
+        fontSize=14,
+        spaceAfter=20,
+        alignment=TA_CENTER
+    )
+
+    chapter_title_style = ParagraphStyle(
+        'ChapterTitle',
+        parent=styles['Heading2'],
+        fontSize=18,
+        spaceAfter=20,
+        spaceBefore=30
+    )
+
+    content_style = ParagraphStyle(
+        'Content',
+        parent=styles['Normal'],
+        fontSize=12,
+        spaceAfter=12,
+        alignment=TA_JUSTIFY,
+        firstLineIndent=20
+    )
+
+    # Title page
+    story.append(Paragraph(manuscript.metadata.title, title_style))
+    story.append(Paragraph(f"by {manuscript.metadata.author or 'Unknown Author'}", author_style))
+    story.append(Spacer(1, 0.5*inch))
+
+    # Metadata
+    metadata_text = f"""
+    Genre: {manuscript.metadata.genre or 'Fiction'}<br/>
+    Chapters: {len(manuscript.chapters)}<br/>
+    Words: {sum(len(chapter.content.split()) for chapter in manuscript.chapters):,}<br/>
+    Exported: {datetime.now().strftime('%B %d, %Y')}
+    """
+    story.append(Paragraph(metadata_text, styles['Normal']))
+    story.append(PageBreak())
+
+    # Chapters
+    for i, chapter in enumerate(manuscript.chapters):
+        if i > 0:
+            story.append(PageBreak())
+
+        # Chapter title
+        story.append(Paragraph(f"Chapter {chapter.number}: {chapter.title}", chapter_title_style))
+
+        # Chapter content
+        paragraphs = [p.strip() for p in chapter.content.split('\n\n') if p.strip()]
+        for paragraph in paragraphs:
+            story.append(Paragraph(paragraph, content_style))
+
+    # Build PDF
+    doc.build(story)
+
+
+def generate_docx_export(manuscript: SavedManuscript, file_path: Path):
+    """Generate DOCX export using python-docx."""
+    try:
+        from docx import Document
+        from docx.shared import Inches
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+    except ImportError:
+        raise Exception("DOCX generation requires 'python-docx' package. Install with: pip install python-docx")
+
+    # Create document
+    doc = Document()
+
+    # Title page
+    title_para = doc.add_paragraph()
+    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = title_para.add_run(manuscript.metadata.title)
+    title_run.bold = True
+    title_run.font.size = doc.styles['Title'].font.size
+
+    author_para = doc.add_paragraph()
+    author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    author_run = author_para.add_run(f"by {manuscript.metadata.author or 'Unknown Author'}")
+    author_run.italic = True
+
+    doc.add_paragraph()  # Spacer
+
+    # Metadata
+    metadata_para = doc.add_paragraph()
+    metadata_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    metadata_text = f"""Genre: {manuscript.metadata.genre or 'Fiction'}
+Chapters: {len(manuscript.chapters)}
+Words: {sum(len(chapter.content.split()) for chapter in manuscript.chapters):,}
+Exported: {datetime.now().strftime('%B %d, %Y')}"""
+    metadata_para.add_run(metadata_text)
+
+    doc.add_page_break()
+
+    # Chapters
+    for chapter in manuscript.chapters:
+        # Chapter title
+        chapter_heading = doc.add_heading(f"Chapter {chapter.number}: {chapter.title}", level=1)
+
+        # Chapter content
+        paragraphs = [p.strip() for p in chapter.content.split('\n\n') if p.strip()]
+        for paragraph in paragraphs:
+            para = doc.add_paragraph(paragraph)
+            para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+        doc.add_page_break()
+
+    # Remove last page break
+    if doc.paragraphs:
+        last_para = doc.paragraphs[-1]
+        if last_para._p.getparent() is not None:
+            last_para._p.getparent().remove(last_para._p)
+
+    # Save document
+    doc.save(str(file_path))

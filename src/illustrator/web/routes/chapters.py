@@ -62,6 +62,56 @@ def save_manuscript(manuscript: SavedManuscript, file_path: Path):
         json.dump(manuscript.model_dump(), f, indent=2, ensure_ascii=False)
 
 
+def load_chapter_analysis(chapter_id: str) -> Optional[dict]:
+    """Load saved analysis for a chapter if available."""
+    try:
+        # Check if analysis file exists
+        analysis_dir = Path("illustrator_output") / "analysis"
+        analysis_file = analysis_dir / f"chapter_{chapter_id}_analysis.json"
+
+        if analysis_file.exists():
+            with open(analysis_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading chapter analysis: {e}")
+
+    return None
+
+
+def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
+    """Count generated images for a specific chapter."""
+    try:
+        # Try database approach first
+        from illustrator.services.illustration_service import IllustrationService
+
+        illustration_service = IllustrationService()
+        try:
+            illustrations = illustration_service.get_illustrations_by_manuscript(manuscript_id)
+            count = sum(1 for ill in illustrations if ill.chapter and ill.chapter.number == chapter_number)
+            illustration_service.close()
+            return count
+        finally:
+            illustration_service.close()
+
+    except Exception:
+        # Fallback to filesystem counting
+        try:
+            generated_images_dir = Path("illustrator_output") / "generated_images"
+            if not generated_images_dir.exists():
+                return 0
+
+            count = 0
+            pattern = f"chapter_{chapter_number}_"
+
+            for image_file in generated_images_dir.iterdir():
+                if image_file.is_file() and pattern in image_file.name:
+                    count += 1
+
+            return count
+        except Exception:
+            return 0
+
+
 @router.get("/{manuscript_id}")
 async def get_manuscript_chapters(manuscript_id: str) -> List[ChapterResponse]:
     """Get all chapters for a manuscript."""
@@ -72,8 +122,8 @@ async def get_manuscript_chapters(manuscript_id: str) -> List[ChapterResponse]:
         chapters.append(ChapterResponse(
             id=str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{manuscript_id}_{chapter.number}")),
             chapter=chapter,
-            analysis=None,  # TODO: Load analysis if available
-            images_generated=0,  # TODO: Count generated images
+            analysis=load_chapter_analysis(generated_id),
+            images_generated=count_chapter_images(manuscript_id, chapter.number),
             processing_status="draft"
         ))
 
@@ -393,4 +443,206 @@ async def generate_chapter_headers(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate chapter headers: {str(e)}"
+        )
+
+
+@router.post("/{chapter_id}/analyze")
+async def analyze_chapter(chapter_id: str) -> dict:
+    """Perform comprehensive analysis of a chapter including emotional moments, scenes, and visual potential."""
+
+    # Find the chapter
+    if not SAVED_MANUSCRIPTS_DIR.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chapter not found"
+        )
+
+    chapter = None
+    chapter_title = ""
+
+    for file_path in SAVED_MANUSCRIPTS_DIR.glob("*.json"):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            manuscript = SavedManuscript(**data)
+            manuscript_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(file_path)))
+
+            for chap in manuscript.chapters:
+                generated_chapter_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{manuscript_id}_{chap.number}"))
+                if generated_chapter_id == chapter_id:
+                    chapter = chap
+                    chapter_title = chap.title
+                    break
+
+            if chapter:
+                break
+
+        except Exception as e:
+            print(f"Error loading manuscript {file_path}: {e}")
+            continue
+
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chapter not found"
+        )
+
+    try:
+        # Initialize the analysis systems
+        import os
+        from langchain.chat_models import init_chat_model
+        from illustrator.analysis import EmotionalAnalyzer
+        from illustrator.scene_detection import LiterarySceneDetector
+        from illustrator.narrative_analysis import NarrativeAnalyzer
+        from generate_scene_illustrations import ComprehensiveSceneAnalyzer
+
+        # Check for required API key
+        anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
+        if not anthropic_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Anthropic API key is required for chapter analysis"
+            )
+
+        # Initialize LLM and analyzers
+        llm = init_chat_model(
+            model="claude-sonnet-4-20250514",
+            model_provider="anthropic",
+            api_key=anthropic_api_key
+        )
+
+        emotional_analyzer = EmotionalAnalyzer(llm)
+        scene_detector = LiterarySceneDetector(llm)
+        narrative_analyzer = NarrativeAnalyzer(llm)
+        comprehensive_analyzer = ComprehensiveSceneAnalyzer()
+
+        # Perform comprehensive analysis
+        analysis_results = {}
+
+        # 1. Emotional Analysis with scenes
+        emotional_moments = await emotional_analyzer.analyze_chapter_with_scenes(
+            chapter=chapter,
+            max_moments=10,
+            min_intensity=0.5,
+            scene_awareness=True
+        )
+
+        analysis_results["emotional_analysis"] = {
+            "total_moments": len(emotional_moments),
+            "moments": [
+                {
+                    "text_excerpt": moment.text_excerpt,
+                    "emotional_tones": [tone.value for tone in moment.emotional_tones],
+                    "intensity_score": moment.intensity_score,
+                    "visual_potential": moment.visual_potential,
+                    "context": moment.context,
+                    "start_position": moment.start_position,
+                    "end_position": moment.end_position
+                } for moment in emotional_moments
+            ]
+        }
+
+        # 2. Scene Detection
+        scenes = await scene_detector.extract_scenes(chapter.content)
+        analysis_results["scene_analysis"] = {
+            "total_scenes": len(scenes),
+            "scenes": [
+                {
+                    "scene_type": scene.scene_type,
+                    "primary_characters": scene.primary_characters,
+                    "location": scene.location,
+                    "time_context": scene.time_context,
+                    "emotional_tone": scene.emotional_tone,
+                    "text_preview": scene.text[:200] + "..." if len(scene.text) > 200 else scene.text,
+                    "word_count": len(scene.text.split()),
+                    "start_position": scene.start_position,
+                    "end_position": scene.end_position
+                } for scene in scenes
+            ]
+        }
+
+        # 3. Narrative Structure Analysis
+        narrative_structure = await narrative_analyzer.analyze_structure(chapter.content)
+        analysis_results["narrative_analysis"] = {
+            "structure_type": narrative_structure.structure_type,
+            "pacing": narrative_structure.pacing,
+            "tension_points": [
+                {
+                    "position": point.position,
+                    "intensity": point.intensity,
+                    "description": point.description,
+                    "tension_type": point.tension_type
+                } for point in narrative_structure.tension_points
+            ],
+            "character_arcs": [
+                {
+                    "character_name": arc.character_name,
+                    "arc_type": arc.arc_type,
+                    "development_stage": arc.development_stage,
+                    "key_moments": arc.key_moments
+                } for arc in narrative_structure.character_arcs
+            ],
+            "themes": narrative_structure.themes,
+            "narrative_devices": narrative_structure.narrative_devices
+        }
+
+        # 4. Visual Illustration Potential Analysis
+        illustration_moments = await comprehensive_analyzer.analyze_chapter_comprehensive(chapter)
+        analysis_results["illustration_potential"] = {
+            "total_illustration_moments": len(illustration_moments),
+            "top_moments": [
+                {
+                    "text_excerpt": moment.text_excerpt,
+                    "visual_potential": moment.visual_potential,
+                    "emotional_tones": [tone.value for tone in moment.emotional_tones],
+                    "intensity_score": moment.intensity_score,
+                    "illustration_description": f"Visual scene with {', '.join([tone.value for tone in moment.emotional_tones[:2]])} tones"
+                } for moment in illustration_moments[:5]  # Top 5 for display
+            ]
+        }
+
+        # 5. Chapter Statistics
+        analysis_results["statistics"] = {
+            "word_count": chapter.word_count or len(chapter.content.split()),
+            "character_count": len(chapter.content),
+            "paragraph_count": len([p for p in chapter.content.split('\n\n') if p.strip()]),
+            "sentence_count": len([s for s in chapter.content.split('.') if s.strip()]),
+            "average_sentence_length": round(len(chapter.content.split()) / max(len([s for s in chapter.content.split('.') if s.strip()]), 1), 2),
+            "emotional_density": round(len(emotional_moments) / max(len(chapter.content.split()) / 100, 1), 2),  # moments per 100 words
+            "scene_density": round(len(scenes) / max(len(chapter.content.split()) / 1000, 1), 2)  # scenes per 1000 words
+        }
+
+        # 6. Analysis Summary
+        analysis_results["summary"] = {
+            "dominant_emotional_tones": list(set([tone for moment in emotional_moments for tone in [t.value for t in moment.emotional_tones]])),
+            "key_scenes": [scene.scene_type for scene in scenes[:3]],
+            "narrative_complexity": "High" if len(narrative_structure.tension_points) > 3 else "Medium" if len(narrative_structure.tension_points) > 1 else "Low",
+            "illustration_readiness": "Excellent" if len(illustration_moments) >= 8 else "Good" if len(illustration_moments) >= 5 else "Moderate",
+            "analysis_timestamp": datetime.now().isoformat()
+        }
+
+        # Save analysis results for future loading
+        try:
+            analysis_dir = Path("illustrator_output") / "analysis"
+            analysis_dir.mkdir(parents=True, exist_ok=True)
+            analysis_file = analysis_dir / f"chapter_{chapter_id}_analysis.json"
+
+            with open(analysis_file, 'w', encoding='utf-8') as f:
+                json.dump(analysis_results, f, indent=2, ensure_ascii=False)
+        except Exception as save_error:
+            print(f"Warning: Could not save analysis results: {save_error}")
+
+        return {
+            "success": True,
+            "chapter_id": chapter_id,
+            "chapter_title": chapter_title,
+            "analysis": analysis_results
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"Error analyzing chapter: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to analyze chapter: {str(e)}"
         )

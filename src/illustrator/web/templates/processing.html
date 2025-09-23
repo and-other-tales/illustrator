@@ -243,7 +243,93 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function initializeProcessing() {
-    // First check if there's an existing processing session
+    // Check if session ID is provided in URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlSessionId = urlParams.get('session_id');
+
+    if (urlSessionId) {
+        // Connect directly to the specified session
+        sessionId = urlSessionId;
+        addLogMessage('info', `Connecting to session ${sessionId}...`);
+
+        // Try to fetch session status to validate it exists
+        try {
+            const statusResponse = await fetch('/api/process/status/{{ manuscript_id }}');
+            if (statusResponse.ok) {
+                const statusData = await statusResponse.json();
+
+                if (statusData.active_session && statusData.active_session.session_id === sessionId) {
+                    const session = statusData.active_session;
+
+                    addLogMessage('info', 'Session found, restoring state...');
+
+                    // Set session info
+                    document.getElementById('sessionId').textContent = sessionId;
+
+                    // Set start time if available
+                    if (session.start_time) {
+                        startTime = new Date(session.start_time);
+                        document.getElementById('startTime').textContent = formatDateTime(startTime);
+                    }
+
+                    // Restore session state
+                    if (session.status) {
+                        const status = session.status;
+                        updateProgress(status.progress, status.message);
+                        updateProcessingStatus(status.status, status.status);
+                    }
+
+                    // Restore step status
+                    if (session.step_status) {
+                        Object.keys(session.step_status).forEach(stepIndex => {
+                            updateProcessingStep(parseInt(stepIndex), session.step_status[stepIndex]);
+                        });
+                    }
+
+                    // Restore logs
+                    if (session.logs && session.logs.length > 0) {
+                        const log = document.getElementById('processingLog');
+                        log.innerHTML = '';
+
+                        session.logs.forEach(logEntry => {
+                            restoreLogMessage(logEntry.timestamp, logEntry.level, logEntry.message);
+                        });
+
+                        addLogMessage('info', `Restored ${session.logs.length} log entries`);
+                    }
+
+                    // Restore images
+                    if (session.images && session.images.length > 0) {
+                        session.images.forEach(imageEntry => {
+                            addGeneratedImage(imageEntry.url, imageEntry.prompt);
+                        });
+
+                        addLogMessage('info', `Restored ${session.images.length} generated images`);
+                    }
+
+                    // Connect WebSocket for real-time updates
+                    connectWebSocket();
+
+                    // Start time tracking
+                    startTimeTracking();
+
+                    // Enable control buttons
+                    document.getElementById('pauseBtn').disabled = false;
+                    document.getElementById('cancelBtn').disabled = false;
+
+                    addLogMessage('success', 'Successfully connected to existing session');
+                    return;
+                } else {
+                    addLogMessage('warning', 'Specified session not found, checking for other active sessions...');
+                }
+            }
+        } catch (error) {
+            console.error('Error validating session:', error);
+            addLogMessage('warning', `Could not validate session ${sessionId}, checking for other active sessions...`);
+        }
+    }
+
+    // First check if there's an existing processing session (original logic)
     try {
         const statusResponse = await fetch('/api/process/status/{{ manuscript_id }}');
         if (statusResponse.ok) {

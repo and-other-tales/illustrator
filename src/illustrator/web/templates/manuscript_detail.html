@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Manuscript Details - Manuscript Illustrator{% endblock %}
+{% block title %}{{ manuscript_title | default('Manuscript Details') }} - Manuscript Illustrator{% endblock %}
 
 {% block page_icon %}
 <i class="bi bi-book me-2"></i>
@@ -10,7 +10,7 @@
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
-        <li class="breadcrumb-item active">Manuscript</li>
+        <li class="breadcrumb-item active" id="breadcrumbTitle">Manuscript</li>
     </ol>
 </nav>
 {% endblock %}
@@ -75,8 +75,8 @@
                     </div>
                     <div class="col-md-4">
                         <div class="d-grid gap-2">
-                            <button class="btn btn-primary" onclick="processManuscript()">
-                                <i class="bi bi-magic me-2"></i>Generate Illustrations
+                            <button class="btn btn-primary" id="processBtn" onclick="processManuscript()">
+                                <i class="bi bi-magic me-2" id="processIcon"></i><span id="processBtnText">Generate Illustrations</span>
                             </button>
                             <button class="btn btn-outline-primary" onclick="configureStyle()">
                                 <i class="bi bi-palette me-2"></i>Configure Style
@@ -94,9 +94,9 @@
     <div class="col-12">
         <div class="card shadow">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="material-icons-outlined me-2">menu_book</i>Chapters
-                </h5>
+                <h4 class="mb-0 fw-bold">
+                    <i class="bi bi-book me-2"></i>Chapters
+                </h4>
                 <button class="btn btn-success btn-sm" onclick="addNewChapter()">
                     <i class="bi bi-plus-circle me-1"></i>Add Chapter
                 </button>
@@ -154,29 +154,19 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="d-flex gap-2 justify-content-end flex-wrap">
-                            <button class="btn btn-sm btn-light border" onclick="generateChapterHeaders(this)" title="Chapter Headers">
-                                <i class="material-icons-outlined me-1">palette</i>
-                                Headers
+                        <div class="d-flex gap-1 justify-content-end align-items-center">
+                            <button class="btn btn-sm btn-light border d-flex align-items-center justify-content-center" onclick="generateChapterHeaders(this)" title="Chapter Headers" style="width: 32px; height: 32px;">
+                                <i class="bi bi-palette"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-primary" onclick="editChapter(this)" title="Edit Chapter">
-                                <i class="bi bi-pencil me-1"></i>
-                                Edit
+                            <button class="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center" onclick="editChapter(this)" title="Edit Chapter" style="width: 32px; height: 32px;">
+                                <i class="bi bi-pencil"></i>
                             </button>
-                            <button class="btn btn-sm btn-outline-success" onclick="analyzeChapter(this)" title="Analyze Chapter">
-                                <i class="bi bi-search me-1"></i>
-                                Analyze
+                            <button class="btn btn-sm btn-outline-success d-flex align-items-center justify-content-center" onclick="analyzeChapter(this)" title="Analyze Chapter" style="width: 32px; height: 32px;">
+                                <i class="bi bi-search"></i>
                             </button>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                    <i class="bi bi-three-dots"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item text-danger" href="#" onclick="deleteChapterFromDropdown(this)">
-                                        <i class="bi bi-trash me-2"></i>Delete Chapter
-                                    </a></li>
-                                </ul>
-                            </div>
+                            <button class="btn btn-sm btn-outline-danger d-flex align-items-center justify-content-center" onclick="deleteChapter(this)" title="Delete Chapter" style="width: 32px; height: 32px;">
+                                <i class="bi bi-trash"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -184,6 +174,161 @@
         </div>
     </div>
 </template>
+
+<!-- Chapter Analysis Modal -->
+<div class="modal fade" id="chapterAnalysisModal" tabindex="-1" aria-labelledby="chapterAnalysisModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="chapterAnalysisModalLabel">
+                    <i class="bi bi-search me-2"></i>Chapter Analysis
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Loading State -->
+                <div id="analysisLoading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Analyzing chapter...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Performing comprehensive chapter analysis...</p>
+                </div>
+
+                <!-- Analysis Results -->
+                <div id="analysisResults" style="display: none;">
+                    <!-- Summary Cards -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card border-primary">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title text-primary">Analysis Summary</h5>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <div class="h4 mb-0" id="emotionalMomentsCount">0</div>
+                                            <small class="text-muted">Emotional Moments</small>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="h4 mb-0" id="scenesCount">0</div>
+                                            <small class="text-muted">Scenes</small>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <span class="badge bg-primary me-2" id="illustrationReadiness">Moderate</span>
+                                        <span class="badge bg-info" id="narrativeComplexity">Medium</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-success">
+                                <div class="card-body text-center">
+                                    <h5 class="card-title text-success">Chapter Statistics</h5>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <div class="h5 mb-0" id="wordCount">0</div>
+                                            <small class="text-muted">Words</small>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="h5 mb-0" id="emotionalDensity">0</div>
+                                            <small class="text-muted">Emotional Density</small>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-6">
+                                            <div class="h6 mb-0" id="paragraphCount">0</div>
+                                            <small class="text-muted">Paragraphs</small>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="h6 mb-0" id="avgSentenceLength">0</div>
+                                            <small class="text-muted">Avg Sentence Length</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Tabs -->
+                    <ul class="nav nav-tabs" id="analysisTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="emotional-tab" data-bs-toggle="tab" data-bs-target="#emotional" type="button" role="tab">
+                                <i class="bi bi-heart me-1"></i>Emotional Moments
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="scenes-tab" data-bs-toggle="tab" data-bs-target="#scenes" type="button" role="tab">
+                                <i class="bi bi-camera-video me-1"></i>Scenes
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="narrative-tab" data-bs-toggle="tab" data-bs-target="#narrative" type="button" role="tab">
+                                <i class="bi bi-graph-up me-1"></i>Narrative Structure
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="illustration-tab" data-bs-toggle="tab" data-bs-target="#illustration" type="button" role="tab">
+                                <i class="bi bi-palette me-1"></i>Illustration Potential
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="analysisTabContent">
+                        <!-- Emotional Moments Tab -->
+                        <div class="tab-pane fade show active" id="emotional" role="tabpanel">
+                            <div class="mt-3">
+                                <h6>Key Emotional Moments</h6>
+                                <div id="emotionalMomentsList"></div>
+                            </div>
+                        </div>
+
+                        <!-- Scenes Tab -->
+                        <div class="tab-pane fade" id="scenes" role="tabpanel">
+                            <div class="mt-3">
+                                <h6>Scene Breakdown</h6>
+                                <div id="scenesList"></div>
+                            </div>
+                        </div>
+
+                        <!-- Narrative Structure Tab -->
+                        <div class="tab-pane fade" id="narrative" role="tabpanel">
+                            <div class="mt-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Tension Points</h6>
+                                        <div id="tensionPointsList"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Character Arcs</h6>
+                                        <div id="characterArcsList"></div>
+                                        <h6 class="mt-3">Themes</h6>
+                                        <div id="themesList"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Illustration Potential Tab -->
+                        <div class="tab-pane fade" id="illustration" role="tabpanel">
+                            <div class="mt-3">
+                                <h6>Top Illustration Opportunities</h6>
+                                <div id="illustrationMomentsList"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error State -->
+                <div id="analysisError" class="alert alert-danger" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="exportAnalysisBtn" onclick="exportAnalysis()" style="display: none;">
+                    <i class="bi bi-download me-1"></i>Export Analysis
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -191,10 +336,12 @@
 let currentManuscriptId = '{{ manuscript_id }}';
 let manuscriptData = null;
 let chapters = [];
+let activeSession = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     if (currentManuscriptId) {
         loadManuscriptDetails();
+        checkProcessingStatus();
     }
 });
 
@@ -229,7 +376,16 @@ async function loadManuscriptDetails() {
 }
 
 function updateManuscriptHeader() {
-    document.getElementById('manuscriptTitle').textContent = manuscriptData.metadata.title;
+    const title = manuscriptData.metadata.title;
+
+    // Update page title
+    document.title = `${title} - Manuscript Illustrator`;
+
+    // Update breadcrumb
+    document.getElementById('breadcrumbTitle').textContent = title;
+
+    // Update header content
+    document.getElementById('manuscriptTitle').textContent = title;
     document.getElementById('manuscriptAuthor').textContent = `By ${manuscriptData.metadata.author || 'Unknown Author'}`;
 
     if (manuscriptData.metadata.genre) {
@@ -289,10 +445,223 @@ function generateChapterHeaders(button) {
     window.location.href = `/chapter/${chapterId}/headers`;
 }
 
-function analyzeChapter(button) {
+async function analyzeChapter(button) {
     const chapterId = button.closest('.chapter-card').getAttribute('data-chapter-id');
-    // This would trigger chapter analysis
-    showInfo('Chapter analysis feature coming soon!');
+    const chapterTitle = button.closest('.chapter-card').querySelector('.chapter-title').textContent;
+
+    // Update modal title
+    document.getElementById('chapterAnalysisModalLabel').innerHTML = `<i class="bi bi-search me-2"></i>Chapter Analysis: ${chapterTitle}`;
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('chapterAnalysisModal'));
+    modal.show();
+
+    // Reset modal state
+    document.getElementById('analysisLoading').style.display = 'block';
+    document.getElementById('analysisResults').style.display = 'none';
+    document.getElementById('analysisError').style.display = 'none';
+    document.getElementById('exportAnalysisBtn').style.display = 'none';
+
+    try {
+        const response = await fetch(`/api/chapters/${chapterId}/analyze`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to analyze chapter');
+        }
+
+        const analysisData = await response.json();
+
+        if (analysisData.success) {
+            displayAnalysisResults(analysisData.analysis);
+            document.getElementById('exportAnalysisBtn').style.display = 'inline-block';
+        } else {
+            throw new Error('Analysis failed');
+        }
+
+    } catch (error) {
+        document.getElementById('analysisLoading').style.display = 'none';
+        document.getElementById('analysisError').style.display = 'block';
+        document.getElementById('analysisError').textContent = `Failed to analyze chapter: ${error.message}`;
+    }
+}
+
+function displayAnalysisResults(analysis) {
+    // Hide loading, show results
+    document.getElementById('analysisLoading').style.display = 'none';
+    document.getElementById('analysisResults').style.display = 'block';
+
+    // Update summary cards
+    document.getElementById('emotionalMomentsCount').textContent = analysis.emotional_analysis.total_moments;
+    document.getElementById('scenesCount').textContent = analysis.scene_analysis.total_scenes;
+    document.getElementById('illustrationReadiness').textContent = analysis.summary.illustration_readiness;
+    document.getElementById('narrativeComplexity').textContent = analysis.summary.narrative_complexity;
+
+    // Update statistics
+    const stats = analysis.statistics;
+    document.getElementById('wordCount').textContent = stats.word_count.toLocaleString();
+    document.getElementById('emotionalDensity').textContent = stats.emotional_density;
+    document.getElementById('paragraphCount').textContent = stats.paragraph_count;
+    document.getElementById('avgSentenceLength').textContent = stats.average_sentence_length;
+
+    // Populate emotional moments
+    populateEmotionalMoments(analysis.emotional_analysis.moments);
+
+    // Populate scenes
+    populateScenes(analysis.scene_analysis.scenes);
+
+    // Populate narrative structure
+    populateNarrativeStructure(analysis.narrative_analysis);
+
+    // Populate illustration potential
+    populateIllustrationMoments(analysis.illustration_potential.top_moments);
+
+    // Store analysis data for export
+    window.currentAnalysisData = analysis;
+}
+
+function populateEmotionalMoments(moments) {
+    const container = document.getElementById('emotionalMomentsList');
+    container.innerHTML = '';
+
+    moments.forEach((moment, index) => {
+        const momentCard = document.createElement('div');
+        momentCard.className = 'card mb-3 border-left-primary';
+        momentCard.innerHTML = `
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="card-title mb-0">Moment ${index + 1}</h6>
+                    <div>
+                        <span class="badge bg-primary">${moment.intensity_score.toFixed(2)}</span>
+                        <span class="badge bg-info">${moment.visual_potential.toFixed(2)}</span>
+                    </div>
+                </div>
+                <p class="card-text"><em>"${moment.text_excerpt}"</em></p>
+                <div class="mb-2">
+                    ${moment.emotional_tones.map(tone => `<span class="badge bg-secondary me-1">${tone}</span>`).join('')}
+                </div>
+                <small class="text-muted">${moment.context}</small>
+            </div>
+        `;
+        container.appendChild(momentCard);
+    });
+}
+
+function populateScenes(scenes) {
+    const container = document.getElementById('scenesList');
+    container.innerHTML = '';
+
+    scenes.forEach((scene, index) => {
+        const sceneCard = document.createElement('div');
+        sceneCard.className = 'card mb-3';
+        sceneCard.innerHTML = `
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="card-title mb-0">Scene ${index + 1}: ${scene.scene_type}</h6>
+                    <span class="badge bg-info">${scene.word_count} words</span>
+                </div>
+                <p class="card-text">${scene.text_preview}</p>
+                <div class="row small text-muted">
+                    <div class="col-md-6">
+                        <strong>Location:</strong> ${scene.location || 'Not specified'}<br>
+                        <strong>Time:</strong> ${scene.time_context || 'Not specified'}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Characters:</strong> ${scene.primary_characters.length > 0 ? scene.primary_characters.join(', ') : 'None identified'}<br>
+                        <strong>Tone:</strong> ${scene.emotional_tone || 'Neutral'}
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(sceneCard);
+    });
+}
+
+function populateNarrativeStructure(narrative) {
+    // Tension Points
+    const tensionContainer = document.getElementById('tensionPointsList');
+    tensionContainer.innerHTML = '';
+
+    narrative.tension_points.forEach((point, index) => {
+        const pointDiv = document.createElement('div');
+        pointDiv.className = 'mb-3 p-3 border-left border-warning';
+        pointDiv.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong>Point ${index + 1}</strong>
+                <span class="badge bg-warning text-dark">${point.intensity.toFixed(2)}</span>
+            </div>
+            <p class="mb-1">${point.description}</p>
+            <small class="text-muted">Type: ${point.tension_type}</small>
+        `;
+        tensionContainer.appendChild(pointDiv);
+    });
+
+    // Character Arcs
+    const characterContainer = document.getElementById('characterArcsList');
+    characterContainer.innerHTML = '';
+
+    narrative.character_arcs.forEach(arc => {
+        const arcDiv = document.createElement('div');
+        arcDiv.className = 'mb-3 p-3 border-left border-success';
+        arcDiv.innerHTML = `
+            <strong>${arc.character_name}</strong>
+            <p class="mb-1">${arc.arc_type} - ${arc.development_stage}</p>
+            <small class="text-muted">Key moments: ${arc.key_moments.join(', ')}</small>
+        `;
+        characterContainer.appendChild(arcDiv);
+    });
+
+    // Themes
+    const themesContainer = document.getElementById('themesList');
+    themesContainer.innerHTML = narrative.themes.map(theme =>
+        `<span class="badge bg-primary me-1 mb-1">${theme}</span>`
+    ).join('');
+}
+
+function populateIllustrationMoments(moments) {
+    const container = document.getElementById('illustrationMomentsList');
+    container.innerHTML = '';
+
+    moments.forEach((moment, index) => {
+        const momentCard = document.createElement('div');
+        momentCard.className = 'card mb-3 border-left-success';
+        momentCard.innerHTML = `
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="card-title mb-0">Opportunity ${index + 1}</h6>
+                    <div>
+                        <span class="badge bg-success">${moment.visual_potential.toFixed(2)}</span>
+                        <span class="badge bg-primary">${moment.intensity_score.toFixed(2)}</span>
+                    </div>
+                </div>
+                <p class="card-text"><em>"${moment.text_excerpt}"</em></p>
+                <p class="small text-muted">${moment.illustration_description}</p>
+                <div>
+                    ${moment.emotional_tones.map(tone => `<span class="badge bg-secondary me-1">${tone}</span>`).join('')}
+                </div>
+            </div>
+        `;
+        container.appendChild(momentCard);
+    });
+}
+
+function exportAnalysis() {
+    if (!window.currentAnalysisData) {
+        showError('No analysis data available to export');
+        return;
+    }
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(window.currentAnalysisData, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `chapter_analysis_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+
+    showSuccess('Analysis data exported successfully!');
 }
 
 async function deleteChapter(button) {
@@ -338,12 +707,257 @@ function configureStyle() {
     window.location.href = `/manuscript/${currentManuscriptId}/style`;
 }
 
+async function checkProcessingStatus() {
+    try {
+        const response = await fetch(`/api/process/status/${currentManuscriptId}`);
+        if (response.ok) {
+            const statusData = await response.json();
+
+            if (statusData.active_session) {
+                activeSession = statusData.active_session;
+                updateProcessButton(true);
+            } else {
+                activeSession = null;
+                updateProcessButton(false);
+            }
+        }
+    } catch (error) {
+        console.error('Error checking processing status:', error);
+        updateProcessButton(false);
+    }
+}
+
+function updateProcessButton(hasActiveSession) {
+    const btn = document.getElementById('processBtn');
+    const icon = document.getElementById('processIcon');
+    const text = document.getElementById('processBtnText');
+
+    if (hasActiveSession) {
+        btn.className = 'btn btn-success';
+        icon.className = 'bi bi-play-circle me-2';
+        text.textContent = 'Resume Processing';
+
+        // Add session status indicator
+        const statusText = activeSession.status ? activeSession.status.status : 'in progress';
+        const badge = document.createElement('small');
+        badge.className = 'badge bg-light text-success ms-2';
+        badge.textContent = statusText;
+
+        // Remove existing badge if present
+        const existingBadge = btn.querySelector('.badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+
+        btn.appendChild(badge);
+    } else {
+        btn.className = 'btn btn-primary';
+        icon.className = 'bi bi-magic me-2';
+        text.textContent = 'Generate Illustrations';
+
+        // Remove status badge if present
+        const existingBadge = btn.querySelector('.badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+    }
+}
+
 function processManuscript() {
-    window.location.href = `/manuscript/${currentManuscriptId}/process`;
+    if (activeSession) {
+        // Redirect to processing page with session ID
+        window.location.href = `/manuscript/${currentManuscriptId}/process?session_id=${activeSession.session_id}`;
+    } else {
+        // Start new processing
+        window.location.href = `/manuscript/${currentManuscriptId}/process`;
+    }
 }
 
 function exportManuscript() {
-    showInfo('Export feature coming soon!');
+    // Show export format modal
+    showExportModal();
+}
+
+function showExportModal() {
+    const modalHtml = `
+        <div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="exportModalLabel">
+                            <i class="bi bi-download me-2"></i>Export Manuscript
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-3">Choose the format for exporting your manuscript:</p>
+
+                        <div class="list-group">
+                            <label class="list-group-item">
+                                <input class="form-check-input me-2" type="radio" name="exportFormat" value="pdf" checked>
+                                <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>
+                                <strong>PDF</strong>
+                                <small class="text-muted d-block">Professional document format, ideal for sharing and printing</small>
+                            </label>
+                            <label class="list-group-item">
+                                <input class="form-check-input me-2" type="radio" name="exportFormat" value="docx">
+                                <i class="bi bi-file-earmark-word me-2 text-primary"></i>
+                                <strong>Word Document (.docx)</strong>
+                                <small class="text-muted d-block">Editable format compatible with Microsoft Word</small>
+                            </label>
+                            <label class="list-group-item">
+                                <input class="form-check-input me-2" type="radio" name="exportFormat" value="html">
+                                <i class="bi bi-file-earmark-code me-2 text-warning"></i>
+                                <strong>HTML</strong>
+                                <small class="text-muted d-block">Web format with styling, can be opened in any browser</small>
+                            </label>
+                            <label class="list-group-item">
+                                <input class="form-check-input me-2" type="radio" name="exportFormat" value="json">
+                                <i class="bi bi-file-earmark-text me-2 text-info"></i>
+                                <strong>JSON</strong>
+                                <small class="text-muted d-block">Raw data format for technical use or backup</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="startExport()" id="exportBtn">
+                            <i class="bi bi-download me-1"></i>Export
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existingModal = document.getElementById('exportModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Add modal to DOM
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('exportModal'));
+    modal.show();
+}
+
+async function startExport() {
+    const selectedFormat = document.querySelector('input[name="exportFormat"]:checked');
+    if (!selectedFormat) {
+        showError('Please select an export format');
+        return;
+    }
+
+    const format = selectedFormat.value;
+    const exportBtn = document.getElementById('exportBtn');
+    const originalText = exportBtn.innerHTML;
+
+    try {
+        // Show loading state
+        exportBtn.disabled = true;
+        exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Exporting...';
+
+        // Call export API
+        const response = await fetch(`/api/manuscripts/${currentManuscriptId}/export?export_format=${format}`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Export failed');
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('exportModal'));
+            modal.hide();
+
+            // Show success message with download info
+            showExportSuccessModal(result);
+        } else {
+            throw new Error('Export failed');
+        }
+
+    } catch (error) {
+        showError(`Export failed: ${error.message}`);
+        exportBtn.disabled = false;
+        exportBtn.innerHTML = originalText;
+    }
+}
+
+function showExportSuccessModal(result) {
+    const successModalHtml = `
+        <div class="modal fade" id="exportSuccessModal" tabindex="-1" aria-labelledby="exportSuccessModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title" id="exportSuccessModalLabel">
+                            <i class="bi bi-check-circle me-2"></i>Export Successful
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-success">
+                            <strong>Export completed successfully!</strong>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-sm-4"><strong>Format:</strong></div>
+                            <div class="col-sm-8">${result.export_format}</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-4"><strong>Filename:</strong></div>
+                            <div class="col-sm-8">${result.filename}</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-4"><strong>File Size:</strong></div>
+                            <div class="col-sm-8">${formatFileSize(result.file_size)}</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-sm-4"><strong>Exported:</strong></div>
+                            <div class="col-sm-8">${formatDateTime(new Date(result.exported_at))}</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <a href="${result.download_url}" class="btn btn-primary" download="${result.filename}">
+                            <i class="bi bi-download me-1"></i>Download
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existingModal = document.getElementById('exportSuccessModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Add modal to DOM
+    document.body.insertAdjacentHTML('beforeend', successModalHtml);
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('exportSuccessModal'));
+    modal.show();
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatDateTime(date) {
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
 }
 
 async function deleteManuscript() {

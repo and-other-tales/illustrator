@@ -685,6 +685,41 @@ class WebSocketIllustrationGenerator:
                                               chapter.title,
                                               style_config.get("art_style", "digital painting"))
 
+    def _create_fallback_prompt(self, text_excerpt, emotional_tone, chapter_title, art_style):
+        """Create a fallback prompt when AI prompt generation fails."""
+        from illustrator.models import IllustrationPrompt
+
+        # Create a simple but effective fallback prompt
+        fallback_text = f"A {art_style} illustration depicting a scene from '{chapter_title}'. "
+
+        # Add emotional tone context
+        if emotional_tone:
+            tone_descriptions = {
+                'JOY': 'bright, uplifting, cheerful atmosphere',
+                'SADNESS': 'melancholic, somber, emotional atmosphere',
+                'FEAR': 'dark, tense, mysterious atmosphere',
+                'ANGER': 'intense, dramatic, fierce atmosphere',
+                'TENSION': 'suspenseful, gripping, charged atmosphere',
+                'MYSTERY': 'enigmatic, shadowy, intriguing atmosphere',
+                'NEUTRAL': 'balanced, natural atmosphere'
+            }
+            tone_desc = tone_descriptions.get(str(emotional_tone).split('.')[-1], 'atmospheric')
+            fallback_text += f"The scene has a {tone_desc}. "
+
+        # Add content from text excerpt if available
+        if text_excerpt and len(text_excerpt.strip()) > 10:
+            # Extract key visual elements from the excerpt
+            fallback_text += f"The scene captures the essence of: '{text_excerpt[:100]}'"
+
+        fallback_text += f". High quality {art_style}, detailed, professional illustration."
+
+        return IllustrationPrompt(
+            provider=self.generator.provider,
+            prompt=fallback_text,
+            style_modifiers=[],
+            negative_prompt="blurry, low quality, distorted",
+            technical_params={}
+        )
 
     async def generate_images(self, prompts, chapter):
         """Generate images with WebSocket progress updates."""
@@ -946,6 +981,26 @@ async def processing_websocket(websocket: WebSocket, session_id: str):
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "manuscript-illustrator"}
+
+
+@app.get("/api/manuscripts/{manuscript_id}/download/{filename}")
+async def download_exported_file(manuscript_id: str, filename: str):
+    """Download an exported manuscript file."""
+    exports_dir = Path("illustrator_output") / "exports"
+    file_path = exports_dir / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Security: ensure the filename doesn't contain path traversal
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=filename,
+        media_type='application/octet-stream'
+    )
 
 
 def create_app() -> FastAPI:
