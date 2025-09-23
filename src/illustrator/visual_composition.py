@@ -192,7 +192,7 @@ class AdvancedVisualComposer:
             'camera_angles': [CameraAngle.HIGH_ANGLE, CameraAngle.SUBJECTIVE]
         },
         EmotionalTone.ROMANCE: {
-            'preferred_rules': [CompositionRule.GOLDEN_RATIO, CompositionRule.SOFT_FOCUS],
+            'preferred_rules': [CompositionRule.GOLDEN_RATIO, CompositionRule.DEPTH_OF_FIELD],
             'shot_types': [ShotType.CLOSE_UP, ShotType.TWO_SHOT],
             'lighting': [LightingSetup.BUTTERFLY, LightingSetup.GOLDEN_HOUR],
             'colors': [ColorHarmony.WARM_PALETTE, ColorHarmony.ANALOGOUS],
