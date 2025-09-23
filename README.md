@@ -1,6 +1,6 @@
 # Illustrator 📚✨
 
-A powerful LangGraph application that analyzes manuscript chapters using advanced NLP and emotional resonance detection, then generates optimized illustration prompts for DALL-E, Imagen4, and Flux 1.1 Pro.
+A powerful LangGraph application that analyzes manuscript chapters using advanced NLP and emotional resonance detection, then generates optimized illustration prompts for DALL-E, Google Vertex AI Imagen (Imagen 3), and Flux 1.1 Pro.
 
 [![LangGraph](https://img.shields.io/badge/Built%20with-LangGraph-00324d.svg)](https://langchain-ai.github.io/langgraph/)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
@@ -9,8 +9,8 @@ A powerful LangGraph application that analyzes manuscript chapters using advance
 ## ✨ Features
 
 - **📖 Chapter-by-Chapter Analysis**: Process manuscripts one chapter at a time with detailed emotional and thematic analysis
-- **🧠 Emotional Resonance Engine**: Advanced NLP to identify the most emotionally impactful moments
-- **🎨 Multi-Provider Support**: Generate illustrations using DALL-E 3, Imagen4, or Flux 1.1 Pro
+- **🧠 Emotional Resonance Engine**: Advanced NLP to identify the most emotionally impactful moments (defaults to 10 per chapter)
+- **🎨 Multi-Provider Support**: Generate illustrations using DALL-E 3, Vertex AI Imagen (Imagen 3), or Flux 1.1 Pro
 - **🔄 Interactive CLI**: User-friendly command-line interface with CTRL+D input handling
 - **💾 Persistent Storage**: Save analysis results and generated images for future reference
 - **⚙️ Configurable Styles**: Customize artistic styles, color palettes, and creative influences
@@ -22,7 +22,7 @@ A powerful LangGraph application that analyzes manuscript chapters using advance
 - Python 3.11 or higher
 - API keys for your chosen image generation provider(s):
   - **DALL-E**: OpenAI API key
-  - **Imagen4**: Google Cloud credentials and project ID
+  - **Imagen (Vertex AI)**: Google Cloud credentials and project ID
   - **Flux**: HuggingFace API key
 - **Claude API key** (Anthropic) for text analysis
 
@@ -57,7 +57,7 @@ ANTHROPIC_API_KEY=your-anthropic-key
 # For DALL-E (OpenAI)
 OPENAI_API_KEY=your-openai-key
 
-# For Imagen4 (Google Cloud)
+# For Vertex AI Imagen (Google Cloud)
 GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 GOOGLE_PROJECT_ID=your-project-id
 
@@ -65,7 +65,7 @@ GOOGLE_PROJECT_ID=your-project-id
 HUGGINGFACE_API_KEY=your-huggingface-key
 
 # Optional: Customize defaults
-DEFAULT_IMAGE_PROVIDER=dalle  # dalle, imagen4, or flux
+DEFAULT_IMAGE_PROVIDER=dalle  # dalle, imagen4 (Vertex Imagen), or flux
 DEFAULT_ILLUSTRATION_STYLE=digital_painting
 ```
 
@@ -77,9 +77,9 @@ DEFAULT_ILLUSTRATION_STYLE=digital_painting
 - Support for large text blocks via copy/paste
 
 ### 2. **Emotional Analysis**
-- Claude 4.1 analyzes text for emotional peaks and valleys
+- Claude analyzes text for emotional peaks and valleys
 - Pattern matching for emotional intensity
-- Identification of 3-5 most resonant moments per chapter
+- Identification of up to 10 most resonant moments per chapter (scene-aware by default)
 
 ### 3. **Visual Scene Detection**
 - Extracts visually compelling narrative moments
@@ -87,7 +87,7 @@ DEFAULT_ILLUSTRATION_STYLE=digital_painting
 - Identifies illustration opportunities
 
 ### 4. **Prompt Generation**
-- Provider-specific optimization (DALL-E vs Imagen4 vs Flux)
+- Provider-specific optimization (DALL-E vs Vertex AI Imagen vs Flux)
 - Style-aware prompt engineering
 - Emotional tone translation to visual elements
 
@@ -100,8 +100,8 @@ DEFAULT_ILLUSTRATION_STYLE=digital_painting
 
 | Provider | Strengths | Best For |
 |----------|-----------|----------|
-| **DALL-E 3** | High-quality, coherent images | Character-focused scenes, detailed illustrations |
-| **Imagen4** | Photorealistic output, fine control | Realistic settings, atmospheric scenes |
+| **DALL-E (gpt-image-1)** | High-quality, coherent images | Character-focused scenes, detailed illustrations |
+| **Imagen (Vertex AI Imagen 3)** | Photorealistic output, fine control | Realistic settings, atmospheric scenes |
 | **Flux 1.1 Pro** | Artistic styles, creative interpretation | Stylized art, concept illustrations |
 
 ## 📋 Example Usage
@@ -116,7 +116,7 @@ $ illustrator
 │ generate AI illustrations                  │
 │                                            │
 │ • Enter chapter content with CTRL+D       │
-│ • Choose from DALL-E, Imagen4, or Flux    │
+│ • Choose from DALL-E, Vertex AI Imagen, or Flux    │
 │ • Get emotional analysis and prompts      │
 │                                            │
 ╰────────────────────────────────────────────╯
@@ -129,7 +129,7 @@ Genre: Fantasy
 🎨 Style Preferences
 Available image providers:
   1. DALL-E 3 (OpenAI)
-  2. Imagen4 (Google)
+  2. Imagen (Google Vertex AI)
   3. Flux 1.1 Pro (HuggingFace)
 
 Select image provider [1]: 1
@@ -187,7 +187,7 @@ Create a `config.json` file:
   "image_provider": "flux",
   "art_style": "oil painting",
   "color_palette": "warm earth tones",
-  "max_emotional_moments": 5,
+  "max_emotional_moments": 10,
   "min_intensity_threshold": 0.7,
   "generate_images": true,
   "save_analysis": true
@@ -208,7 +208,12 @@ Built using **LangGraph** for robust workflow orchestration:
 
 For each chapter, you'll receive:
 
-- **Emotional Moments**: 3-5 highest intensity passages with emotional tone analysis
+- **Emotional Moments**: up to 10 highest intensity passages with emotional tone analysis (scene-aware)
+
+## 🧭 CLI Options Highlights
+
+- `--max-moments` to set the target number of moments per chapter (default: 10)
+- `--comprehensive/--standard` to enable/disable scene-aware comprehensive analysis (default: comprehensive)
 - **Themes**: Dominant literary themes and motifs
 - **Setting Description**: Atmospheric and visual setting details
 - **Character Emotions**: Emotional arcs for key characters
@@ -226,7 +231,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 - Built with [LangGraph](https://langchain-ai.github.io/langgraph/) by LangChain
 - Powered by [Claude](https://anthropic.com) for literary analysis
-- Supports [DALL-E](https://openai.com/dall-e-3), [Imagen4](https://deepmind.google/technologies/imagen-2/), and [Flux](https://huggingface.co/black-forest-labs/FLUX.1-pro)
+- Supports [DALL-E](https://openai.com/dall-e-3), [Vertex AI Imagen](https://cloud.google.com/vertex-ai), and [Flux](https://huggingface.co/black-forest-labs/FLUX.1-pro)
 
 ---
 

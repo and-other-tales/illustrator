@@ -9,6 +9,7 @@ from enum import Enum
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+from illustrator.utils import parse_llm_json
 
 from illustrator.models import Chapter, EmotionalMoment, EmotionalTone
 from illustrator.scene_detection import Scene
@@ -335,7 +336,7 @@ class NarrativeAnalyzer:
             ]
 
             response = await self.llm.ainvoke(messages)
-            return json.loads(response.content.strip())
+            return parse_llm_json(response.content)
 
         except Exception as e:
             logger.warning(f"LLM narrative analysis failed: {e}")
@@ -517,7 +518,7 @@ class NarrativeAnalyzer:
             ]
 
             response = await self.llm.ainvoke(messages)
-            theme_data = json.loads(response.content.strip())
+            theme_data = parse_llm_json(response.content)
 
             thematic_elements = []
             for data in theme_data:
@@ -608,7 +609,7 @@ class NarrativeAnalyzer:
             ]
 
             response = await self.llm.ainvoke(messages)
-            return json.loads(response.content.strip())
+            return parse_llm_json(response.content)
 
         except Exception as e:
             logger.warning(f"Literary style analysis failed: {e}")

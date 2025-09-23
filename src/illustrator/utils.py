@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict
 
@@ -131,3 +132,84 @@ def create_prompt_variations(base_prompt: str, variations: int = 3) -> list[str]
         prompts.append(modified_prompt)
 
     return prompts[:variations]
+
+
+# -----------------------
+# LLM JSON parsing helpers
+# -----------------------
+
+def extract_json_from_text(text: str) -> str | None:
+    """Extract the first JSON object or array from arbitrary LLM text.
+
+    Handles common cases like code fences and leading/trailing prose.
+    """
+    if not text:
+        return None
+
+    s = text.strip()
+
+    # Strip code fences if present
+    if s.startswith("```"):
+        # remove starting fence with optional language
+        s = re.sub(r"^```(json|JSON)?\s*", "", s)
+        # remove trailing fence
+        s = re.sub(r"\s*```\s*$", "", s)
+
+    # Quick path: already starts with JSON
+    if s.startswith("{") or s.startswith("["):
+        return s
+
+    # Fallback: search for the first {..} or [..] block
+    obj_match = re.search(r"\{[\s\S]*\}", s)
+    arr_match = re.search(r"\[[\s\S]*\]", s)
+
+    # Prefer object over array if both found and object starts earlier
+    candidates = []
+    if obj_match:
+        candidates.append((obj_match.start(), obj_match.group(0)))
+    if arr_match:
+        candidates.append((arr_match.start(), arr_match.group(0)))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: x[0])
+    return candidates[0][1]
+
+
+def parse_llm_json(text: str) -> Any:
+    """Parse JSON from LLM output robustly.
+
+    Returns Python object or raises ValueError on failure.
+    """
+    candidate = extract_json_from_text(text)
+    if candidate is None:
+        raise ValueError("No JSON found in LLM output")
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError as e:
+        # Attempt minor cleanup: remove trailing ellipses or stray characters
+        cleaned = candidate.strip().rstrip('.').rstrip()
+        return json.loads(cleaned)
+
+
+def enforce_prompt_length(provider: str, prompt: str) -> str:
+    """Clamp prompt length per provider to conservative char limits.
+
+    This is a pragmatic safeguard; providers enforce their own limits.
+    """
+    limits = {
+        'dalle': 1800,        # OpenAI Images prompt (approx)
+        'imagen4': 2200,      # Vertex Imagen
+        'imagen': 2200,
+        'flux': 2400,
+    }
+    max_len = limits.get(provider.lower(), 2000)
+    if len(prompt) <= max_len:
+        return prompt
+    # Trim on word boundary when possible
+    cut = prompt[:max_len]
+    sp = cut.rfind(' ')
+    if sp > max_len * 0.6:
+        return cut[:sp] + '...'
+    return cut + '...'

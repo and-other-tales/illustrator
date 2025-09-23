@@ -198,6 +198,13 @@ class CharacterTracker:
         # Extract character names using pattern matching
         pattern_characters = self._extract_character_names_patterns(chapter.content)
 
+        # Optional: enhance with spaCy NER if available
+        try:
+            spacy_names = self._extract_character_names_spacy(chapter.content)
+            pattern_characters.update(spacy_names)
+        except Exception:
+            pass
+
         # Use LLM for more sophisticated character extraction
         llm_characters = await self._extract_characters_llm(chapter.content, chapter.number)
 
@@ -218,6 +225,32 @@ class CharacterTracker:
         await self._analyze_character_interactions(chapter, all_character_names)
 
         return {name: self.characters[name] for name in all_character_names if name in self.characters}
+
+    def _extract_character_names_spacy(self, text: str) -> Set[str]:
+        """Optionally extract names using spaCy NER when installed.
+
+        Returns an empty set if spaCy or the model is unavailable.
+        """
+        try:
+            import spacy  # type: ignore
+        except Exception:
+            return set()
+
+        # Try to load a small English model; fall back silently if unavailable
+        try:
+            nlp = spacy.load("en_core_web_sm")
+        except Exception:
+            return set()
+
+        doc = nlp(text[:200000])  # cap processing for very long chapters
+        names = set()
+        for ent in doc.ents:
+            if ent.label_ in {"PERSON"} and len(ent.text) > 1:
+                cleaned = ent.text.strip()
+                # Filter trivial/ambiguous short tokens
+                if len(cleaned.split()) >= 1 and cleaned[0].isupper():
+                    names.add(cleaned)
+        return names
 
     def _extract_character_names_patterns(self, text: str) -> Set[str]:
         """Extract character names using regex patterns."""

@@ -35,9 +35,14 @@ console = Console()
 class ComprehensiveSceneAnalyzer:
     """Performs comprehensive analysis to extract 10 illustration-worthy scenes per chapter."""
 
-    def __init__(self, llm_model: str = "claude-sonnet-4-20250514", enable_parallel: bool = True):
+    def __init__(self, llm_model: str = "anthropic/claude-3-5-sonnet-20241022", enable_parallel: bool = True):
         """Initialize with enhanced analysis parameters and optional parallel processing."""
-        self.llm = init_chat_model(model=llm_model, model_provider="anthropic")
+        # Use unified model naming style used across the codebase
+        if "/" in llm_model:
+            provider, model_name = llm_model.split("/", 1)
+            self.llm = init_chat_model(model=model_name, model_provider=provider)
+        else:
+            self.llm = init_chat_model(model=llm_model)
         self.emotional_analyzer = EmotionalAnalyzer(self.llm)
 
         # Initialize parallel processor
@@ -513,7 +518,8 @@ class IllustrationGenerator:
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             google_credentials=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
             google_project_id=os.getenv("GOOGLE_PROJECT_ID"),
-            huggingface_api_key=os.getenv("HUGGINGFACE_API_KEY")
+            huggingface_api_key=os.getenv("HUGGINGFACE_API_KEY"),
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
         )
 
     async def generate_illustration_prompts(
@@ -564,7 +570,7 @@ class IllustrationGenerator:
         """Get default technical parameters for the provider."""
         if self.provider == ImageProvider.DALLE:
             return {
-                "model": "dall-e-3",
+                "model": "gpt-image-1",
                 "size": "1024x1024",
                 "quality": "hd",
                 "style": "natural"

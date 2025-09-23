@@ -7,6 +7,7 @@ from enum import Enum
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+from illustrator.utils import parse_llm_json
 
 
 class SceneTransitionType(str, Enum):
@@ -275,9 +276,7 @@ Analyze if there's a scene boundary between these paragraphs.""")
             ]
 
             response = await self.llm.ainvoke(messages)
-
-            import json
-            return json.loads(response.content.strip())
+            return parse_llm_json(response.content)
 
         except Exception:
             # Fallback analysis
@@ -490,9 +489,7 @@ Return JSON:
             ]
 
             response = await self.llm.ainvoke(messages)
-
-            import json
-            return json.loads(response.content.strip())
+            return parse_llm_json(response.content)
 
         except Exception:
             return {

@@ -41,8 +41,9 @@ class ImageGenerationProvider(ABC):
 
         try:
             llm = init_chat_model(
-                model="anthropic/claude-3-5-sonnet-20241022",
-                api_key=anthropic_api_key
+                model="claude-3-5-sonnet-20241022",
+                model_provider="anthropic",
+                api_key=anthropic_api_key,
             )
             self.prompt_engineer = PromptEngineer(llm)
         except Exception as e:
@@ -101,7 +102,7 @@ class DalleProvider(ImageGenerationProvider):
     @resilient_async(
         max_attempts=3,
         fallback_functions={
-            'simplified_processing': lambda prompt: {"success": True, "image_data": None, "error": "Used fallback"}
+            'simplified_processing': lambda: {"success": False, "error": "Used fallback"}
         }
     )
     async def generate_image(
@@ -162,7 +163,11 @@ class DalleProvider(ImageGenerationProvider):
 
 
 class Imagen4Provider(ImageGenerationProvider):
-    """Google Cloud Imagen4 image generation provider."""
+    """Google Cloud Vertex AI Imagen provider (uses Imagen 3 family).
+
+    Note: Despite the class name for backwards compatibility, the underlying
+    Vertex AI model currently used is from the Imagen 3 line.
+    """
 
     def __init__(self, credentials_path: str, project_id: str, anthropic_api_key: str):
         """Initialize Imagen4 provider."""
@@ -176,6 +181,14 @@ class Imagen4Provider(ImageGenerationProvider):
         return ImageProvider.IMAGEN4
 
 
+    from illustrator.error_handling import resilient_async
+
+    @resilient_async(
+        max_attempts=3,
+        fallback_functions={
+            'simplified_processing': lambda: {"success": False, "error": "Used fallback"}
+        }
+    )
     async def generate_image(
         self,
         prompt: IllustrationPrompt,
@@ -189,7 +202,7 @@ class Imagen4Provider(ImageGenerationProvider):
             # Initialize Vertex AI
             vertexai.init(project=self.project_id)
 
-            # Get the model
+            # Get the model (Imagen 3 family)
             model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
 
             # Generate image
@@ -238,6 +251,14 @@ class FluxProvider(ImageGenerationProvider):
         return ImageProvider.FLUX
 
 
+    from illustrator.error_handling import resilient_async
+
+    @resilient_async(
+        max_attempts=3,
+        fallback_functions={
+            'simplified_processing': lambda: {"success": False, "error": "Used fallback"}
+        }
+    )
     async def generate_image(
         self,
         prompt: IllustrationPrompt,

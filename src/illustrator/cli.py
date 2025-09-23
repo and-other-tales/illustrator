@@ -238,7 +238,7 @@ class ManuscriptCLI:
         """Ask user if they want to add another chapter."""
         return Confirm.ask("\n[yellow]Add another chapter?[/yellow]", default=True)
 
-    async def process_chapters(self, style_preferences: Dict[str, Any]):
+    async def process_chapters(self, style_preferences: Dict[str, Any], *, max_moments: int | None = None, scene_aware: bool | None = None, mode: str | None = None):
         """Process all chapters through the LangGraph workflow."""
         if not self.chapters:
             console.print("[red]No chapters to process![/red]")
@@ -267,6 +267,21 @@ class ManuscriptCLI:
             google_credentials=os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
             huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),
         )
+
+        # Apply overrides if provided
+        if max_moments is not None:
+            context.max_emotional_moments = max_moments
+        # Configure analysis mode and concurrency
+        context.analysis_mode = (mode or 'scene').lower()
+        if context.analysis_mode == 'parallel':
+            context.prompt_concurrency = 8
+            context.image_concurrency = 3
+        elif context.analysis_mode == 'basic':
+            context.prompt_concurrency = 1
+            context.image_concurrency = 1
+        else:
+            context.prompt_concurrency = 2
+            context.image_concurrency = 2
 
         # Create store and compile graph
         store = InMemoryStore()
@@ -695,7 +710,26 @@ def cli():
     is_flag=True,
     help='List all saved manuscript drafts'
 )
-def analyze(interactive: bool, config_file: str | None, style_config: str | None, load: str | None, list_saved: bool):
+@click.option(
+    '--max-moments',
+    type=int,
+    default=10,
+    show_default=True,
+    help='Target number of emotional moments per chapter'
+)
+@click.option(
+    '--comprehensive/--standard',
+    default=True,
+    help='Use scene-aware comprehensive analysis (recommended)'
+)
+@click.option(
+    '--mode',
+    type=click.Choice(['basic', 'scene', 'parallel'], case_sensitive=False),
+    default='scene',
+    show_default=True,
+    help='Analysis mode: basic | scene | parallel'
+)
+def analyze(interactive: bool, config_file: str | None, style_config: str | None, load: str | None, list_saved: bool, max_moments: int, comprehensive: bool, mode: str):
     """Run CLI analysis (original functionality)."""
     cli = ManuscriptCLI()
 
@@ -830,7 +864,8 @@ def analyze(interactive: bool, config_file: str | None, style_config: str | None
                 cli.manuscript_metadata.total_chapters = len(cli.chapters)
 
                 # Process chapters
-                asyncio.run(cli.process_chapters(style_preferences))
+                # Process with configured mode
+                asyncio.run(cli.process_chapters(style_preferences, max_moments=max_moments, scene_aware=comprehensive))
 
                 # Display results
                 cli.display_results_summary()

@@ -10,6 +10,7 @@ from illustrator.models import (
     EmotionalTone,
     IllustrationPrompt,
     ImageProvider,
+    Chapter,
 )
 from illustrator.providers import (
     DalleProvider,
@@ -26,7 +27,8 @@ class TestProviderFactory:
         """Test creating DALL-E provider."""
         provider = ProviderFactory.create_provider(
             ImageProvider.DALLE,
-            openai_api_key="test-key"
+            openai_api_key="test-key",
+            anthropic_api_key="test-anthropic-key",
         )
         assert isinstance(provider, DalleProvider)
         assert provider.api_key == "test-key"
@@ -36,7 +38,8 @@ class TestProviderFactory:
         provider = ProviderFactory.create_provider(
             ImageProvider.IMAGEN4,
             google_credentials="path/to/creds",
-            google_project_id="test-project"
+            google_project_id="test-project",
+            anthropic_api_key="test-anthropic-key",
         )
         assert isinstance(provider, Imagen4Provider)
         assert provider.project_id == "test-project"
@@ -45,27 +48,29 @@ class TestProviderFactory:
         """Test creating Flux provider."""
         provider = ProviderFactory.create_provider(
             ImageProvider.FLUX,
-            huggingface_api_key="test-hf-key"
+            huggingface_api_key="test-hf-key",
+            anthropic_api_key="test-anthropic-key",
         )
         assert isinstance(provider, FluxProvider)
         assert provider.api_key == "test-hf-key"
 
     def test_create_provider_missing_credentials(self):
         """Test error handling for missing credentials."""
-        with pytest.raises(ValueError, match="OpenAI API key required"):
+        # Now requires Anthropic key first (for prompt engineering)
+        with pytest.raises(ValueError, match="Anthropic API key is required"):
             ProviderFactory.create_provider(ImageProvider.DALLE)
 
         with pytest.raises(ValueError, match="Google credentials"):
-            ProviderFactory.create_provider(ImageProvider.IMAGEN4)
+            ProviderFactory.create_provider(ImageProvider.IMAGEN4, anthropic_api_key="test-anthropic-key")
 
         with pytest.raises(ValueError, match="HuggingFace API key required"):
-            ProviderFactory.create_provider(ImageProvider.FLUX)
+            ProviderFactory.create_provider(ImageProvider.FLUX, anthropic_api_key="test-anthropic-key")
 
     def test_unsupported_provider(self):
         """Test error handling for unsupported provider."""
         with pytest.raises(ValueError, match="Unsupported provider type"):
-            # This would fail if we had an invalid enum value
-            ProviderFactory.create_provider("invalid_provider")
+            # Supply anthropic key so provider type check is reached
+            ProviderFactory.create_provider("invalid_provider", anthropic_api_key="x")
 
     def test_get_available_providers(self):
         """Test getting available providers based on credentials."""
@@ -75,7 +80,8 @@ class TestProviderFactory:
 
         # DALL-E only
         available = ProviderFactory.get_available_providers(
-            openai_api_key="test-key"
+            openai_api_key="test-key",
+            anthropic_api_key="test-anthropic-key",
         )
         assert ImageProvider.DALLE in available
         assert len(available) == 1
@@ -85,7 +91,8 @@ class TestProviderFactory:
             openai_api_key="test-key",
             google_credentials="path/to/creds",
             google_project_id="test-project",
-            huggingface_api_key="test-hf-key"
+            huggingface_api_key="test-hf-key",
+            anthropic_api_key="test-anthropic-key",
         )
         assert len(available) == 3
         assert all(provider in available for provider in ImageProvider)
@@ -97,7 +104,7 @@ class TestDalleProvider:
     @pytest.fixture
     def dalle_provider(self):
         """Create a DALL-E provider for testing."""
-        return DalleProvider("test-api-key")
+        return DalleProvider("test-api-key", "test-anthropic-key")
 
     @pytest.fixture
     def sample_emotional_moment(self):
@@ -120,10 +127,19 @@ class TestDalleProvider:
             "artistic_influences": "Frank Frazetta"
         }
 
+        # Minimal chapter context
+        sample_chapter = Chapter(
+            title="Test Chapter",
+            content="A short test chapter content.",
+            number=1,
+            word_count=5,
+        )
+
         prompt = await dalle_provider.generate_prompt(
             sample_emotional_moment,
             style_preferences,
-            context="Medieval fantasy setting"
+            context="Medieval fantasy setting",
+            chapter_context=sample_chapter,
         )
 
         assert isinstance(prompt, IllustrationPrompt)
@@ -133,7 +149,7 @@ class TestDalleProvider:
         assert "warm colors" in prompt.prompt
         assert prompt.negative_prompt is None  # DALL-E doesn't support negative prompts
         assert "model" in prompt.technical_params
-        assert prompt.technical_params["model"] == "dall-e-3"
+        assert prompt.technical_params["model"] in ("gpt-image-1", "dall-e-3")
 
     @pytest.mark.asyncio
     async def test_generate_image_success(self, dalle_provider):
@@ -205,7 +221,7 @@ class TestFluxProvider:
     @pytest.fixture
     def flux_provider(self):
         """Create a Flux provider for testing."""
-        return FluxProvider("test-hf-key")
+        return FluxProvider("test-hf-key", "test-anthropic-key")
 
     @pytest.fixture
     def sample_emotional_moment(self):
@@ -227,10 +243,18 @@ class TestFluxProvider:
             "artistic_influences": "Monet"
         }
 
+        sample_chapter = Chapter(
+            title="Test Chapter",
+            content="A short test chapter content.",
+            number=1,
+            word_count=5,
+        )
+
         prompt = await flux_provider.generate_prompt(
             sample_emotional_moment,
             style_preferences,
-            context="Enchanted forest"
+            context="Enchanted forest",
+            chapter_context=sample_chapter,
         )
 
         assert isinstance(prompt, IllustrationPrompt)
@@ -305,7 +329,7 @@ class TestImagen4Provider:
     @pytest.fixture
     def imagen4_provider(self):
         """Create an Imagen4 provider for testing."""
-        return Imagen4Provider("path/to/creds", "test-project")
+        return Imagen4Provider("path/to/creds", "test-project", "test-anthropic-key")
 
     @pytest.fixture
     def sample_emotional_moment(self):
@@ -327,10 +351,18 @@ class TestImagen4Provider:
             "color_palette": "golden hour"
         }
 
+        sample_chapter = Chapter(
+            title="Test Chapter",
+            content="A short test chapter content.",
+            number=1,
+            word_count=5,
+        )
+
         prompt = await imagen4_provider.generate_prompt(
             sample_emotional_moment,
             style_preferences,
-            context="Scenic landscape"
+            context="Scenic landscape",
+            chapter_context=sample_chapter,
         )
 
         assert isinstance(prompt, IllustrationPrompt)

@@ -23,27 +23,36 @@ class TestNarrativeStructure:
     def test_narrative_structure_creation(self):
         """Test creating narrative structure."""
         structure = NarrativeStructure(
-            structure_type=StructureType.THREE_ACT,
-            act_boundaries=[0, 1000, 2000, 3000],
-            climax_position=2500,
-            key_plot_points=[500, 1500, 2500],
-            pacing_analysis="Well-paced with clear act divisions"
+            overall_structure="three-act",
+            narrative_arcs=[],
+            character_arcs=[],
+            thematic_elements=[],
+            pacing_analysis={"act1": 0.3, "act2": 0.5, "act3": 0.2},
+            genre_indicators=[Genre.DRAMA],
+            literary_style={"tone": "formal", "perspective": "third_person"},
+            illustration_opportunities=[]
         )
 
-        assert structure.structure_type == StructureType.THREE_ACT
-        assert len(structure.act_boundaries) == 4
-        assert structure.climax_position == 2500
-        assert len(structure.key_plot_points) == 3
+        assert structure.overall_structure == "three-act"
+        assert structure.pacing_analysis["act1"] == 0.3
+        assert Genre.DRAMA in structure.genre_indicators
 
     def test_narrative_structure_defaults(self):
-        """Test narrative structure with default values."""
+        """Test narrative structure with minimal values."""
         structure = NarrativeStructure(
-            structure_type=StructureType.HERO_JOURNEY
+            overall_structure="hero_journey",
+            narrative_arcs=[],
+            character_arcs=[],
+            thematic_elements=[],
+            pacing_analysis={},
+            genre_indicators=[],
+            literary_style={},
+            illustration_opportunities=[]
         )
 
-        assert structure.act_boundaries == []
-        assert structure.climax_position == 0
-        assert structure.key_plot_points == []
+        assert structure.overall_structure == "hero_journey"
+        assert structure.pacing_analysis == {}
+        assert len(structure.genre_indicators) == 0
 
 
 class TestNarrativeElement:

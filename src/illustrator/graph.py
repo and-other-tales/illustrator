@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, List, cast
 
 from langchain.chat_models import init_chat_model
+from illustrator.utils import split_model_and_provider
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from langgraph.runtime import Runtime
@@ -63,19 +64,32 @@ async def analyze_chapter(state: ManuscriptState, runtime: Runtime[ManuscriptCon
         }
 
     try:
-        # Initialize the LLM and analyzer
-        llm = init_chat_model(model=runtime.context.model)
+        # Initialize the LLM and analyzer with provider inference support
+        model_info = split_model_and_provider(runtime.context.model)
+        if 'provider' in model_info:
+            llm = init_chat_model(model=model_info['model'], model_provider=model_info['provider'])
+        else:
+            llm = init_chat_model(model=model_info['model'])
         analyzer = EmotionalAnalyzer(llm)
 
         chapter = state["current_chapter"]
         context = runtime.context
 
-        # Perform emotional analysis
-        emotional_moments = await analyzer.analyze_chapter(
-            chapter=chapter,
-            max_moments=context.max_emotional_moments,
-            min_intensity=context.min_intensity_threshold,
-        )
+        # Perform emotional analysis based on configured mode
+        mode = (context.analysis_mode or 'scene').lower()
+        if mode == 'basic':
+            emotional_moments = await analyzer.analyze_chapter(
+                chapter=chapter,
+                max_moments=context.max_emotional_moments,
+                min_intensity=context.min_intensity_threshold,
+            )
+        else:
+            emotional_moments = await analyzer.analyze_chapter_with_scenes(
+                chapter=chapter,
+                max_moments=context.max_emotional_moments,
+                min_intensity=context.min_intensity_threshold,
+                scene_awareness=True,
+            )
 
         # Generate literary analysis using Claude
         analysis_prompt = context.analysis_prompt.format(
@@ -138,7 +152,7 @@ Return your analysis in JSON format with these fields:
             setting_description = f"Chapter {chapter.number} setting with rich atmospheric detail"
             character_emotions = {}
 
-        # Generate illustration prompts for each emotional moment
+        # Generate illustration prompts for each emotional moment (with concurrency)
         illustration_prompts = []
 
         if emotional_moments:
@@ -194,20 +208,25 @@ Return your analysis in JSON format with these fields:
                 except Exception:
                     pass  # Continue without previous scenes if store access fails
 
-            for moment in emotional_moments:
-                try:
-                    prompt = await provider.generate_prompt(
-                        emotional_moment=moment,
-                        style_preferences=style_preferences,
-                        context=setting_description,
-                        chapter_context=chapter,
-                        previous_scenes=previous_scenes,
-                    )
-                    illustration_prompts.append(prompt)
-                except Exception as e:
-                    logger.error(f"Failed to generate prompt for emotional moment: {e}")
-                    # Don't include this moment if prompt generation fails
-                    continue
+            import asyncio
+            sem = asyncio.Semaphore(max(1, runtime.context.prompt_concurrency))
+
+            async def gen_prompt(moment):
+                async with sem:
+                    try:
+                        return await provider.generate_prompt(
+                            emotional_moment=moment,
+                            style_preferences=style_preferences,
+                            context=setting_description,
+                            chapter_context=chapter,
+                            previous_scenes=previous_scenes,
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to generate prompt for emotional moment: {e}")
+                        return None
+
+            generated = await asyncio.gather(*(gen_prompt(m) for m in emotional_moments))
+            illustration_prompts = [p for p in generated if p is not None]
 
         # Create complete analysis
         chapter_analysis = ChapterAnalysis(
@@ -318,51 +337,56 @@ async def generate_illustrations(state: ManuscriptState, runtime: Runtime[Manusc
                 "retry_count": state.get("retry_count", 0) + 1,
             }
 
-        for i, prompt in enumerate(analysis.illustration_prompts):
-            try:
-                result = await provider.generate_image(prompt)
+        import asyncio
+        sem_img = asyncio.Semaphore(max(1, runtime.context.image_concurrency))
 
-                # Add timestamp for quality tracking
-                if 'metadata' not in result:
-                    result['metadata'] = {}
-                result['metadata']['timestamp'] = datetime.now().isoformat()
+        async def gen_image(i_prompt):
+            i, prompt = i_prompt
+            async with sem_img:
+                try:
+                    result = await provider.generate_image(prompt)
 
-                # Process quality feedback if available
-                if feedback_system and i < len(analysis.emotional_moments):
-                    emotional_moment = analysis.emotional_moments[i]
-                    feedback_result = await feedback_system.process_generation_feedback(
-                        prompt,
-                        result,
-                        emotional_moment,
-                        enable_iteration=True
-                    )
+                    if 'metadata' not in result:
+                        result['metadata'] = {}
+                    result['metadata']['timestamp'] = datetime.now().isoformat()
 
-                    quality_assessments.append(feedback_result['quality_assessment'])
+                    if feedback_system and i < len(analysis.emotional_moments):
+                        emotional_moment = analysis.emotional_moments[i]
+                        feedback_result = await feedback_system.process_generation_feedback(
+                            prompt,
+                            result,
+                            emotional_moment,
+                            enable_iteration=True
+                        )
+                        quality_assessments.append(feedback_result['quality_assessment'])
+                        if (not result.get('success') and
+                            feedback_result.get('improved_prompt') and
+                            feedback_result.get('feedback_applied')):
+                            logger.info(f"Retrying generation {i} with improved prompt")
+                            improved_result = await provider.generate_image(feedback_result['improved_prompt'])
+                            if improved_result.get('success'):
+                                result = improved_result
+                                logger.info(f"Improved prompt succeeded for generation {i}")
 
-                    # If we have an improved prompt and the original failed, try again
-                    if (not result.get('success') and
-                        feedback_result.get('improved_prompt') and
-                        feedback_result.get('feedback_applied')):
+                    if result.get('success'):
+                        return {
+                            'prompt_index': i,
+                            'emotional_moment': analysis.emotional_moments[i].text_excerpt if i < len(analysis.emotional_moments) else 'Scene',
+                            'image_data': result['image_data'],
+                            'metadata': result['metadata'],
+                        }
+                    else:
+                        logger.error(f"Image generation failed for prompt {i}: {result.get('error')}")
+                        return None
 
-                        logger.info(f"Retrying generation {i} with improved prompt")
-                        improved_result = await provider.generate_image(feedback_result['improved_prompt'])
+                except Exception as e:
+                    logger.error(f"Error generating image {i}: {e}")
+                    return None
 
-                        if improved_result.get('success'):
-                            result = improved_result
-                            logger.info(f"Improved prompt succeeded for generation {i}")
-
-                if result.get('success'):
-                    generated_images.append({
-                        'prompt_index': i,
-                        'emotional_moment': analysis.emotional_moments[i].text_excerpt if i < len(analysis.emotional_moments) else 'Scene',
-                        'image_data': result['image_data'],
-                        'metadata': result['metadata'],
-                    })
-                else:
-                    logger.error(f"Image generation failed for prompt {i}: {result.get('error')}")
-
-            except Exception as e:
-                logger.error(f"Error generating image {i}: {e}")
+        results = await asyncio.gather(*(gen_image((i, p)) for i, p in enumerate(analysis.illustration_prompts)))
+        for item in results:
+            if item:
+                generated_images.append(item)
 
         # Store generated images and quality assessments
         if generated_images:

@@ -8,6 +8,7 @@ from enum import Enum
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+from illustrator.utils import parse_llm_json
 
 from illustrator.models import (
     EmotionalMoment,
@@ -189,7 +190,7 @@ Analyze the prompt quality and return scores for each metric.""")
             ]
 
             response = await self.llm.ainvoke(messages)
-            analysis_data = json.loads(response.content.strip())
+            analysis_data = parse_llm_json(response.content)
 
             # Convert to proper enum keys and ensure valid scores
             quality_scores = {}

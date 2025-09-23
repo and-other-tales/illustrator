@@ -10,6 +10,7 @@ from enum import Enum
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+from illustrator.utils import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ Extract the most important visual elements for illustration.""")
             ]
 
             response = await self.llm.ainvoke(messages)
-            elements_data = json.loads(response.content.strip())
+            elements_data = parse_llm_json(response.content)
 
             visual_elements = []
             for elem_data in elements_data:
@@ -276,7 +277,7 @@ Recommend the optimal composition for maximum visual and emotional impact.""")
             ]
 
             response = await self.llm.ainvoke(messages)
-            composition_data = json.loads(response.content.strip())
+            composition_data = parse_llm_json(response.content)
 
             return SceneComposition(
                 composition_type=CompositionType(composition_data.get('composition_type', 'medium_shot')),
@@ -526,10 +527,10 @@ class StyleTranslator:
         # Add quality modifiers (limited for DALL-E)
         style_modifiers.extend(vocabulary['quality_modifiers'][:3])
 
-        # Technical parameters optimized for DALL-E
+        # Technical parameters optimized for DALL-E (OpenAI Images API)
         technical_params = style_config.get('technical_params', {})
         technical_params.update({
-            "model": "dall-e-3",
+            "model": "gpt-image-1",
             "quality": "hd",
             "size": "1024x1024",
             "style": "vivid" if scene_composition.emotional_weight > 0.7 else "natural"
@@ -895,6 +896,13 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             style_translation.get('provider_optimizations', {})
         )
 
+        # Enforce conservative provider prompt length limits
+        try:
+            from illustrator.utils import enforce_prompt_length
+            optimized_prompt = enforce_prompt_length(provider.value, optimized_prompt)
+        except Exception:
+            pass
+
         return optimized_prompt
 
     async def generate_chapter_header_options(
@@ -953,15 +961,7 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 HumanMessage(content=analysis_prompt)
             ])
 
-            # Parse the JSON response
-            response_text = response.content.strip()
-            if response_text.startswith("```json"):
-                response_text = response_text[7:-3].strip()
-            elif response_text.startswith("```"):
-                response_text = response_text[3:-3].strip()
-
-            import json
-            analysis_data = json.loads(response_text)
+            analysis_data = parse_llm_json(response.content)
             header_options = []
 
             for i, option_data in enumerate(analysis_data.get("options", [])):

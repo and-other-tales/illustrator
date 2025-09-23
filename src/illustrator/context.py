@@ -48,7 +48,7 @@ Scene context: {scene_context}""",
 
     # Processing preferences
     image_provider: ImageProvider = Field(default=ImageProvider.DALLE, description="Default image generation provider")
-    max_emotional_moments: int = Field(default=3, description="Maximum emotional moments to extract per chapter")
+    max_emotional_moments: int = Field(default=10, description="Maximum emotional moments to extract per chapter")
     min_intensity_threshold: float = Field(default=0.6, description="Minimum emotional intensity threshold")
 
     # Style preferences
@@ -67,6 +67,10 @@ Scene context: {scene_context}""",
     enable_content_filtering: bool = Field(default=True, description="Enable content filtering for generated images")
     save_intermediate_results: bool = Field(default=True, description="Save analysis results during processing")
     batch_processing: bool = Field(default=False, description="Enable batch processing mode")
+    # Analysis mode and concurrency
+    analysis_mode: str = Field(default="scene", description="basic | scene | parallel")
+    prompt_concurrency: int = Field(default=2, description="Max concurrent prompt generations")
+    image_concurrency: int = Field(default=2, description="Max concurrent image generations")
 
     model_config = {"extra": "allow"}
 

@@ -1,11 +1,15 @@
 """Enhanced emotional analysis and NLP processing for manuscript text with scene-aware analysis."""
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import List, Dict, Tuple
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+from illustrator.utils import parse_llm_json
+
+logger = logging.getLogger(__name__)
 
 from illustrator.models import (
     Chapter,
@@ -577,10 +581,8 @@ Respond in JSON format:
             ]
 
             response = await self.llm.ainvoke(messages)
-
-            # Parse JSON response
-            import json
-            analysis = json.loads(response.content.strip())
+            # Parse JSON response robustly
+            analysis = parse_llm_json(response.content)
 
             emotional_tones = [EmotionalTone(tone) for tone in analysis.get('emotional_tones', [])]
             context = analysis.get('context', 'Emotionally significant moment')
@@ -654,3 +656,24 @@ Respond in JSON format:
             return '. '.join(excerpt_parts) + '.'
         else:
             return scored_sentences[0][0][:max_length]
+
+    def _calculate_pattern_score(self, text: str) -> float:
+        """Calculate emotional pattern score using regex patterns."""
+        text_lower = text.lower()
+        total_score = 0.0
+
+        # Score based on emotion patterns
+        for emotion, patterns in self.EMOTION_PATTERNS.items():
+            for pattern in patterns:
+                matches = len(re.findall(pattern, text_lower))
+                total_score += matches * 0.1
+
+        # Apply intensity modifiers
+        for intensity_level, modifiers in self.INTENSITY_MODIFIERS.items():
+            multiplier = {'high': 1.5, 'medium': 1.0, 'low': 0.5}.get(intensity_level, 1.0)
+            for modifier in modifiers:
+                if modifier in text_lower:
+                    total_score *= multiplier
+                    break
+
+        return min(1.0, total_score)
