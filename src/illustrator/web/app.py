@@ -446,9 +446,25 @@ async def run_processing_workflow(
         total_images = 0
         progress_per_chapter = 70 // len(chapters)
 
-        for i, chapter in enumerate(chapters):
+        # Determine starting point for resume
+        start_chapter_index = 0
+        if resume_info and resume_info.get("last_completed_chapter", 0) > 0:
+            start_chapter_index = resume_info["last_completed_chapter"]
+            total_images = resume_info.get("total_images_generated", 0)
+
+        for i, chapter in enumerate(chapters[start_chapter_index:], start_chapter_index):
             # Check for pause request before processing each chapter
             if connection_manager.sessions[session_id].pause_requested:
+                # Create pause checkpoint
+                current_progress = connection_manager.sessions[session_id].status.progress
+                checkpoint_manager.create_pause_checkpoint(
+                    session_id=session_id,
+                    chapter_number=chapter.number,
+                    current_step=ProcessingStep.ANALYZING_CHAPTERS,
+                    progress_percent=current_progress,
+                    pause_reason="user_requested"
+                )
+
                 connection_manager.sessions[session_id].status.status = "paused"
                 connection_manager.sessions[session_id].status.message = f"Processing paused at Chapter {chapter.number}"
                 await connection_manager.send_personal_message(
@@ -468,6 +484,17 @@ async def run_processing_workflow(
                     session_id
                 )
                 return  # Exit the processing function
+
+            current_progress = 20 + (i * progress_per_chapter)
+
+            # Create chapter start checkpoint
+            checkpoint_manager.create_chapter_start_checkpoint(
+                session_id=session_id,
+                chapter_number=chapter.number,
+                chapter_title=chapter.title,
+                chapter_word_count=len(chapter.content.split()),
+                progress_percent=current_progress
+            )
 
             await connection_manager.send_personal_message(
                 json.dumps({
@@ -490,6 +517,21 @@ async def run_processing_workflow(
 
             emotional_moments = await analyzer.analyze_chapter_comprehensive(chapter)
 
+            # Create chapter analyzed checkpoint
+            analysis_results = {
+                "chapter_analyzed": True,
+                "emotional_moments_found": len(emotional_moments),
+                "analysis_quality": "comprehensive"
+            }
+
+            checkpoint_manager.create_chapter_analyzed_checkpoint(
+                session_id=session_id,
+                chapter_number=chapter.number,
+                emotional_moments=emotional_moments,
+                analysis_results=analysis_results,
+                progress_percent=current_progress + (progress_per_chapter // 3)
+            )
+
             await connection_manager.send_personal_message(
                 json.dumps({
                     "type": "step",
@@ -510,6 +552,7 @@ async def run_processing_workflow(
             )
 
             prompts = []
+            prompts_metadata = []
             for idx, moment in enumerate(emotional_moments[:max_emotional_moments], 1):
                 primary_tone = moment.emotional_tones[0] if moment.emotional_tones else "neutral"
 
@@ -521,6 +564,15 @@ async def run_processing_workflow(
                     chapter=chapter
                 )
                 prompts.append(prompt_text)
+
+                # Create metadata for the prompt
+                prompt_metadata = {
+                    "prompt_index": idx,
+                    "emotional_tone": str(primary_tone),
+                    "text_excerpt": moment.text_excerpt[:200],
+                    "intensity_score": moment.intensity_score
+                }
+                prompts_metadata.append(prompt_metadata)
 
                 # Log detailed prompt generation with AI analysis
                 excerpt_preview = moment.text_excerpt
@@ -541,6 +593,15 @@ async def run_processing_workflow(
                     }),
                     session_id
                 )
+
+            # Create prompts generated checkpoint
+            checkpoint_manager.create_prompts_generated_checkpoint(
+                session_id=session_id,
+                chapter_number=chapter.number,
+                generated_prompts=prompts,
+                prompts_metadata=prompts_metadata,
+                progress_percent=current_progress + (2 * progress_per_chapter // 3)
+            )
 
             if i == 0:
                 await connection_manager.send_personal_message(
@@ -575,10 +636,20 @@ async def run_processing_workflow(
                 session_id
             )
 
-            results = await generator.generate_images(prompts, chapter)
-            total_images += len(results)
+            # Create checkpoint before starting image generation
+            checkpoint_manager.create_images_generating_checkpoint(
+                session_id=session_id,
+                chapter_number=chapter.number,
+                images_to_generate=len(prompts),
+                current_image_index=0,
+                progress_percent=current_progress + (2 * progress_per_chapter // 3)
+            )
 
-            # Send image updates
+            results = await generator.generate_images(prompts, chapter)
+            chapter_images_generated = len([r for r in results if r.get("success")])
+            total_images += chapter_images_generated
+
+            # Send image updates and add to session tracking
             for result in results:
                 if result.get("success") and result.get("file_path"):
                     # Convert file path to web-accessible URL
@@ -601,6 +672,15 @@ async def run_processing_workflow(
                         }),
                         session_id
                     )
+
+            # Create chapter completed checkpoint
+            checkpoint_manager.create_chapter_completed_checkpoint(
+                session_id=session_id,
+                chapter_number=chapter.number,
+                images_generated=chapter_images_generated,
+                total_images_so_far=total_images,
+                progress_percent=20 + ((i + 1) * progress_per_chapter)
+            )
 
         await connection_manager.send_personal_message(
             json.dumps({
@@ -647,6 +727,21 @@ async def run_processing_workflow(
         if session_id in connection_manager.sessions:
             connection_manager.sessions[session_id].step_status[3] = "completed"
 
+        # Create session completion checkpoint
+        checkpoint_manager.create_session_completed_checkpoint(
+            session_id=session_id,
+            total_images_generated=total_images,
+            total_chapters_processed=len(chapters)
+        )
+
+        # Update session status in database
+        persistence_service.update_session_status(
+            session_id=session_id,
+            status="completed",
+            progress_percent=100,
+            current_task="Session completed successfully"
+        )
+
         await connection_manager.send_personal_message(
             json.dumps({
                 "type": "complete",
@@ -664,6 +759,31 @@ async def run_processing_workflow(
 
     except Exception as e:
         console.print(f"[red]Processing error: {e}[/red]")
+
+        # Create error checkpoint if we have the checkpoint manager
+        try:
+            if 'checkpoint_manager' in locals():
+                current_chapter = connection_manager.sessions[session_id].status.current_chapter if session_id in connection_manager.sessions else 0
+                current_progress = connection_manager.sessions[session_id].status.progress if session_id in connection_manager.sessions else 0
+
+                checkpoint_manager.create_error_checkpoint(
+                    session_id=session_id,
+                    chapter_number=current_chapter or 0,
+                    current_step=ProcessingStep.ANALYZING_CHAPTERS,
+                    error_message=str(e),
+                    error_details={"error_type": type(e).__name__, "traceback": str(e)},
+                    progress_percent=current_progress
+                )
+
+                # Update session status in database
+                persistence_service.update_session_status(
+                    session_id=session_id,
+                    status="failed",
+                    error_message=str(e)
+                )
+        except Exception as checkpoint_error:
+            console.print(f"[yellow]Warning: Could not create error checkpoint: {checkpoint_error}[/yellow]")
+
         await connection_manager.send_personal_message(
             json.dumps({
                 "type": "error",
@@ -676,6 +796,16 @@ async def run_processing_workflow(
         if session_id in connection_manager.sessions:
             connection_manager.sessions[session_id].status.status = "error"
             connection_manager.sessions[session_id].status.error = str(e)
+
+    finally:
+        # Clean up resources
+        try:
+            if 'persistence_service' in locals():
+                persistence_service.close()
+            if 'checkpoint_manager' in locals():
+                checkpoint_manager.close()
+        except Exception as cleanup_error:
+            console.print(f"[yellow]Warning: Error during cleanup: {cleanup_error}[/yellow]")
 
 
 class WebSocketComprehensiveSceneAnalyzer:
