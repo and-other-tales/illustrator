@@ -27,6 +27,7 @@ from src.illustrator.models import (
 )
 from src.illustrator.analysis import EmotionalAnalyzer
 from src.illustrator.providers import ProviderFactory
+from src.illustrator.parallel_processor import ParallelProcessor, parallel_processor_decorator
 from langchain.chat_models import init_chat_model
 
 console = Console()
@@ -34,10 +35,21 @@ console = Console()
 class ComprehensiveSceneAnalyzer:
     """Performs comprehensive analysis to extract 10 illustration-worthy scenes per chapter."""
 
-    def __init__(self, llm_model: str = "claude-sonnet-4-20250514"):
-        """Initialize with enhanced analysis parameters."""
+    def __init__(self, llm_model: str = "claude-sonnet-4-20250514", enable_parallel: bool = True):
+        """Initialize with enhanced analysis parameters and optional parallel processing."""
         self.llm = init_chat_model(model=llm_model, model_provider="anthropic")
         self.emotional_analyzer = EmotionalAnalyzer(self.llm)
+
+        # Initialize parallel processor
+        if enable_parallel:
+            self.parallel_processor = ParallelProcessor(
+                max_concurrent_llm=8,
+                max_concurrent_image=3,
+                enable_rate_limiting=True,
+                enable_circuit_breaker=True
+            )
+        else:
+            self.parallel_processor = None
 
     async def analyze_chapter_comprehensive(self, chapter: Chapter) -> List[EmotionalMoment]:
         """
@@ -91,6 +103,131 @@ class ComprehensiveSceneAnalyzer:
         selected_moments = await self._select_diverse_moments(all_scored_moments, target_count=10)
 
         console.print(f"   🎨 Selected {len(selected_moments)} diverse illustration scenes")
+        return selected_moments
+
+    async def analyze_chapter_comprehensive_parallel(self, chapter: Chapter) -> List[EmotionalMoment]:
+        """
+        Parallel version of comprehensive chapter analysis with optimized performance.
+        Uses the scene-aware analysis for better emotional moment detection.
+        """
+        if not self.parallel_processor:
+            # Fallback to regular analysis
+            return await self.analyze_chapter_comprehensive(chapter)
+
+        console.print(f"🚀 Parallel deep analysis of Chapter {chapter.number}: {chapter.title}")
+
+        # Use the new scene-aware analysis from the enhanced EmotionalAnalyzer
+        try:
+            # This uses the scene boundary detection and character tracking
+            selected_moments = await self.emotional_analyzer.analyze_chapter_with_scenes(
+                chapter,
+                max_moments=10,
+                min_intensity=0.5,
+                scene_awareness=True
+            )
+
+            console.print(f"   ✅ Scene-aware analysis found {len(selected_moments)} high-quality illustration moments")
+            return selected_moments
+
+        except Exception as e:
+            console.print(f"   ⚠️ Scene-aware analysis failed ({e}), falling back to parallel segment analysis")
+
+            # Fallback to parallel segment analysis
+            return await self._analyze_segments_parallel(chapter)
+
+    async def _analyze_segments_parallel(self, chapter: Chapter) -> List[EmotionalMoment]:
+        """Parallel analysis of text segments using the parallel processor."""
+
+        # Create segments
+        segments = self._create_detailed_segments(chapter.content, segment_size=300, overlap=50)
+        console.print(f"   📑 Created {len(segments)} segments for parallel analysis")
+
+        # Create scoring tasks for parallel execution
+        @parallel_processor_decorator(provider='llm_analysis', max_retries=2, timeout=60.0)
+        async def score_segment_parallel(segment_data):
+            segment, chapter_ref = segment_data
+
+            # Multi-criteria scoring
+            emotional_score = await self._score_emotional_intensity(segment)
+            visual_score = await self._score_visual_potential(segment)
+            narrative_score = await self._score_narrative_significance(segment)
+            dialogue_score = await self._score_dialogue_richness(segment)
+
+            combined_score = (
+                emotional_score * 0.3 +
+                visual_score * 0.4 +
+                narrative_score * 0.2 +
+                dialogue_score * 0.1
+            )
+
+            return {
+                'segment': segment,
+                'emotional_score': emotional_score,
+                'visual_score': visual_score,
+                'narrative_score': narrative_score,
+                'dialogue_score': dialogue_score,
+                'combined_score': combined_score,
+                'chapter': chapter_ref
+            }
+
+        # Prepare segment data for parallel processing
+        segment_data = [(segment, chapter) for segment in segments]
+
+        # Process segments in batches for better performance
+        batch_size = 10
+        all_scored_results = []
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=console
+        ) as progress:
+
+            task = progress.add_task(f"Parallel segment analysis...", total=len(segments))
+
+            for i in range(0, len(segment_data), batch_size):
+                batch = segment_data[i:i + batch_size]
+
+                # Process batch in parallel
+                batch_tasks = [
+                    score_segment_parallel(data) for data in batch
+                ]
+
+                batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+
+                # Process results and handle exceptions
+                for result in batch_results:
+                    if isinstance(result, Exception):
+                        console.print(f"   ⚠️ Segment analysis failed: {result}")
+                        continue
+
+                    if result['combined_score'] >= 0.4:
+                        all_scored_results.append(result)
+
+                progress.update(task, advance=len(batch))
+
+        console.print(f"   ✅ Parallel analysis found {len(all_scored_results)} high-potential moments")
+
+        # Convert scored results to EmotionalMoments
+        all_scored_moments = []
+        for result in all_scored_results:
+            try:
+                moment = await self._create_detailed_moment(
+                    result['segment'],
+                    result['combined_score'],
+                    result['chapter']
+                )
+                all_scored_moments.append((moment, result['combined_score']))
+            except Exception as e:
+                console.print(f"   ⚠️ Failed to create moment: {e}")
+
+        # Select diverse moments
+        selected_moments = await self._select_diverse_moments(all_scored_moments, target_count=10)
+
+        console.print(f"   🎨 Selected {len(selected_moments)} diverse moments from parallel analysis")
         return selected_moments
 
     def _create_detailed_segments(self, text: str, segment_size: int = 300, overlap: int = 50):

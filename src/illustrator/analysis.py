@@ -1,8 +1,8 @@
-"""Emotional analysis and NLP processing for manuscript text."""
+"""Enhanced emotional analysis and NLP processing for manuscript text with scene-aware analysis."""
 
 import re
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict, Tuple
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -12,6 +12,8 @@ from illustrator.models import (
     EmotionalMoment,
     EmotionalTone,
 )
+from illustrator.scene_detection import LiterarySceneDetector, Scene
+from illustrator.narrative_analysis import NarrativeAnalyzer, NarrativeStructure
 
 
 @dataclass
@@ -71,6 +73,8 @@ class EmotionalAnalyzer:
     def __init__(self, llm: BaseChatModel):
         """Initialize the emotional analyzer."""
         self.llm = llm
+        self.scene_detector = LiterarySceneDetector(llm)
+        self.narrative_analyzer = NarrativeAnalyzer(llm)
 
     async def analyze_chapter(
         self,
@@ -100,6 +104,372 @@ class EmotionalAnalyzer:
             emotional_moments.append(moment)
 
         return emotional_moments
+
+    async def analyze_chapter_with_scenes(
+        self,
+        chapter: Chapter,
+        max_moments: int = 10,
+        min_intensity: float = 0.6,
+        scene_awareness: bool = True
+    ) -> List[EmotionalMoment]:
+        """Enhanced chapter analysis using scene boundary detection for better emotional moment extraction."""
+
+        if not scene_awareness:
+            return await self.analyze_chapter(chapter, max_moments, min_intensity)
+
+        # First, detect scenes in the chapter
+        scenes = await self.scene_detector.extract_scenes(chapter.content)
+
+        all_moments = []
+
+        # Analyze each scene individually
+        for scene in scenes:
+            # Create a scene-specific chapter object
+            scene_chapter = Chapter(
+                title=f"{chapter.title} - Scene",
+                content=scene.text,
+                number=chapter.number,
+                word_count=len(scene.text.split())
+            )
+
+            # Analyze scene for emotional moments with lower threshold
+            scene_moments = await self.analyze_chapter(scene_chapter, max_moments=3, min_intensity=0.4)
+
+            # Adjust positions to match original chapter
+            for moment in scene_moments:
+                moment.start_position += scene.start_position
+                moment.end_position += scene.start_position
+
+                # Enhance context with scene metadata
+                enhanced_context = f"{moment.context}. Scene context: {scene.scene_type} scene"
+                if scene.primary_characters:
+                    enhanced_context += f" featuring {', '.join(scene.primary_characters[:2])}"
+                if scene.setting_indicators:
+                    enhanced_context += f" in {', '.join(scene.setting_indicators[:2])}"
+
+                moment.context = enhanced_context
+
+                # Boost intensity for high-potential scenes
+                if scene.visual_potential > 0.7:
+                    moment.intensity_score = min(1.0, moment.intensity_score * 1.2)
+
+                # Add narrative significance to the context
+                moment.narrative_significance = getattr(moment, 'narrative_significance', 0.0)
+                moment.narrative_significance = max(moment.narrative_significance, scene.narrative_importance)
+
+            all_moments.extend(scene_moments)
+
+        # Combine and diversify moments across scenes
+        if not all_moments:
+            # Fallback to traditional analysis
+            return await self.analyze_chapter(chapter, max_moments, min_intensity)
+
+        # Sort by combined score (intensity + narrative significance)
+        scored_moments = []
+        for moment in all_moments:
+            narrative_score = getattr(moment, 'narrative_significance', 0.5)
+            combined_score = (moment.intensity_score * 0.7) + (narrative_score * 0.3)
+            scored_moments.append((moment, combined_score))
+
+        scored_moments.sort(key=lambda x: x[1], reverse=True)
+
+        # Select diverse moments ensuring scene variety
+        selected_moments = self._select_diverse_scene_moments(scored_moments, scenes, max_moments)
+
+        return selected_moments
+
+    def _select_diverse_scene_moments(
+        self,
+        scored_moments: List[Tuple[EmotionalMoment, float]],
+        scenes: List[Scene],
+        max_moments: int
+    ) -> List[EmotionalMoment]:
+        """Select diverse moments ensuring representation across different scenes and emotions."""
+
+        selected = []
+        scene_coverage = {}
+        emotion_coverage = {}
+
+        # Group moments by scene
+        scene_moments = {}
+        for moment, score in scored_moments:
+            for i, scene in enumerate(scenes):
+                if scene.start_position <= moment.start_position < scene.end_position:
+                    if i not in scene_moments:
+                        scene_moments[i] = []
+                    scene_moments[i].append((moment, score))
+                    break
+
+        # First pass: select best moment from each scene (up to max_moments)
+        scene_indices = list(scene_moments.keys())
+        scene_indices.sort(key=lambda i: max(score for _, score in scene_moments[i]), reverse=True)
+
+        for scene_idx in scene_indices[:max_moments]:
+            if len(selected) >= max_moments:
+                break
+
+            best_moment, _ = max(scene_moments[scene_idx], key=lambda x: x[1])
+            selected.append(best_moment)
+            scene_coverage[scene_idx] = True
+
+            # Track emotion coverage
+            for emotion in best_moment.emotional_tones:
+                emotion_coverage[emotion] = emotion_coverage.get(emotion, 0) + 1
+
+        # Second pass: fill remaining slots with emotional diversity priority
+        remaining_moments = []
+        for moment, score in scored_moments:
+            if moment not in selected:
+                remaining_moments.append((moment, score))
+
+        for moment, score in remaining_moments:
+            if len(selected) >= max_moments:
+                break
+
+            # Prioritize moments with underrepresented emotions
+            emotion_diversity_bonus = 0.0
+            for emotion in moment.emotional_tones:
+                current_count = emotion_coverage.get(emotion, 0)
+                if current_count == 0:
+                    emotion_diversity_bonus += 0.3
+                elif current_count == 1:
+                    emotion_diversity_bonus += 0.1
+
+            adjusted_score = score + emotion_diversity_bonus
+
+            # Add if it significantly improves diversity or quality
+            if emotion_diversity_bonus > 0.2 or adjusted_score > 0.7:
+                selected.append(moment)
+                for emotion in moment.emotional_tones:
+                    emotion_coverage[emotion] = emotion_coverage.get(emotion, 0) + 1
+
+        # Sort final selection by intensity for consistency
+        selected.sort(key=lambda m: m.intensity_score, reverse=True)
+
+        return selected[:max_moments]
+
+    async def analyze_chapter_with_narrative_structure(
+        self,
+        chapter: Chapter,
+        max_moments: int = 10,
+        min_intensity: float = 0.5,
+        full_manuscript_context: str = None
+    ) -> Tuple[List[EmotionalMoment], NarrativeStructure]:
+        """
+        Enhanced chapter analysis that incorporates narrative structure recognition
+        for superior emotional moment identification and illustration opportunities.
+        """
+
+        # First, detect scenes in the chapter
+        scenes = await self.scene_detector.extract_scenes(chapter.content)
+
+        # Perform comprehensive narrative structure analysis
+        narrative_structure = await self.narrative_analyzer.analyze_narrative_structure(
+            chapter,
+            scenes,
+            full_manuscript_context
+        )
+
+        # Use narrative structure to enhance emotional moment selection
+        enhanced_moments = await self._select_narrative_enhanced_moments(
+            chapter,
+            scenes,
+            narrative_structure,
+            max_moments,
+            min_intensity
+        )
+
+        return enhanced_moments, narrative_structure
+
+    async def _select_narrative_enhanced_moments(
+        self,
+        chapter: Chapter,
+        scenes: List[Scene],
+        narrative_structure: NarrativeStructure,
+        max_moments: int,
+        min_intensity: float
+    ) -> List[EmotionalMoment]:
+        """Select emotional moments enhanced by narrative structure analysis."""
+
+        candidate_moments = []
+
+        # 1. Extract moments from high-priority illustration opportunities
+        for opportunity in narrative_structure.illustration_opportunities[:max_moments * 2]:
+            if opportunity.get('priority', 0) > 0.6:
+                try:
+                    # Find the text around this opportunity
+                    position = opportunity.get('position', 0)
+                    start_pos = max(0, position - 150)
+                    end_pos = min(len(chapter.content), position + 150)
+
+                    excerpt = chapter.content[start_pos:end_pos].strip()
+
+                    if len(excerpt) < 50:  # Skip very short excerpts
+                        continue
+
+                    # Determine emotional tones
+                    emotional_tones = []
+                    if 'emotional_focus' in opportunity:
+                        for tone_str in opportunity['emotional_focus']:
+                            try:
+                                emotional_tones.append(EmotionalTone(tone_str))
+                            except ValueError:
+                                continue
+
+                    # If no specific emotions, analyze the excerpt
+                    if not emotional_tones:
+                        emotional_tones = await self._analyze_emotional_tones(excerpt)
+
+                    # Create enhanced emotional moment
+                    moment = EmotionalMoment(
+                        text_excerpt=excerpt,
+                        start_position=start_pos,
+                        end_position=end_pos,
+                        emotional_tones=emotional_tones,
+                        intensity_score=min(1.0, opportunity.get('priority', 0.7)),
+                        context=self._build_narrative_context(opportunity, narrative_structure),
+                        narrative_significance=opportunity.get('priority', 0.7)
+                    )
+
+                    candidate_moments.append((moment, opportunity.get('priority', 0.7)))
+
+                except Exception as e:
+                    continue
+
+        # 2. Extract moments from narrative arc peaks
+        for arc in narrative_structure.narrative_arcs:
+            if arc.intensity > 0.6 and arc.illustration_potential > 0.5:
+                try:
+                    # Find text for this arc
+                    start_pos = max(0, arc.start_position)
+                    end_pos = min(len(chapter.content), arc.end_position)
+
+                    if end_pos - start_pos < 50:
+                        continue
+
+                    excerpt = chapter.content[start_pos:end_pos].strip()
+
+                    # Create moment from arc
+                    moment = EmotionalMoment(
+                        text_excerpt=excerpt[:300] if len(excerpt) > 300 else excerpt,
+                        start_position=start_pos,
+                        end_position=min(start_pos + 300, end_pos),
+                        emotional_tones=arc.emotional_trajectory or [EmotionalTone.ANTICIPATION],
+                        intensity_score=arc.intensity,
+                        context=f"Narrative {arc.element.value}: {'; '.join(arc.key_events[:2])}",
+                        narrative_significance=arc.significance_score
+                    )
+
+                    candidate_moments.append((moment, arc.intensity * arc.significance_score))
+
+                except Exception as e:
+                    continue
+
+        # 3. Supplement with scene-aware analysis if needed
+        if len(candidate_moments) < max_moments:
+            scene_moments = await self.analyze_chapter_with_scenes(
+                chapter,
+                max_moments=max_moments - len(candidate_moments),
+                min_intensity=min_intensity * 0.8,  # Lower threshold for supplemental moments
+                scene_awareness=True
+            )
+
+            for scene_moment in scene_moments:
+                candidate_moments.append((scene_moment, scene_moment.intensity_score))
+
+        # Remove duplicates and overlapping moments
+        unique_moments = self._remove_overlapping_moments(candidate_moments)
+
+        # Sort by combined score and select final moments
+        scored_moments = []
+        for moment, initial_score in unique_moments:
+            narrative_score = getattr(moment, 'narrative_significance', 0.5)
+            combined_score = (moment.intensity_score * 0.6) + (narrative_score * 0.4)
+            scored_moments.append((moment, combined_score))
+
+        scored_moments.sort(key=lambda x: x[1], reverse=True)
+
+        return [moment for moment, score in scored_moments[:max_moments]]
+
+    def _build_narrative_context(
+        self,
+        opportunity: Dict[str, any],
+        narrative_structure: NarrativeStructure
+    ) -> str:
+        """Build rich context description using narrative analysis."""
+
+        context_parts = []
+
+        if opportunity.get('type'):
+            context_parts.append(f"Type: {opportunity['type']}")
+
+        if opportunity.get('description'):
+            context_parts.append(opportunity['description'])
+
+        # Add genre context
+        if narrative_structure.genre_indicators:
+            genres = [g.value for g in narrative_structure.genre_indicators[:2]]
+            context_parts.append(f"Genre elements: {', '.join(genres)}")
+
+        # Add structural context
+        if narrative_structure.overall_structure:
+            context_parts.append(f"Structure: {narrative_structure.overall_structure}")
+
+        # Add thematic context
+        if narrative_structure.thematic_elements:
+            themes = [t.theme for t in narrative_structure.thematic_elements[:2]]
+            context_parts.append(f"Themes: {', '.join(themes)}")
+
+        return "; ".join(context_parts)
+
+    async def _analyze_emotional_tones(self, text: str) -> List[EmotionalTone]:
+        """Quick emotional tone analysis for a text excerpt."""
+
+        # Use pattern matching for speed
+        detected_emotions = []
+
+        for emotion, patterns in self.EMOTION_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, text.lower()):
+                    detected_emotions.append(emotion)
+                    break
+
+        return detected_emotions if detected_emotions else [EmotionalTone.ANTICIPATION]
+
+    def _remove_overlapping_moments(
+        self,
+        candidate_moments: List[Tuple[EmotionalMoment, float]]
+    ) -> List[Tuple[EmotionalMoment, float]]:
+        """Remove overlapping emotional moments, keeping the highest-scored ones."""
+
+        # Sort by score
+        sorted_moments = sorted(candidate_moments, key=lambda x: x[1], reverse=True)
+
+        unique_moments = []
+        used_positions = set()
+
+        for moment, score in sorted_moments:
+            # Check for overlap with already selected moments
+            overlaps = False
+            for used_start, used_end in used_positions:
+                # Check if this moment overlaps significantly (>50%) with a used position
+                overlap_start = max(moment.start_position, used_start)
+                overlap_end = min(moment.end_position, used_end)
+
+                if overlap_end > overlap_start:
+                    overlap_size = overlap_end - overlap_start
+                    moment_size = moment.end_position - moment.start_position
+                    overlap_ratio = overlap_size / max(1, moment_size)
+
+                    if overlap_ratio > 0.5:
+                        overlaps = True
+                        break
+
+            if not overlaps:
+                unique_moments.append((moment, score))
+                used_positions.add((moment.start_position, moment.end_position))
+
+        return unique_moments
 
     def _segment_text(self, text: str, segment_size: int = 500, overlap: int = 100) -> List[TextSegment]:
         """Segment text into overlapping chunks for analysis."""

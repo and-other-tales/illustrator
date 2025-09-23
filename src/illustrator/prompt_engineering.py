@@ -20,6 +20,7 @@ from illustrator.models import (
     ImageProvider,
     Chapter,
 )
+from illustrator.character_tracking import CharacterTracker
 
 
 class CompositionType(str, Enum):
@@ -905,10 +906,11 @@ class StyleTranslator:
 class PromptEngineer:
     """Master prompt engineering system orchestrating all components."""
 
-    def __init__(self, llm: BaseChatModel):
+    def __init__(self, llm: BaseChatModel, character_tracker: Optional[CharacterTracker] = None):
         self.llm = llm
         self.scene_analyzer = SceneAnalyzer(llm)
         self.style_translator = StyleTranslator()
+        self.character_tracker = character_tracker or CharacterTracker(llm)
 
         # Context tracking
         self.character_profiles: Dict[str, CharacterProfile] = {}
@@ -923,7 +925,13 @@ class PromptEngineer:
         chapter_context: Chapter,
         previous_scenes: List[Dict] = None
     ) -> IllustrationPrompt:
-        """Engineer an optimal prompt using all available techniques."""
+        """Engineer an optimal prompt using all available techniques with character consistency."""
+
+        # Update character tracking for this chapter
+        await self.character_tracker.extract_characters_from_chapter(chapter_context, update_profiles=True)
+
+        # Store current chapter number for character context
+        self._current_chapter_number = chapter_context.number
 
         # Update context tracking
         await self._update_context_tracking(emotional_moment, chapter_context, previous_scenes or [])
@@ -1374,22 +1382,68 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         return ". ".join(guidance_parts)
 
     def _build_character_guidance(self, visual_elements: List[VisualElement]) -> str:
-        """Build character consistency guidance."""
+        """Build advanced character consistency guidance using the character tracker."""
         character_elements = [elem for elem in visual_elements if elem.element_type == "character"]
 
         if not character_elements:
             return ""
 
         guidance_parts = []
-        for char_elem in character_elements:
-            # Check if we have existing character profile
-            char_name = char_elem.attributes.get('name', '').lower()
-            if char_name in self.character_profiles:
-                profile = self.character_profiles[char_name]
-                if profile.physical_description:
-                    guidance_parts.append(f"Character consistency: {profile.physical_description}")
 
-        return ". ".join(guidance_parts) if guidance_parts else ""
+        for char_elem in character_elements:
+            char_name = char_elem.attributes.get('name', '')
+
+            if char_name:
+                # Get character description from the advanced tracker
+                char_description = self.character_tracker.get_character_for_illustration(
+                    char_name,
+                    context_chapter=getattr(self, '_current_chapter_number', None)
+                )
+
+                if char_description:
+                    # Build comprehensive character guidance
+                    char_guidance_parts = []
+
+                    # Physical consistency
+                    if char_description.get('physical_summary'):
+                        char_guidance_parts.append(f"Character {char_name}: {char_description['physical_summary']}")
+
+                    # Distinctive features
+                    if char_description.get('distinctive_features'):
+                        char_guidance_parts.append(f"distinctive features: {char_description['distinctive_features']}")
+
+                    # Clothing consistency
+                    if char_description.get('typical_clothing'):
+                        char_guidance_parts.append(f"typically wearing: {char_description['typical_clothing']}")
+
+                    # Context-specific appearance
+                    if char_description.get('context_appearance'):
+                        char_guidance_parts.append(f"context appearance: {char_description['context_appearance']}")
+
+                    # Emotional default
+                    if char_description.get('emotional_default'):
+                        char_guidance_parts.append(f"emotional state: {char_description['emotional_default']}")
+
+                    # Illustration notes
+                    if char_description.get('illustration_notes'):
+                        char_guidance_parts.append(f"illustration notes: {char_description['illustration_notes']}")
+
+                    # Add consistency warning if score is low
+                    consistency_score = float(char_description.get('consistency_score', '1.0'))
+                    if consistency_score < 0.8:
+                        char_guidance_parts.append("(maintain visual consistency with previous appearances)")
+
+                    if char_guidance_parts:
+                        guidance_parts.append("; ".join(char_guidance_parts))
+
+            # Fallback to basic character description from visual elements
+            elif not char_name and char_elem.description:
+                guidance_parts.append(f"Character appearance: {char_elem.description}")
+
+        if guidance_parts:
+            return "Character consistency guidance: " + ". ".join(guidance_parts)
+
+        return ""
 
     def _build_atmospheric_guidance(
         self,

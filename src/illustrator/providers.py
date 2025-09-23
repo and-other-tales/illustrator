@@ -14,6 +14,7 @@ from illustrator.models import (
     Chapter,
 )
 from illustrator.prompt_engineering import PromptEngineer
+from illustrator.error_handling import resilient_async, ErrorRecoveryHandler, safe_execute
 
 
 def _format_style_modifiers(style_modifiers: List[Any]) -> str:
@@ -34,6 +35,8 @@ class ImageGenerationProvider(ABC):
     def __init__(self, anthropic_api_key: str = None):
         """Initialize provider with optional LLM for advanced prompt engineering."""
         self.prompt_engineer = None
+        self.error_handler = ErrorRecoveryHandler(max_attempts=3)
+
         if anthropic_api_key:
             try:
                 llm = init_chat_model(
@@ -210,52 +213,67 @@ class DalleProvider(ImageGenerationProvider):
             technical_params=technical_params,
         )
 
+    @resilient_async(
+        max_attempts=3,
+        fallback_functions={
+            'simplified_processing': lambda prompt: {"success": True, "image_data": None, "error": "Used fallback"}
+        }
+    )
     async def generate_image(
         self,
         prompt: IllustrationPrompt,
         **kwargs
     ) -> Dict[str, Any]:
-        """Generate image using DALL-E API."""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        """Generate image using DALL-E API with resilient error handling."""
 
-        payload = {
-            "prompt": prompt.prompt,
-            **prompt.technical_params,
-            "n": 1,
-            "response_format": "b64_json"
-        }
+        async def _generate_dalle_image():
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                self.base_url,
-                headers=headers,
-                json=payload
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    image_data = data['data'][0]['b64_json']
+            payload = {
+                "prompt": prompt.prompt,
+                **prompt.technical_params,
+                "n": 1,
+                "response_format": "b64_json"
+            }
 
-                    return {
-                        'success': True,
-                        'image_data': image_data,
-                        'format': 'base64',
-                        'metadata': {
-                            'provider': 'dalle',
-                            'model': prompt.technical_params.get('model', 'dall-e-3'),
-                            'prompt': prompt.prompt,
-                            'revised_prompt': data['data'][0].get('revised_prompt', prompt.prompt)
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.base_url,
+                    headers=headers,
+                    json=payload
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        image_data = data['data'][0]['b64_json']
+
+                        return {
+                            'success': True,
+                            'image_data': image_data,
+                            'format': 'base64',
+                            'metadata': {
+                                'provider': 'dalle',
+                                'model': prompt.technical_params.get('model', 'dall-e-3'),
+                                'prompt': prompt.prompt,
+                                'revised_prompt': data['data'][0].get('revised_prompt', prompt.prompt)
+                            }
                         }
-                    }
-                else:
-                    error_data = await response.json()
-                    return {
-                        'success': False,
-                        'error': error_data.get('error', {}).get('message', 'Unknown error'),
-                        'status_code': response.status
-                    }
+                    elif response.status == 429:
+                        # Rate limit - let error handler deal with it
+                        error_data = await response.json()
+                        raise Exception(f"Rate limit exceeded: {error_data.get('error', {}).get('message', 'Unknown error')}")
+                    elif response.status in [401, 403]:
+                        # Authentication error
+                        error_data = await response.json()
+                        raise Exception(f"Authentication error: {error_data.get('error', {}).get('message', 'Invalid API key')}")
+                    else:
+                        error_data = await response.json()
+                        error_msg = error_data.get('error', {}).get('message', 'Unknown error')
+                        raise Exception(f"DALL-E API error (status {response.status}): {error_msg}")
+
+        return await _generate_dalle_image()
 
 
 class Imagen4Provider(ImageGenerationProvider):
