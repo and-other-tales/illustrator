@@ -33,6 +33,7 @@ class EmotionalTone(str, Enum):
     # Additional emotional tones used in tests and other files
     SUSPENSE = "suspense"
     COURAGE = "courage"
+    TRIUMPH = "triumph"
     NEUTRAL = "neutral"
 
 

@@ -44,19 +44,28 @@ class TestManuscriptCLI:
     @pytest.fixture
     def sample_analysis(self, sample_chapter):
         """Sample chapter analysis for testing."""
+        from illustrator.models import IllustrationPrompt
         emotional_moment = EmotionalMoment(
             text_excerpt="emotional depth",
+            start_position=10,
+            end_position=25,
             emotional_tones=[EmotionalTone.JOY],
             intensity_score=0.8,
-            narrative_significance=0.7
+            context="This is a test chapter with emotional depth."
+        )
+        illustration_prompt = IllustrationPrompt(
+            provider=ImageProvider.DALLE,
+            prompt="A mystical forest scene",
+            style_modifiers=["digital painting"],
+            technical_params={}
         )
         return ChapterAnalysis(
             chapter=sample_chapter,
             emotional_moments=[emotional_moment],
             dominant_themes=["Growth", "Discovery"],
             setting_description="A mystical forest",
-            character_emotions={"protagonist": [EmotionalTone.HOPE]},
-            illustration_prompts=["A mystical forest scene"]
+            character_emotions={"protagonist": [EmotionalTone.JOY]},
+            illustration_prompts=[illustration_prompt]
         )
 
     def test_cli_initialization(self, cli):
@@ -100,14 +109,20 @@ class TestManuscriptCLI:
     @patch.dict(os.environ, {'DEFAULT_IMAGE_PROVIDER': 'dalle'}, clear=True)
     def test_setup_environment_missing_openai_key(self, cli):
         """Test environment setup with missing OpenAI key."""
-        with patch('sys.exit') as mock_exit:
+        with patch('sys.exit') as mock_exit, \
+             patch('illustrator.cli.console'), \
+             patch('illustrator.cli.load_dotenv'), \
+             patch('illustrator.cli.find_dotenv'):
             cli.setup_environment()
             mock_exit.assert_called_with(1)
 
     @patch.dict(os.environ, {'DEFAULT_IMAGE_PROVIDER': 'imagen4'}, clear=True)
     def test_setup_environment_missing_google_creds(self, cli):
         """Test environment setup with missing Google credentials."""
-        with patch('sys.exit') as mock_exit:
+        with patch('sys.exit') as mock_exit, \
+             patch('illustrator.cli.console'), \
+             patch('illustrator.cli.load_dotenv'), \
+             patch('illustrator.cli.find_dotenv'):
             cli.setup_environment()
             mock_exit.assert_called_with(1)
 
@@ -229,8 +244,8 @@ class TestManuscriptCLI:
             mock_console.print.assert_called_with("[red]No chapters to process![/red]")
 
     @pytest.mark.asyncio
-    @patch('illustrator.cli.graph')
-    @patch('illustrator.cli.InMemoryStore')
+    @patch('illustrator.graph.graph')
+    @patch('langgraph.store.memory.InMemoryStore')
     @patch('illustrator.cli.ManuscriptContext')
     async def test_process_chapters_success(self, mock_context, mock_store, mock_graph, cli, sample_chapter, sample_metadata):
         """Test successful chapter processing."""
@@ -247,16 +262,18 @@ class TestManuscriptCLI:
 
         style_prefs = {"image_provider": "dalle", "art_style": "digital"}
 
-        with patch('illustrator.cli.uuid.uuid4') as mock_uuid:
+        with patch('uuid.uuid4') as mock_uuid:
             mock_uuid.return_value = "test-uuid"
             await cli.process_chapters(style_prefs)
 
+    @pytest.mark.asyncio
     async def test_save_generated_images_no_images(self, cli, sample_chapter, sample_metadata):
         """Test image saving with no images."""
         cli.manuscript_metadata = sample_metadata
         await cli._save_generated_images([], sample_chapter, 1)
         # Should complete without error
 
+    @pytest.mark.asyncio
     async def test_save_generated_images_success(self, cli, sample_chapter, sample_metadata, tmp_path):
         """Test successful image saving."""
         cli.manuscript_metadata = sample_metadata
@@ -460,7 +477,7 @@ class TestCLICommands:
         finally:
             os.unlink(temp_file)
 
-    @patch('illustrator.cli.run_server')
+    @patch('illustrator.web.app.run_server')
     def test_start_command(self, mock_run_server):
         """Test start command."""
         from illustrator.cli import start

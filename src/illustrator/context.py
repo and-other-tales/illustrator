@@ -82,6 +82,13 @@ IllustratorContext = ManuscriptContext
 def get_default_context() -> IllustratorContext:
     """Get default context with environment variables."""
     import os
+    # Ensure environment variables from a nearby .env are available
+    try:
+        from dotenv import load_dotenv, find_dotenv
+        load_dotenv(find_dotenv(), override=False)
+    except Exception:
+        # If dotenv isn't available or .env isn't found, proceed with process env
+        pass
 
     return IllustratorContext(
         user_id="default_user",

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import click
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -40,7 +40,8 @@ class ManuscriptCLI:
 
     def setup_environment(self):
         """Load environment variables and validate configuration."""
-        load_dotenv('.env')
+        # Load nearest .env (works even if invoked outside repo root)
+        load_dotenv(find_dotenv(), override=False)
 
         # Validate required API keys based on selected provider
         image_provider = os.getenv('DEFAULT_IMAGE_PROVIDER', 'dalle')

@@ -79,7 +79,7 @@ class TestManuscriptContext:
         context = ManuscriptContext(user_id="test_user")
 
         # Analysis prompt should contain key sections
-        assert "emotional analyst" in context.analysis_prompt.lower()
+        assert "literary analyst" in context.analysis_prompt.lower()
         assert "emotional peaks" in context.analysis_prompt.lower()
         assert "narrative tension" in context.analysis_prompt.lower()
 
@@ -269,8 +269,13 @@ class TestGetDefaultContext:
         assert context.huggingface_api_key == "test_hf_key"
 
     @patch.dict(os.environ, {}, clear=True)
-    def test_get_default_context_no_env_vars(self):
+    @patch('dotenv.load_dotenv')
+    @patch('dotenv.find_dotenv')
+    def test_get_default_context_no_env_vars(self, mock_find_dotenv, mock_load_dotenv):
         """Test get_default_context without environment variables."""
+        mock_find_dotenv.return_value = ""
+        mock_load_dotenv.return_value = False
+
         context = get_default_context()
 
         assert context.user_id == "default_user"
@@ -283,9 +288,14 @@ class TestGetDefaultContext:
     @patch.dict(os.environ, {
         'OPENAI_API_KEY': 'partial_openai',
         'GOOGLE_PROJECT_ID': 'partial_google'
-    })
-    def test_get_default_context_partial_env_vars(self):
+    }, clear=True)
+    @patch('dotenv.load_dotenv')
+    @patch('dotenv.find_dotenv')
+    def test_get_default_context_partial_env_vars(self, mock_find_dotenv, mock_load_dotenv):
         """Test get_default_context with partial environment variables."""
+        mock_find_dotenv.return_value = ""
+        mock_load_dotenv.return_value = False
+
         context = get_default_context()
 
         assert context.user_id == "default_user"

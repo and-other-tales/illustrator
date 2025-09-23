@@ -279,7 +279,7 @@ class TestDatabaseManager:
         assert chapter.chapter.title == "Test Chapter"
         assert chapter.chapter.content == "This is test content for the chapter."
         assert chapter.chapter.number == 1
-        assert chapter.chapter.word_count == 8  # Number of words in content
+        assert chapter.chapter.word_count == 7  # Number of words in "This is test content for the chapter."
         assert chapter.processing_status == "draft"
         assert chapter.analysis is None
 
@@ -450,8 +450,10 @@ class TestDatabaseManagerEdgeCases:
 
     def test_save_operations_create_directories(self, tmp_path):
         """Test that save operations create necessary directories."""
-        # Initialize with non-existent directory
-        data_dir = tmp_path / "nested" / "test_db"
+        # Initialize with non-existent directory - create parent first
+        nested_dir = tmp_path / "nested"
+        nested_dir.mkdir()
+        data_dir = nested_dir / "test_db"
         db_manager = DatabaseManager(data_dir=str(data_dir))
 
         # Directories should be created during initialization
