@@ -103,7 +103,7 @@ class TestLiterarySceneDetector:
         Boundary at position 65 - Time transition: "Finally, the evening"
         """
 
-        scenes = await self.detector.extract_scenes(chapter.content)
+        scenes = await self.detector.extract_scenes(chapter.content, min_scene_length=50)
 
         # Should detect multiple scenes
         assert isinstance(scenes, list)
