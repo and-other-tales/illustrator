@@ -137,7 +137,8 @@ async def start_processing(
             session_id=session_id,
             manuscript_id=request.manuscript_id,
             style_config=request.style_config,
-            max_emotional_moments=getattr(request, 'max_emotional_moments', 10)
+            max_emotional_moments=getattr(request, 'max_emotional_moments', 10),
+            resume_from_checkpoint=False
         )
 
         return {
@@ -151,6 +152,113 @@ async def start_processing(
         raise HTTPException(
             status_code=500,
             detail=f"Error starting processing: {str(e)}"
+        )
+
+@app.post("/api/process/resume/{session_id}")
+async def resume_processing_from_checkpoint(
+    session_id: str,
+    background_tasks: BackgroundTasks
+):
+    """Resume processing from the last checkpoint."""
+    try:
+        from illustrator.services.checkpoint_manager import CheckpointManager
+        from illustrator.services.session_persistence import SessionPersistenceService
+
+        # Initialize persistence services to check for resumable session
+        persistence_service = SessionPersistenceService()
+        checkpoint_manager = CheckpointManager(persistence_service)
+
+        # Get resume information
+        resume_info = checkpoint_manager.get_resume_info(session_id)
+        if not resume_info:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No resumable session found with ID: {session_id}"
+            )
+
+        # Check if session is already active
+        if session_id in connection_manager.sessions:
+            return {
+                "success": True,
+                "session_id": session_id,
+                "message": "Reconnecting to existing processing session",
+                "resumed_at": datetime.now().isoformat(),
+                "is_existing": True,
+                "resume_info": resume_info
+            }
+
+        # Start processing with resume flag
+        background_tasks.add_task(
+            run_processing_workflow,
+            session_id=session_id,
+            manuscript_id=resume_info["manuscript_id"],
+            style_config=resume_info["style_config"],
+            max_emotional_moments=resume_info["max_emotional_moments"],
+            resume_from_checkpoint=True
+        )
+
+        persistence_service.close()
+        checkpoint_manager.close()
+
+        return {
+            "success": True,
+            "session_id": session_id,
+            "message": "Processing resumed from checkpoint",
+            "resumed_at": datetime.now().isoformat(),
+            "is_existing": False,
+            "resume_info": {
+                "checkpoint_type": resume_info.get("latest_checkpoint_type"),
+                "progress_percent": resume_info.get("progress_percent"),
+                "total_chapters": resume_info.get("total_chapters"),
+                "last_completed_chapter": resume_info.get("last_completed_chapter")
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error resuming processing: {str(e)}"
+        )
+
+@app.get("/api/process/resumable")
+async def get_resumable_sessions():
+    """Get all sessions that can be resumed."""
+    try:
+        from illustrator.services.session_persistence import SessionPersistenceService
+
+        persistence_service = SessionPersistenceService()
+        resumable_sessions = persistence_service.get_resumable_sessions()
+
+        session_info = []
+        for session in resumable_sessions:
+            session_info.append({
+                "session_id": str(session.id),
+                "manuscript_id": str(session.manuscript_id),
+                "external_session_id": session.external_session_id,
+                "status": session.status,
+                "progress_percent": session.progress_percent,
+                "total_chapters": session.total_chapters,
+                "last_completed_chapter": session.last_completed_chapter,
+                "total_images_generated": session.total_images_generated,
+                "started_at": session.started_at.isoformat() if session.started_at else None,
+                "paused_at": session.paused_at.isoformat() if session.paused_at else None,
+                "error_message": session.error_message
+            })
+
+        persistence_service.close()
+
+        return {
+            "success": True,
+            "resumable_sessions": session_info,
+            "count": len(session_info)
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting resumable sessions: {str(e)}"
         )
 
 @app.post("/api/process/{session_id}/pause")
