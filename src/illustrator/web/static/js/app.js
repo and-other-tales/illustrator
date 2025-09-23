@@ -96,9 +96,9 @@ function setTheme(theme) {
     // Update theme toggle button text
     const toggleBtn = document.getElementById('themeToggle');
     if (toggleBtn) {
-        const icon = theme === 'dark' ? 'bi-sun' : 'bi-moon';
+        const icon = theme === 'dark' ? 'brightness-high' : 'moon-stars';
         const text = theme === 'dark' ? 'Light Theme' : 'Dark Theme';
-        toggleBtn.innerHTML = `<i class="bi ${icon}"></i> ${text}`;
+        toggleBtn.innerHTML = `<i class="bi bi-${icon} me-2"></i>${text}`;
     }
 }
 
@@ -164,12 +164,10 @@ function togglePasswordVisibility(fieldId) {
 
     if (field.type === 'password') {
         field.type = 'text';
-        icon.classList.remove('bi-eye');
-        icon.classList.add('bi-eye-slash');
+        icon.className = 'bi bi-eye-slash';
     } else {
         field.type = 'password';
-        icon.classList.remove('bi-eye-slash');
-        icon.classList.add('bi-eye');
+        icon.className = 'bi bi-eye';
     }
 }
 
