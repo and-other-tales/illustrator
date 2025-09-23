@@ -11,11 +11,10 @@ from illustrator.visual_composition import (
     ColorHarmony,
     ShotType,
     CameraAngle,
-    CompositionAnalysis,
-    VisualElement,
-    CompositionGuide,
-    LightingType,
-    ColorScheme
+    VisualFocus,
+    AdvancedComposition,
+    CompositionElement,
+    VisualLayer
 )
 from illustrator.models import Chapter, EmotionalMoment, EmotionalTone
 

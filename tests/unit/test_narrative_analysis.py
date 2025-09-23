@@ -6,16 +6,13 @@ from typing import List, Dict, Any
 
 from illustrator.narrative_analysis import (
     NarrativeAnalyzer,
-    GenreClassifier,
-    ThematicAnalyzer,
-    CharacterArcAnalyzer,
     NarrativeStructure,
     Genre,
-    StructureType,
-    CharacterArcType,
     NarrativeElement,
     ThematicElement,
-    CharacterArc
+    CharacterArc,
+    NarrativeArc,
+    LiteraryDevice
 )
 from illustrator.models import Chapter, EmotionalMoment, EmotionalTone
 

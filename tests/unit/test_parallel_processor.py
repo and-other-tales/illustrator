@@ -9,11 +9,11 @@ from typing import List, Dict, Any
 from illustrator.parallel_processor import (
     ParallelProcessor,
     ProcessingResult,
-    BatchConfig,
-    ProcessingStats,
-    RateLimitConfig,
-    CircuitBreakerConfig,
-    CircuitBreakerState
+    ProcessingTask,
+    RateLimiter,
+    CircuitBreaker,
+    PerformanceMonitor,
+    parallel_processor_decorator
 )
 
 
