@@ -3,7 +3,7 @@
 import re
 import json
 from dataclasses import dataclass
-from typing import Dict, List, Set, Optional, Tuple
+from typing import Any, Dict, List, Set, Optional, Tuple
 from enum import Enum
 from datetime import datetime
 
