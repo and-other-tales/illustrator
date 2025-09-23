@@ -262,9 +262,10 @@ async def run_processing_workflow(
     session_id: str,
     manuscript_id: str,
     style_config: dict,
-    max_emotional_moments: int = 10
+    max_emotional_moments: int = 10,
+    resume_from_checkpoint: bool = False
 ):
-    """Run the actual processing workflow with WebSocket updates."""
+    """Run the actual processing workflow with WebSocket updates and checkpoint support."""
     try:
         # Import the processing logic
         import sys
@@ -274,19 +275,51 @@ async def run_processing_workflow(
         from generate_scene_illustrations import ComprehensiveSceneAnalyzer, IllustrationGenerator
         from illustrator.web.routes.manuscripts import get_saved_manuscripts
         from illustrator.web.models.web_models import ProcessingSessionData, ProcessingStatus
+        from illustrator.services.checkpoint_manager import CheckpointManager, ProcessingStep
+        from illustrator.services.session_persistence import SessionPersistenceService
         import uuid
 
-        # Create and store session data
-        initial_status = ProcessingStatus(
-            session_id=session_id,
-            manuscript_id=manuscript_id,
-            status="started",
-            progress=0,
-            total_chapters=0,  # Will be updated when we load the manuscript
-            message="Starting manuscript processing...",
-            current_chapter=None,
-            error=None
-        )
+        # Initialize persistence services
+        persistence_service = SessionPersistenceService()
+        checkpoint_manager = CheckpointManager(persistence_service)
+
+        # Check if we're resuming from a checkpoint
+        resume_info = None
+        if resume_from_checkpoint:
+            resume_info = checkpoint_manager.get_resume_info(session_id)
+            if resume_info:
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "info",
+                        "message": f"Resuming session from checkpoint: {resume_info['latest_checkpoint_type']}"
+                    }),
+                    session_id
+                )
+
+        # Create or restore session data
+        if resume_info:
+            initial_status = ProcessingStatus(
+                session_id=session_id,
+                manuscript_id=manuscript_id,
+                status="resuming",
+                progress=resume_info["progress_percent"],
+                total_chapters=resume_info["total_chapters"],
+                message=f"Resuming from {resume_info['latest_checkpoint_type']}...",
+                current_chapter=resume_info.get("current_chapter"),
+                error=None
+            )
+        else:
+            initial_status = ProcessingStatus(
+                session_id=session_id,
+                manuscript_id=manuscript_id,
+                status="started",
+                progress=0,
+                total_chapters=0,  # Will be updated when we load the manuscript
+                message="Starting manuscript processing...",
+                current_chapter=None,
+                error=None
+            )
 
         session_data = ProcessingSessionData(
             session_id=session_id,
@@ -300,14 +333,54 @@ async def run_processing_workflow(
         connection_manager.sessions[session_id] = session_data
 
         # Send initial status
+        initial_message = "Resuming manuscript processing..." if resume_info else "Starting manuscript processing..."
         await connection_manager.send_personal_message(
             json.dumps({
                 "type": "log",
                 "level": "info",
-                "message": "Starting manuscript processing..."
+                "message": initial_message
             }),
             session_id
         )
+
+        # Find manuscript by ID (using the same logic as manuscripts.py)
+        manuscripts = get_saved_manuscripts()
+        manuscript = None
+        for saved_manuscript in manuscripts:
+            generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, saved_manuscript.file_path))
+            if generated_id == manuscript_id:
+                manuscript = saved_manuscript
+                break
+
+        if not manuscript:
+            raise Exception(f"Manuscript {manuscript_id} not found")
+
+        chapters = manuscript.chapters
+        if not chapters:
+            raise Exception(f"No chapters found for manuscript {manuscript_id}")
+
+        # Create or update processing session in database
+        if not resume_info:
+            db_session = persistence_service.create_session(
+                manuscript_id=manuscript_id,
+                external_session_id=session_id,
+                style_config=style_config,
+                max_emotional_moments=max_emotional_moments,
+                total_chapters=len(chapters)
+            )
+
+            # Create session start checkpoint
+            checkpoint_manager.create_session_start_checkpoint(
+                session_id=str(db_session.id),
+                manuscript_id=manuscript_id,
+                manuscript_title=manuscript.title,
+                total_chapters=len(chapters),
+                style_config=style_config,
+                max_emotional_moments=max_emotional_moments
+            )
+
+        # Update total chapters in session status
+        connection_manager.sessions[session_id].status.total_chapters = len(chapters)
 
         # Initialize components with WebSocket-enabled analyzer
         analyzer = WebSocketComprehensiveSceneAnalyzer(connection_manager, session_id)
@@ -340,21 +413,21 @@ async def run_processing_workflow(
             session_id
         )
 
-        # Find manuscript by ID (using the same logic as manuscripts.py)
-        manuscripts = get_saved_manuscripts()
-        manuscript = None
-        for saved_manuscript in manuscripts:
-            generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, saved_manuscript.file_path))
-            if generated_id == manuscript_id:
-                manuscript = saved_manuscript
-                break
+        # Create manuscript loaded checkpoint if not resuming
+        if not resume_info:
+            chapters_info = [
+                {
+                    "number": chapter.number,
+                    "title": chapter.title,
+                    "word_count": len(chapter.content.split())
+                }
+                for chapter in chapters
+            ]
 
-        if not manuscript:
-            raise Exception(f"Manuscript {manuscript_id} not found")
-
-        chapters = manuscript.chapters
-        if not chapters:
-            raise Exception(f"No chapters found for manuscript {manuscript_id}")
+            checkpoint_manager.create_manuscript_loaded_checkpoint(
+                session_id=str(db_session.id),
+                chapters_info=chapters_info
+            )
 
         await connection_manager.send_personal_message(
             json.dumps({
