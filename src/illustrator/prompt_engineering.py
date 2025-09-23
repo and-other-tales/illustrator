@@ -145,27 +145,50 @@ class SceneAnalyzer:
     ) -> List[VisualElement]:
         """Extract detailed visual elements from text."""
 
-        system_prompt = """You are a visual scene analyst. Extract detailed visual elements from the provided text that would be essential for creating an illustration. Focus on:
+        system_prompt = """You are a master visual scene analyst specializing in E.H. Shepard-style book illustrations. Extract exceptionally detailed visual elements essential for creating emotionally rich, artistically compelling illustrations. Focus intensively on:
 
-1. Characters: Physical appearance, expressions, poses, clothing, emotional state
-2. Environment: Setting details, lighting conditions, atmosphere, weather
-3. Objects: Important items, props, symbolic elements
-4. Composition: Spatial relationships, perspective, focal points
+1. CHARACTERS WITH PRECISE EMOTIONAL DETAILS:
+- Exact facial expressions (wide eyes, frozen smile, startled look, raised eyebrows, tense mouth)
+- Specific body language (leaning back, shoulders hunched, hands positioned defensively, rigid posture)
+- Detailed positioning (behind counter, at angle, slightly turned away, facing toward)
+- Emotional state manifestations (fear showing through stiff smile, curiosity in tilted head, tension in stance)
+- Clothing and appearance that enhances character portrayal
 
-Return a JSON array of visual elements with this structure:
+2. ENVIRONMENT WITH RICH SPECIFICITY:
+- Precise setting details (cozy coffee shop interior, wooden counter, ceramic displays)
+- Architectural elements (doorways, windows, ceiling details, floor patterns)
+- Furniture and fixtures (specific café equipment, seating arrangements, lighting sources)
+- Textural details (rough wood grain, smooth ceramic, soft fabric, metal finishes)
+- Atmospheric conditions (warm lighting, shadows, spatial depth)
+
+3. OBJECTS WITH NARRATIVE SIGNIFICANCE:
+- Symbolic items that enhance storytelling (half-empty coffee cup, open book, mysterious package)
+- Props that reveal character state (trembling hands holding cup, nervously arranged items)
+- Environmental objects that create mood (flickering candle, old photograph, handwritten note)
+
+4. COMPOSITION WITH EMOTIONAL IMPACT:
+- Spatial relationships that create tension (close proximity yet emotional distance)
+- Perspective elements (viewer's eye level, intimate framing, dramatic angles)
+- Visual flow directing attention to emotional focal points
+
+Return a JSON array with this enhanced structure:
 [
     {
         "element_type": "character|environment|object|atmosphere",
-        "description": "detailed description",
+        "description": "richly detailed description with specific visual and emotional elements",
         "importance": 0.9,
         "attributes": {
-            "specific_details": "any specific visual details",
-            "emotional_significance": "why this element matters to the scene"
+            "facial_expression": "precise emotional details (if character)",
+            "body_language": "specific posture and gesture details (if character)",
+            "spatial_position": "exact positioning and relationships",
+            "emotional_significance": "detailed explanation of narrative and emotional importance",
+            "artistic_potential": "how this element enhances E.H. Shepard-style illustration",
+            "texture_details": "specific material and surface characteristics"
         }
     }
 ]
 
-Focus on elements that would be visually compelling and narratively significant."""
+Prioritize elements that create emotional resonance and visual storytelling depth, perfect for detailed pencil illustration techniques."""
 
         try:
             messages = [
@@ -1142,7 +1165,7 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
     ) -> str:
         """Enhance scene description with comprehensive visual and artistic details."""
         enhancement_prompt = f"""
-        Transform this literary text into a detailed visual scene description for classic book illustration generation.
+        Transform this literary text into a richly detailed visual scene description for E.H. Shepard-style classic book illustration generation.
 
         Original text: "{original_text}"
         Visual elements: {[f"{elem.element_type}: {elem.description}" for elem in visual_elements]}
@@ -1150,33 +1173,42 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         Composition: {scene_composition.composition_type.value}
         Atmosphere: {getattr(scene_composition, 'atmosphere', 'natural')}
 
-        Create a comprehensive scene description that includes:
+        Create an exceptionally detailed scene description following this structure:
 
-        1. SETTING & ENVIRONMENT:
-        - Specific location details (interior/exterior, architectural elements, furniture, landscape)
-        - Background elements and spatial relationships
-        - Environmental atmosphere and mood
+        1. PRECISE SETTING & ENVIRONMENT:
+        - Exact location with architectural specifics (cozy coffee shop, intimate café interior, small friendly establishment)
+        - Detailed background elements (espresso machine, displayed pastries, counter details, café furniture, menu boards)
+        - Environmental textures and materials (wooden counter, ceramic cups, glass display cases, warm lighting fixtures)
+        - Spatial relationships and scene layout with depth
 
-        2. CHARACTER DETAILS:
-        - Precise positioning and postures of all characters
-        - Facial expressions with specific emotional details (wide eyes, frozen smile, etc.)
-        - Body language that conveys psychological state
-        - How characters relate spatially to each other and the environment
+        2. HIGHLY SPECIFIC CHARACTER DETAILS:
+        - Exact positioning and body posture (behind counter, leaning slightly forward, turned at angle)
+        - Precise facial expressions with emotional specificity (wide eyes, startled expression, frozen smile, stiff posture)
+        - Detailed body language conveying psychological state (recoiling slightly, tense shoulders, hands positioned defensively)
+        - Character interactions and spatial dynamics (customer unaware, barista's fearful gaze, intimate yet tense moment)
+        - Clothing and appearance details that enhance character portrayal
 
-        3. ARTISTIC COMPOSITION:
-        - Camera angle/viewpoint (close-up, medium shot, wide shot)
-        - What's in foreground vs background
-        - Visual flow and focal points
-        - How elements are arranged for maximum emotional impact
+        3. DETAILED ARTISTIC COMPOSITION:
+        - Specific viewpoint and framing (intimate scene, everyday moment interrupted by tension)
+        - Foreground elements (main characters, counter interaction) vs background elements (café atmosphere, environmental details)
+        - Visual flow guiding viewer attention to emotional focal points
+        - Compositional elements that enhance the narrative tension
 
-        4. EMOTIONAL ATMOSPHERE:
-        - Specific mood descriptors (tension, unease, mystery, etc.)
-        - How the environment reinforces the emotional state
-        - Psychological elements visible through visual cues
+        4. RICH EMOTIONAL ATMOSPHERE:
+        - Specific emotional descriptors (startled fear, subtle tension, everyday atmosphere with underlying unease)
+        - Environmental reinforcement of mood (warm café setting contrasting with psychological tension)
+        - Psychological elements visible through visual storytelling
+        - Emotional contrast between characters (casual customer vs frightened barista)
 
-        Example output: "Interior coffee shop scene with young man at ordering counter while female barista behind register displays shocked, fearful expression with widened eyes and artificial smile frozen on her face. The barista's body language suggests she's recoiling slightly from the customer. Coffee shop ambiance with espresso machine, displayed pastries, hanging menu boards. Captures moment of psychological tension - customer appears relaxed and normal, barista visibly disturbed and frightened."
+        5. ARTISTIC TECHNIQUE INTEGRATION:
+        - References to pencil sketch qualities (fine linework, gentle shading, crosshatching opportunities)
+        - E.H. Shepard-style elements (expressive faces, detailed environmental textures, whimsical yet realistic approach)
+        - Classic book illustration aesthetics (intimate scenes, character-focused compositions)
 
-        Return only the enhanced scene description with specific visual and emotional details.
+        EXAMPLE QUALITY LEVEL:
+        "Inside a cozy coffee shop interior, a young female barista stands behind the wooden counter, her body language betraying startled fear as she gazes at the customer she just served. Her smile is frozen and artificial, eyes wide with unmistakable alarm, shoulders tensed as she leans slightly back from the counter. The customer, a casual figure positioned to the side, remains unaware of her frightened expression, creating a moment of psychological tension within the intimate café setting. The scene captures everyday café details - espresso machine humming softly, ceramic cups arranged on shelves, pastries displayed in glass cases, small wooden tables with simple chairs - all rendered with the gentle, detailed approach characteristic of classic book illustrations. The atmosphere balances warmth and comfort with subtle underlying unease, perfect for expressive pencil work with fine crosshatching and delicate shading."
+
+        Generate a description of this caliber with equivalent detail density and emotional specificity.
         """
 
         try:
@@ -1203,67 +1235,114 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         visual_elements: List[VisualElement],
         scene_composition: SceneComposition
     ) -> str:
-        """Create a detailed fallback description when AI enhancement fails."""
+        """Create an exceptionally detailed fallback description when AI enhancement fails."""
         parts = []
 
-        # Enhanced fallback for E.H. Shepard style illustration
-        # Start with a rich scene description
-        parts.append(f"Classic book illustration showing: {original_text}")
-
-        # Determine scene type and setting
+        # Enhanced fallback with rich environmental and character specificity
         character_elements = [elem for elem in visual_elements if elem.element_type == "character"]
         environment_elements = [elem for elem in visual_elements if elem.element_type == "environment"]
         atmosphere_elements = [elem for elem in visual_elements if elem.element_type == "atmosphere"]
 
-        # Build detailed description
+        # DETAILED ENVIRONMENTAL SETTING
         if environment_elements:
             setting = environment_elements[0].description
-            parts.append(f"Scene set in {setting}")
-        else:
-            # Infer setting from text
-            if "house" in original_text.lower() or "room" in original_text.lower():
-                parts.append("Interior domestic setting with period details")
-            elif "door" in original_text.lower() or "doorway" in original_text.lower():
-                parts.append("Architectural framing with doorway as focal point")
+            # Enhance with specific architectural and atmospheric details
+            if "coffee" in setting.lower() or "café" in setting.lower() or "shop" in setting.lower():
+                parts.append("Interior cozy coffee shop scene with wooden counter, ceramic cup displays, espresso machine details, hanging menu boards, small café tables, warm ambient lighting creating intimate atmosphere")
+            elif "house" in setting.lower() or "home" in setting.lower() or "room" in setting.lower():
+                parts.append("Interior domestic setting with period architectural details, wooden furniture, textured wallpaper, window light casting gentle shadows, cozy furnishings creating lived-in atmosphere")
+            elif "door" in setting.lower() or "entrance" in setting.lower():
+                parts.append("Architectural framing with detailed doorway, wooden panels, brass hardware, threshold details, creating sense of transition and anticipation")
             else:
-                parts.append("Detailed environmental setting")
+                parts.append(f"Richly detailed {setting} with specific environmental textures, atmospheric lighting, and period-appropriate furnishings")
+        else:
+            # Infer detailed setting from text context
+            if any(word in original_text.lower() for word in ["coffee", "café", "barista", "counter", "order"]):
+                parts.append("Intimate coffee shop interior with wooden counter details, ceramic coffee cups arranged on shelves, espresso machine with steam, display case with pastries, small wooden tables, warm lighting fixtures creating cozy café atmosphere")
+            elif any(word in original_text.lower() for word in ["house", "room", "home", "door", "window"]):
+                parts.append("Interior domestic setting with detailed period furnishings, wooden elements, textured fabrics, natural lighting from windows, architectural details creating warm, lived-in environment")
+            else:
+                parts.append("Detailed environmental setting with rich textural elements, atmospheric lighting, and period-specific architectural details")
 
+        # SPECIFIC CHARACTER DETAILS WITH EMOTIONAL EXPRESSIONS
         if character_elements:
             char_descriptions = []
             for char in character_elements:
-                # Add emotional context from attributes if available
-                emotion_details = char.attributes.get('emotional_significance', '') if hasattr(char, 'attributes') and char.attributes else ''
-                if emotion_details:
-                    char_descriptions.append(f"{char.description} ({emotion_details})")
+                base_desc = char.description
+                # Enhanced emotional and physical details
+                if hasattr(char, 'attributes') and char.attributes:
+                    facial_expr = char.attributes.get('facial_expression', '')
+                    body_lang = char.attributes.get('body_language', '')
+                    emotion_sig = char.attributes.get('emotional_significance', '')
+
+                    enhanced_desc = base_desc
+                    if facial_expr:
+                        enhanced_desc += f" with {facial_expr}"
+                    if body_lang:
+                        enhanced_desc += f", {body_lang}"
+                    if emotion_sig:
+                        enhanced_desc += f" conveying {emotion_sig}"
+                    char_descriptions.append(enhanced_desc)
                 else:
-                    char_descriptions.append(char.description)
+                    # Add inferred emotional details based on text context
+                    if any(word in original_text.lower() for word in ["fear", "afraid", "startled", "shocked"]):
+                        char_descriptions.append(f"{base_desc} showing startled expression with wide eyes, tense posture, conveying fear and unease")
+                    elif any(word in original_text.lower() for word in ["smile", "happy", "joy", "pleased"]):
+                        char_descriptions.append(f"{base_desc} with gentle smile, relaxed posture, expressing warmth and contentment")
+                    elif any(word in original_text.lower() for word in ["curious", "wonder", "watching", "observing"]):
+                        char_descriptions.append(f"{base_desc} with attentive expression, slightly tilted head, posture suggesting curiosity and engagement")
+                    else:
+                        char_descriptions.append(f"{base_desc} with expressive facial features and meaningful body language")
+
             parts.append(f"featuring {', '.join(char_descriptions)}")
         else:
-            # Infer character details from text
-            if "lukas" in original_text.lower():
-                parts.append("featuring male character Lukas with expressive face and thoughtful pose")
+            # Infer character presence and details from text
+            if "barista" in original_text.lower():
+                parts.append("featuring female barista behind counter with detailed facial expression showing mix of professional service and underlying emotional tension, positioned with careful body language")
+            elif "customer" in original_text.lower():
+                parts.append("featuring casual customer with relaxed posture and unaware expression, creating contrast with other characters' emotional states")
+            elif "lukas" in original_text.lower():
+                parts.append("featuring male character Lukas with thoughtful, expressive face, detailed posture suggesting contemplation or emotional engagement")
             else:
-                parts.append("featuring character with detailed facial expression and body language")
+                parts.append("featuring character with highly detailed facial expressions, specific body language, and emotionally resonant positioning")
 
-        # Add composition details
-        parts.append(f"{scene_composition.composition_type.value} composition focusing on {scene_composition.focal_point}")
+        # ENHANCED COMPOSITION AND ARTISTIC DETAILS
+        comp_desc = f"{scene_composition.composition_type.value} composition"
+        if scene_composition.composition_type.value == "intimate":
+            comp_desc += " creating personal, close connection between viewer and subjects"
+        elif scene_composition.composition_type.value == "medium_shot":
+            comp_desc += " balancing character details with environmental context"
+        elif scene_composition.composition_type.value == "close_up":
+            comp_desc += " focusing intensely on facial expressions and emotional details"
 
-        # Add atmospheric details
+        comp_desc += f" with visual focus on {scene_composition.focal_point}"
+        parts.append(comp_desc)
+
+        # RICH ATMOSPHERIC DETAILS
         if atmosphere_elements:
-            parts.append(f"with {atmosphere_elements[0].description}")
-        elif hasattr(scene_composition, 'atmosphere') and scene_composition.atmosphere:
-            parts.append(f"creating {scene_composition.atmosphere} atmosphere")
-        else:
-            # Infer atmosphere from emotional tones in the text
-            if "mysterious" in original_text.lower() or "mystery" in original_text.lower():
-                parts.append("creating mysterious, atmospheric mood")
-            elif "curious" in original_text.lower() or "watching" in original_text.lower():
-                parts.append("creating sense of anticipation and watchful atmosphere")
+            atmo_desc = atmosphere_elements[0].description
+            # Enhance atmospheric description
+            if "mysterious" in atmo_desc.lower():
+                parts.append("creating mysterious atmosphere with strategic shadows, subtle environmental details, and sense of hidden narrative tension")
+            elif "warm" in atmo_desc.lower() or "cozy" in atmo_desc.lower():
+                parts.append("creating warm, inviting atmosphere with soft lighting, comfortable environmental details, and intimate mood")
             else:
-                parts.append("creating emotionally resonant atmosphere")
+                parts.append(f"creating {atmo_desc} with detailed environmental mood, lighting nuances, and emotional resonance")
+        elif hasattr(scene_composition, 'atmosphere') and scene_composition.atmosphere:
+            parts.append(f"creating {scene_composition.atmosphere} atmosphere with rich environmental details and emotional depth")
+        else:
+            # Enhanced atmospheric inference
+            if any(word in original_text.lower() for word in ["fear", "tension", "unease", "worried"]):
+                parts.append("creating subtle tension atmosphere - everyday setting with underlying psychological unease, perfect for expressive pencil illustration")
+            elif any(word in original_text.lower() for word in ["mystery", "curious", "watching", "strange"]):
+                parts.append("creating mysterious, anticipatory atmosphere with careful environmental details suggesting hidden narrative elements")
+            elif any(word in original_text.lower() for word in ["warm", "cozy", "comfortable", "friendly"]):
+                parts.append("creating warm, intimate atmosphere with detailed environmental comfort and gentle emotional resonance")
+            else:
+                parts.append("creating emotionally rich atmosphere with environmental details supporting the narrative mood")
 
-        # Add E.H. Shepard specific visual elements
-        parts.append("Delicate pencil work with expressive linework, gentle shading, and classic book illustration composition")
+        # E.H. SHEPARD SPECIFIC ARTISTIC TECHNIQUE INTEGRATION
+        parts.append("Rendered in classic E.H. Shepard pencil illustration style with delicate crosshatching, expressive character faces, detailed environmental textures, soft graphite shading, and whimsical yet emotionally resonant artistic approach perfect for classic book illustration")
 
         return ". ".join(parts)
 
@@ -1375,53 +1454,55 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             }
         }
 
-        # Provider-specific enhancements with artistic detail
+        # Provider-specific enhancements with rich E.H. Shepard artistic detail integration
         if provider == ImageProvider.DALLE:
             enhanced_parts = []
 
-            # Add artistic style prefix based on configuration
-            if "pencil sketch" in prompt.lower() or "shepard" in prompt.lower():
-                style_prefix = "A pencil sketch illustration in the style of E.H. Shepard showing"
+            # Check for E.H. Shepard style configuration
+            if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):
+                style_prefix = "A black-and-white pencil sketch in the style of E.H. Shepard."
                 enhanced_parts.append(style_prefix)
                 enhanced_parts.append(prompt)
                 enhanced_parts.extend([
-                    "Delicate line work, expressive faces, gentle shading, whimsical yet unsettling atmosphere",
-                    "Classic book illustration style with fine crosshatching and soft pencil textures"
+                    "The atmosphere is intimate and everyday, with charming sketchy detail rendered in fine pencil linework.",
+                    "Expressive and whimsical style with delicate crosshatching, gentle shading, capturing subtle emotional tension in the scene.",
+                    "Classic children's book illustration aesthetic with detailed environmental textures and characterful expression."
                 ])
             else:
                 enhanced_parts = [f"A masterfully crafted illustration: {prompt}"]
-                enhanced_parts.append("Professional illustration quality")
+                enhanced_parts.append("Professional artistic illustration with detailed environmental and emotional elements")
 
         elif provider == ImageProvider.IMAGEN4:
             enhanced_parts = []
 
-            if "pencil sketch" in prompt.lower() or "shepard" in prompt.lower():
-                style_prefix = "E.H. Shepard style pencil drawing:"
+            if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):
+                style_prefix = "Pencil illustration, drawn in the expressive and whimsical style of E.H. Shepard."
                 enhanced_parts.append(style_prefix)
                 enhanced_parts.append(prompt)
                 enhanced_parts.extend([
-                    "Detailed linework showing environmental elements and character interactions",
-                    "Soft graphite shading, crosshatching techniques, illustration book quality",
-                    "Classic British illustration aesthetic with gentle, flowing lines"
+                    "The scene should feel like an ordinary moment with charming sketchy detail — rendered in fine pencil linework.",
+                    "Classic book illustration with detailed crosshatching, soft graphite shading, expressive character faces.",
+                    "Traditional British illustration aesthetic balancing whimsy with emotional depth and environmental detail."
                 ])
             else:
-                enhanced_parts = [f"Cinematic artistic scene: {prompt}"]
-                enhanced_parts.append("Professional artistic rendering")
+                enhanced_parts = [f"Cinematic artistic scene with detailed environmental and emotional elements: {prompt}"]
+                enhanced_parts.append("Professional artistic rendering with rich atmospheric detail")
 
         elif provider == ImageProvider.FLUX:
             enhanced_parts = []
 
-            if "pencil sketch" in prompt.lower() or "shepard" in prompt.lower():
-                style_prefix = "Detailed pencil sketch in E.H. Shepard's illustration style:"
+            if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):
+                style_prefix = "A natural pencil sketch illustration in the classic E.H. Shepard style."
                 enhanced_parts.append(style_prefix)
                 enhanced_parts.append(prompt)
                 enhanced_parts.extend([
-                    "Fine line art with crosshatching, soft graphite shading, expressive character work",
-                    "Classic children's book illustration aesthetic, delicate linework, emotive facial features"
+                    "The sketch should balance whimsy and emotional depth, with fine crosshatching, detailed environmental textures, and expressive, characterful linework.",
+                    "Classic children's book illustration technique with delicate pencil work, gentle shading, and intimate scene composition.",
+                    "Traditional book illustration aesthetic with detailed character expressions and rich environmental storytelling."
                 ])
             else:
-                enhanced_parts = [f"Masterful artistic interpretation: {prompt}"]
-                enhanced_parts.append("Superior artistic technique")
+                enhanced_parts = [f"Masterful artistic interpretation with detailed environmental and character elements: {prompt}"]
+                enhanced_parts.append("Superior artistic technique with rich visual storytelling")
 
         else:
             enhanced_parts = [prompt]
