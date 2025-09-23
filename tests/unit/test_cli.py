@@ -499,6 +499,71 @@ class TestCLICommands:
             main()
             mock_cli.assert_called_once()
 
+    @patch('illustrator.cli.uvicorn.run')
+    def test_web_server_command_api_only(self, mock_uvicorn):
+        """Test `web-server` command starts API-only app with options and API key env."""
+        from illustrator.cli import web_server
+        from click.testing import CliRunner
+
+        runner = CliRunner()
+        with patch('illustrator.cli.create_api_only_app') as mock_factory, \
+             patch('illustrator.cli.console'):
+            mock_factory.return_value = MagicMock()
+            result = runner.invoke(web_server, ['--host', '0.0.0.0', '--port', '9000', '--api-key', 'k123', '--reload'])
+
+        assert result.exit_code == 0
+        # Verify uvicorn called with parameters
+        mock_uvicorn.assert_called()
+        args, kwargs = mock_uvicorn.call_args
+        assert kwargs['host'] == '0.0.0.0'
+        assert kwargs['port'] == 9000
+        assert kwargs['reload'] is True
+
+    @patch('illustrator.cli.uvicorn.run')
+    def test_web_client_command(self, mock_uvicorn):
+        """Test `web-client` command starts web client and sets env vars."""
+        from illustrator.cli import web_client
+        from click.testing import CliRunner
+
+        runner = CliRunner()
+        with patch('illustrator.cli.create_web_client_app') as mock_factory, \
+             patch('illustrator.cli.requests.get') as mock_get, \
+             patch('illustrator.cli.console'), \
+             patch('illustrator.cli.threading.Thread'):
+            mock_factory.return_value = MagicMock()
+            mock_get.return_value.status_code = 200
+            result = runner.invoke(web_client, [
+                '--server-url', 'http://127.0.0.1:8000',
+                '--api-key', 'abc123',
+                '--host', '127.0.0.1',
+                '--port', '3001',
+                '--open-browser'
+            ])
+
+        assert result.exit_code == 0
+        mock_uvicorn.assert_called()
+        args, kwargs = mock_uvicorn.call_args
+        assert kwargs['host'] == '127.0.0.1'
+        assert kwargs['port'] == 3001
+
+    @patch('illustrator.cli.requests.get')
+    def test_web_client_connection_warning_and_abort(self, mock_get):
+        """If connection fails and user declines to continue, command exits with error code 1."""
+        from illustrator.cli import web_client
+        from click.testing import CliRunner
+
+        mock_get.side_effect = Exception('connect error')
+        runner = CliRunner()
+        with patch('illustrator.cli.create_web_client_app') as mock_factory, \
+             patch('illustrator.cli.uvicorn.run'), \
+             patch('illustrator.cli.console'), \
+             patch('illustrator.cli.Confirm.ask', return_value=False):
+            mock_factory.return_value = MagicMock()
+            result = runner.invoke(web_client, ['--server-url', 'http://127.0.0.1:8000'])
+
+        # The command should exit with code 1 because we sys.exit(1)
+        assert result.exit_code == 1
+
 
 class TestCLIHelperFunctions:
     """Test CLI helper functions and edge cases."""

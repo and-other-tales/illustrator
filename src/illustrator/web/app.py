@@ -9,7 +9,7 @@ import uvicorn
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from rich.console import Console
@@ -1511,6 +1511,295 @@ async def download_exported_file(manuscript_id: str, filename: str):
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     return app
+
+
+def create_api_only_app() -> FastAPI:
+    """Create API-only FastAPI application (no web interface)."""
+    from fastapi.openapi.docs import get_swagger_ui_html
+    from fastapi.openapi.utils import get_openapi
+
+    # Create a new FastAPI app for API only
+    api_app = FastAPI(
+        title="Manuscript Illustrator API",
+        description="AI-powered manuscript analysis and illustration generation API",
+        version="1.0.0",
+    )
+
+    # Add CORS middleware
+    api_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Add API key authentication middleware if configured
+    api_key = os.getenv('ILLUSTRATOR_API_KEY')
+    if api_key:
+        @api_app.middleware("http")
+        async def authenticate_api_key(request: Request, call_next):
+            # Skip authentication for health check and docs
+            if request.url.path in ["/health", "/docs", "/openapi.json"]:
+                response = await call_next(request)
+                return response
+
+            # Check for API key in header
+            provided_key = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").replace("Bearer ", "")
+
+            if not provided_key or provided_key != api_key:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Invalid or missing API key"}
+                )
+
+            response = await call_next(request)
+            return response
+
+    # Include API routes only
+    api_app.include_router(manuscripts.router, prefix="/api/manuscripts", tags=["manuscripts"])
+    api_app.include_router(chapters.router, prefix="/api/chapters", tags=["chapters"])
+
+    # Add processing endpoints
+    api_app.get("/api/process/status/{manuscript_id}")(get_processing_status)
+    api_app.post("/api/process")(start_processing)
+    api_app.post("/api/process/resume/{session_id}")(resume_processing_from_checkpoint)
+    api_app.get("/api/process/resumable")(get_resumable_sessions)
+    api_app.post("/api/process/{session_id}/pause")(pause_processing)
+    api_app.post("/api/process/{session_id}/resume")(resume_processing)
+
+    # Health check
+    @api_app.get("/health")
+    async def health_check():
+        return {"status": "healthy", "service": "manuscript-illustrator-api", "mode": "api-only"}
+
+    return api_app
+
+
+def create_web_client_app() -> FastAPI:
+    """Create web client FastAPI application (connects to remote API)."""
+    import httpx
+    from fastapi.responses import HTMLResponse, RedirectResponse
+
+    # Create a new FastAPI app for web client
+    web_app = FastAPI(
+        title="Manuscript Illustrator Web Client",
+        description="Web interface for Manuscript Illustrator (connects to remote API)",
+        version="1.0.0",
+    )
+
+    # Add CORS middleware
+    web_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Get remote API configuration
+    remote_api_url = os.getenv('ILLUSTRATOR_REMOTE_API_URL', 'http://127.0.0.1:8000')
+    api_key = os.getenv('ILLUSTRATOR_API_KEY')
+
+    # Mount static files (same as main app)
+    web_app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    # Templates
+    web_templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+    # Create HTTP client for API requests
+    async def get_api_client():
+        headers = {}
+        if api_key:
+            headers["X-API-Key"] = api_key
+        return httpx.AsyncClient(base_url=remote_api_url, headers=headers, timeout=30.0)
+
+    # Proxy API requests to remote server
+    @web_app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+    async def proxy_api_request(request: Request, path: str):
+        async with await get_api_client() as client:
+            try:
+                # Forward the request to the remote API
+                url = f"/api/{path}"
+                query_params = str(request.query_params)
+                if query_params:
+                    url += f"?{query_params}"
+
+                # Get request body if present
+                body = None
+                if request.method in ["POST", "PUT", "PATCH"]:
+                    body = await request.body()
+
+                # Make the request to remote API
+                response = await client.request(
+                    method=request.method,
+                    url=url,
+                    content=body,
+                    headers={k: v for k, v in request.headers.items()
+                            if k.lower() not in ['host', 'content-length']},
+                )
+
+                # Return the response
+                return JSONResponse(
+                    content=response.json() if response.headers.get('content-type', '').startswith('application/json') else response.text,
+                    status_code=response.status_code,
+                    headers=dict(response.headers)
+                )
+            except httpx.RequestError as e:
+                return JSONResponse(
+                    status_code=503,
+                    content={"detail": f"Remote API unavailable: {str(e)}"}
+                )
+            except Exception as e:
+                return JSONResponse(
+                    status_code=500,
+                    content={"detail": f"Proxy error: {str(e)}"}
+                )
+
+    # WebSocket proxy for real-time updates
+    @web_app.websocket("/ws/processing/{session_id}")
+    async def websocket_proxy(websocket: WebSocket, session_id: str):
+        await websocket.accept()
+
+        try:
+            # Try to connect to remote WebSocket
+            import websockets
+            remote_ws_url = remote_api_url.replace('http://', 'ws://').replace('https://', 'wss://')
+            remote_ws_url += f"/ws/processing/{session_id}"
+
+            async with websockets.connect(remote_ws_url) as remote_ws:
+                # Forward messages between client and remote server
+                async def forward_from_remote():
+                    try:
+                        async for message in remote_ws:
+                            await websocket.send_text(message)
+                    except websockets.exceptions.ConnectionClosed:
+                        pass
+
+                async def forward_to_remote():
+                    try:
+                        while True:
+                            message = await websocket.receive_text()
+                            await remote_ws.send(message)
+                    except Exception:
+                        pass
+
+                # Run both forwarding tasks concurrently
+                import asyncio
+                await asyncio.gather(
+                    forward_from_remote(),
+                    forward_to_remote(),
+                    return_exceptions=True
+                )
+        except Exception as e:
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "error": f"WebSocket connection to remote server failed: {str(e)}"
+            }))
+        finally:
+            await websocket.close()
+
+    # Serve HTML pages (same as main app)
+    @web_app.get("/", response_class=HTMLResponse)
+    async def dashboard(request: Request):
+        return web_templates.TemplateResponse(
+            request,
+            "index.html",
+            {"title": "Dashboard", "remote_mode": True, "remote_api_url": remote_api_url}
+        )
+
+    @web_app.get("/manuscript/new", response_class=HTMLResponse)
+    async def new_manuscript(request: Request):
+        return web_templates.TemplateResponse(
+            request,
+            "manuscript_form.html",
+            {"title": "New Manuscript", "manuscript": None, "remote_mode": True}
+        )
+
+    @web_app.get("/manuscript/{manuscript_id}", response_class=HTMLResponse)
+    async def manuscript_detail(request: Request, manuscript_id: str):
+        return web_templates.TemplateResponse(
+            request,
+            "manuscript_detail.html",
+            {"title": "Manuscript", "manuscript_id": manuscript_id, "remote_mode": True}
+        )
+
+    @web_app.get("/manuscript/{manuscript_id}/edit", response_class=HTMLResponse)
+    async def edit_manuscript(request: Request, manuscript_id: str):
+        return web_templates.TemplateResponse(
+            request,
+            "manuscript_form.html",
+            {"title": "Edit Manuscript", "manuscript_id": manuscript_id, "remote_mode": True}
+        )
+
+    @web_app.get("/manuscript/{manuscript_id}/chapter/new", response_class=HTMLResponse)
+    async def new_chapter(request: Request, manuscript_id: str):
+        return web_templates.TemplateResponse(
+            request,
+            "chapter_form.html",
+            {"title": "New Chapter", "manuscript_id": manuscript_id, "chapter": None, "remote_mode": True}
+        )
+
+    @web_app.get("/chapter/{chapter_id}/edit", response_class=HTMLResponse)
+    async def edit_chapter(request: Request, chapter_id: str):
+        return web_templates.TemplateResponse(
+            request,
+            "chapter_form.html",
+            {"title": "Edit Chapter", "chapter_id": chapter_id, "remote_mode": True}
+        )
+
+    @web_app.get("/manuscript/{manuscript_id}/style", response_class=HTMLResponse)
+    async def style_config(request: Request, manuscript_id: str):
+        return web_templates.TemplateResponse(
+            request,
+            "style_config.html",
+            {"title": "Style Configuration", "manuscript_id": manuscript_id, "remote_mode": True}
+        )
+
+    @web_app.get("/manuscript/{manuscript_id}/process", response_class=HTMLResponse)
+    async def processing_page(request: Request, manuscript_id: str):
+        return web_templates.TemplateResponse(
+            request,
+            "processing.html",
+            {"title": "Processing", "manuscript_id": manuscript_id, "remote_mode": True}
+        )
+
+    @web_app.get("/chapter/{chapter_id}/headers", response_class=HTMLResponse)
+    async def chapter_headers_page(request: Request, chapter_id: str):
+        return web_templates.TemplateResponse(
+            request,
+            "chapter_headers.html",
+            {"title": "Chapter Headers", "chapter_id": chapter_id, "remote_mode": True}
+        )
+
+    @web_app.get("/manuscript/{manuscript_id}/gallery", response_class=HTMLResponse)
+    async def gallery_page(request: Request, manuscript_id: str):
+        return web_templates.TemplateResponse(
+            request,
+            "gallery.html",
+            {"title": "Gallery", "manuscript_id": manuscript_id, "remote_mode": True}
+        )
+
+    # Health check
+    @web_app.get("/health")
+    async def health_check():
+        # Also check remote API health
+        try:
+            async with await get_api_client() as client:
+                response = await client.get("/health")
+                remote_healthy = response.status_code == 200
+        except Exception:
+            remote_healthy = False
+
+        return {
+            "status": "healthy" if remote_healthy else "degraded",
+            "service": "manuscript-illustrator-web-client",
+            "mode": "web-client",
+            "remote_api_url": remote_api_url,
+            "remote_api_healthy": remote_healthy
+        }
+
+    return web_app
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False):

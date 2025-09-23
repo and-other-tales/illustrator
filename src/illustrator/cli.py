@@ -914,7 +914,7 @@ def analyze(interactive: bool, config_file: str | None, style_config: str | None
     help='Automatically open browser (default: True)'
 )
 def start(host: str, port: int, reload: bool, open_browser: bool):
-    """Start the web interface."""
+    """Start the full web interface with both UI and API."""
     try:
         import webbrowser
         import threading
@@ -953,6 +953,171 @@ def start(host: str, port: int, reload: bool, open_browser: bool):
         console.print("\n[yellow]🛑 Web server stopped.[/yellow]")
     except Exception as e:
         console.print(f"[red]❌ Failed to start web server: {e}[/red]")
+        sys.exit(1)
+
+
+@cli.command()
+@click.option(
+    '--host',
+    default='0.0.0.0',
+    help='Host to bind to (default: 0.0.0.0 for external access)'
+)
+@click.option(
+    '--port',
+    default=8000,
+    type=int,
+    help='Port to bind to (default: 8000)'
+)
+@click.option(
+    '--api-key',
+    help='API key for authentication (optional)'
+)
+@click.option(
+    '--reload',
+    is_flag=True,
+    help='Enable auto-reload for development'
+)
+def api_server(host: str, port: int, api_key: str, reload: bool):
+    """Start API server only (no web interface)."""
+    try:
+        from illustrator.web.app import create_api_only_app
+        import uvicorn
+
+        console.print(Panel.fit(
+            f"[bold green]🚀 Starting API Server (No Web UI)[/bold green]\n\n"
+            f"[cyan]• Server: http://{host}:{port}[/cyan]\n"
+            f"[cyan]• Mode: API Only[/cyan]\n"
+            f"[cyan]• Authentication: {'Enabled' if api_key else 'Disabled'}[/cyan]\n"
+            f"[cyan]• Auto-reload: {'Enabled' if reload else 'Disabled'}[/cyan]\n\n"
+            f"[yellow]Access API docs at: http://{host}:{port}/docs[/yellow]",
+            title="API Server",
+            border_style="green"
+        ))
+
+        # Set environment variables for configuration
+        if api_key:
+            import os
+            os.environ['ILLUSTRATOR_API_KEY'] = api_key
+
+        # Create API-only app
+        app = create_api_only_app()
+
+        # Start the server
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            reload=reload,
+            log_level="info"
+        )
+
+    except ImportError:
+        console.print("[red]❌ Web dependencies not installed. Please install with:[/red]")
+        console.print("[yellow]pip install 'illustrator[web]'[/yellow]")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]🛑 API server stopped.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]❌ Failed to start API server: {e}[/red]")
+        sys.exit(1)
+
+
+@cli.command()
+@click.option(
+    '--server-url',
+    default='http://127.0.0.1:8000',
+    help='Remote server URL (default: http://127.0.0.1:8000)'
+)
+@click.option(
+    '--api-key',
+    help='API key for remote server authentication'
+)
+@click.option(
+    '--host',
+    default='127.0.0.1',
+    help='Local host to bind web interface to (default: 127.0.0.1)'
+)
+@click.option(
+    '--port',
+    default=3000,
+    type=int,
+    help='Local port for web interface (default: 3000)'
+)
+@click.option(
+    '--open-browser',
+    is_flag=True,
+    default=True,
+    help='Automatically open browser (default: True)'
+)
+def web_client(server_url: str, api_key: str, host: str, port: int, open_browser: bool):
+    """Start web interface only (connects to remote API server)."""
+    try:
+        from illustrator.web.app import create_web_client_app
+        import uvicorn
+        import webbrowser
+        import threading
+        import time
+
+        console.print(Panel.fit(
+            f"[bold blue]🌐 Starting Web Client[/bold blue]\n\n"
+            f"[cyan]• Web Interface: http://{host}:{port}[/cyan]\n"
+            f"[cyan]• Remote API: {server_url}[/cyan]\n"
+            f"[cyan]• Authentication: {'Enabled' if api_key else 'Disabled'}[/cyan]\n\n"
+            f"[yellow]Testing connection to remote server...[/yellow]",
+            title="Web Client",
+            border_style="blue"
+        ))
+
+        # Test connection to remote server
+        try:
+            import requests
+            response = requests.get(f"{server_url}/health", timeout=5)
+            if response.status_code == 200:
+                console.print("[green]✅ Successfully connected to remote server[/green]")
+            else:
+                console.print(f"[yellow]⚠️ Remote server responded with status {response.status_code}[/yellow]")
+        except Exception as e:
+            console.print(f"[red]❌ Failed to connect to remote server: {e}[/red]")
+            if not Confirm.ask("Continue anyway?", default=False):
+                sys.exit(1)
+
+        # Set environment variables for configuration
+        import os
+        os.environ['ILLUSTRATOR_REMOTE_API_URL'] = server_url
+        if api_key:
+            os.environ['ILLUSTRATOR_API_KEY'] = api_key
+
+        # Open browser in a separate thread after a short delay
+        if open_browser:
+            def open_browser_delayed():
+                time.sleep(2)  # Give server time to start
+                try:
+                    webbrowser.open(f"http://{host}:{port}")
+                    console.print(f"[green]🌐 Opened browser at http://{host}:{port}[/green]")
+                except Exception:
+                    console.print(f"[yellow]Could not open browser automatically. Please visit: http://{host}:{port}[/yellow]")
+
+            threading.Thread(target=open_browser_delayed, daemon=True).start()
+
+        # Create web client app
+        app = create_web_client_app()
+
+        # Start the server
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            log_level="info"
+        )
+
+    except ImportError as e:
+        console.print("[red]❌ Required dependencies not installed. Please install with:[/red]")
+        console.print("[yellow]pip install 'illustrator[web]' requests[/yellow]")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]🛑 Web client stopped.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]❌ Failed to start web client: {e}[/red]")
         sys.exit(1)
 
 

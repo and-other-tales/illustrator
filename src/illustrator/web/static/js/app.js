@@ -7,7 +7,9 @@ window.illustratorApp = {
     apiKeys: {},
     currentTheme: 'light',
     websocket: null,
-    processing: false
+    processing: false,
+    remoteMode: false,
+    remoteApiUrl: null
 };
 
 // Initialize application when DOM is ready
@@ -16,6 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeApp() {
+    // Check if running in remote mode
+    checkRemoteMode();
+
     // Load saved preferences
     loadUserPreferences();
 
@@ -26,6 +31,47 @@ function initializeApp() {
     initializeBootstrapComponents();
 
     console.log('Manuscript Illustrator Web Interface initialized');
+}
+
+function checkRemoteMode() {
+    // Check if remote mode is configured via meta tag or global variable
+    const remoteMetaTag = document.querySelector('meta[name="remote-mode"]');
+    const remoteApiUrlMetaTag = document.querySelector('meta[name="remote-api-url"]');
+
+    if (remoteMetaTag) {
+        window.illustratorApp.remoteMode = remoteMetaTag.content === 'true';
+    }
+
+    if (remoteApiUrlMetaTag) {
+        window.illustratorApp.remoteApiUrl = remoteApiUrlMetaTag.content;
+    }
+
+    // Display remote mode indicator if active
+    if (window.illustratorApp.remoteMode) {
+        displayRemoteModeIndicator();
+    }
+}
+
+function displayRemoteModeIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'remoteModeIndicator';
+    indicator.className = 'alert alert-info alert-dismissible fade show position-fixed';
+    indicator.style.cssText = 'top: 10px; right: 10px; z-index: 9999; max-width: 350px;';
+    indicator.innerHTML = `
+        <i class="bi bi-cloud-arrow-up me-2"></i>
+        <strong>Remote Mode:</strong> Connected to ${window.illustratorApp.remoteApiUrl || 'remote server'}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(indicator);
+
+    // Auto-hide after 8 seconds
+    setTimeout(() => {
+        const alert = document.getElementById('remoteModeIndicator');
+        if (alert) {
+            const bootstrapAlert = new bootstrap.Alert(alert);
+            bootstrapAlert.close();
+        }
+    }, 8000);
 }
 
 function loadUserPreferences() {
