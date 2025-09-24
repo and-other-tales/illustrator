@@ -18,6 +18,12 @@ from illustrator.web.models.web_models import (
     SuccessResponse,
     ErrorResponse
 )
+from illustrator.services.illustration_service import IllustrationService
+
+# Lazy-import friendly placeholders for patchability in tests
+EmotionalAnalyzer = None  # type: ignore
+LiterarySceneDetector = None  # type: ignore
+NarrativeAnalyzer = None  # type: ignore
 
 router = APIRouter()
 
@@ -129,8 +135,6 @@ def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
     """Count generated images for a specific chapter."""
     try:
         # Try database approach first
-        from illustrator.services.illustration_service import IllustrationService
-
         illustration_service = IllustrationService()
         try:
             illustrations = illustration_service.get_illustrations_by_manuscript(manuscript_id)
@@ -143,7 +147,7 @@ def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
     except Exception:
         # Fallback to filesystem counting
         try:
-            generated_images_dir = Path("illustrator_output") / "generated_images"
+            generated_images_dir = Path("illustrator_output/generated_images")
             if not generated_images_dir.exists():
                 return 0
 
@@ -543,9 +547,6 @@ async def analyze_chapter(chapter_id: str) -> dict:
         # Initialize the analysis systems
         import os
         from langchain.chat_models import init_chat_model
-        from illustrator.analysis import EmotionalAnalyzer
-        from illustrator.scene_detection import LiterarySceneDetector
-        from illustrator.narrative_analysis import NarrativeAnalyzer
         from generate_scene_illustrations import ComprehensiveSceneAnalyzer
 
         # Check for required API key
@@ -563,9 +564,18 @@ async def analyze_chapter(chapter_id: str) -> dict:
             api_key=anthropic_api_key
         )
 
-        emotional_analyzer = EmotionalAnalyzer(llm)
-        scene_detector = LiterarySceneDetector(llm)
-        narrative_analyzer = NarrativeAnalyzer(llm)
+        # Resolve analyzers (use patched module-level names if set; otherwise import lazily)
+        from illustrator import analysis as _analysis_mod
+        from illustrator import scene_detection as _scene_mod
+        from illustrator import narrative_analysis as _narrative_mod
+
+        EA = EmotionalAnalyzer or getattr(_analysis_mod, 'EmotionalAnalyzer')
+        SD = LiterarySceneDetector or getattr(_scene_mod, 'LiterarySceneDetector')
+        NA = NarrativeAnalyzer or getattr(_narrative_mod, 'NarrativeAnalyzer')
+
+        emotional_analyzer = EA(llm)
+        scene_detector = SD(llm)
+        narrative_analyzer = NA(llm)
         comprehensive_analyzer = ComprehensiveSceneAnalyzer()
 
         # Perform comprehensive analysis

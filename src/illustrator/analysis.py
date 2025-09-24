@@ -465,7 +465,7 @@ class EmotionalAnalyzer:
                     moment_size = moment.end_position - moment.start_position
                     overlap_ratio = overlap_size / max(1, moment_size)
 
-                    if overlap_ratio > 0.5:
+                    if overlap_ratio >= 0.5:
                         overlaps = True
                         break
 
@@ -537,22 +537,24 @@ Consider factors like:
 
 Return ONLY a decimal number between 0.0 and 1.0."""
 
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"Text to analyze:\n\n{segment.text}")
+        ]
+
+        # First try the LLM call itself; on transport/LLM failures, fall back
         try:
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=f"Text to analyze:\n\n{segment.text}")
-            ]
-
             response = await self.llm.ainvoke(messages)
+        except Exception as e:
+            logger.error(f"LLM intensity scoring failed: {e}")
+            return self._calculate_pattern_score(segment.text)
 
-            # Extract numerical score
-            score_text = response.content.strip()
+        # If the LLM responded, handle both plain string and object with .content
+        try:
+            score_text = response.strip() if isinstance(response, str) else response.content.strip()
             score = float(score_text)
-
             return max(0.0, min(1.0, score))
-
-        except (ValueError, AttributeError, Exception) as e:
-            # No fallback - require LLM analysis
+        except (ValueError, AttributeError) as e:
             logger.error(f"LLM intensity scoring failed: {e}")
             raise ValueError(f"LLM intensity scoring failed: {str(e)}")
 
@@ -617,12 +619,18 @@ Respond in JSON format:
             emotion_scores[emotion] = score
 
         if emotion_scores:
-            return max(emotion_scores.items(), key=lambda x: x[1])[0]
+            top_emotion, top_score = max(emotion_scores.items(), key=lambda x: x[1])
+            if top_score > 0:
+                return top_emotion
 
         return EmotionalTone.ANTICIPATION
 
     def _extract_peak_excerpt(self, text: str, max_length: int = 200) -> str:
         """Extract the most emotionally dense excerpt from a text segment."""
+        # If there are no sentence-ending punctuations, return the original (trimmed)
+        if not re.search(r'[.!?]', text):
+            return text[:max_length]
+
         sentences = re.split(r'[.!?]+', text)
 
         if not sentences:

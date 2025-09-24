@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 from illustrator.web.routes import manuscripts, chapters
+from illustrator.db_config import create_tables
 from illustrator.web.models.web_models import ConnectionManager
 from illustrator.models import EmotionalTone, IllustrationPrompt
 
@@ -61,6 +62,15 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # WebSocket connection manager
 connection_manager = ConnectionManager()
+
+# Ensure database tables exist on startup
+@app.on_event("startup")
+async def _ensure_tables():
+    try:
+        create_tables()
+        console.log("Database tables ensured/created")
+    except Exception as e:
+        console.log(f"Failed to create tables: {e}")
 
 # Include routers
 app.include_router(manuscripts.router, prefix="/api/manuscripts", tags=["manuscripts"])
@@ -1524,6 +1534,15 @@ def create_api_only_app() -> FastAPI:
         description="AI-powered manuscript analysis and illustration generation API",
         version="1.0.0",
     )
+
+    # Ensure database tables exist on startup for API-only mode
+    @api_app.on_event("startup")
+    async def _ensure_tables_api_only():
+        try:
+            create_tables()
+            console.log("[api-only] Database tables ensured/created")
+        except Exception as e:
+            console.log(f"[api-only] Failed to create tables: {e}")
 
     # Add CORS middleware
     api_app.add_middleware(

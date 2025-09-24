@@ -29,6 +29,8 @@ class TestChapterAnalysisRoutes:
     def setup_method(self):
         """Set up test environment."""
         self.temp_dir = Path(tempfile.mkdtemp())
+        # Base output dir to mimic `illustrator_output`
+        self.test_output_dir = self.temp_dir
         self.test_manuscripts_dir = self.temp_dir / "manuscripts"
         self.test_analysis_dir = self.temp_dir / "analysis"
         self.test_images_dir = self.temp_dir / "generated_images"

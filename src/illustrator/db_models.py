@@ -16,8 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
 Base = declarative_base()
@@ -195,7 +194,13 @@ class ProcessingCheckpoint(Base):
     completed_at = Column(DateTime(timezone=True))
 
     # Relationships
-    session = relationship("ProcessingSession", back_populates="checkpoints")
+    # Explicitly specify foreign_keys to disambiguate join paths between
+    # ProcessingCheckpoint and ProcessingSession (due to last_checkpoint_id).
+    session = relationship(
+        "ProcessingSession",
+        back_populates="checkpoints",
+        foreign_keys=[session_id]
+    )
 
 
 class ProcessingLog(Base):

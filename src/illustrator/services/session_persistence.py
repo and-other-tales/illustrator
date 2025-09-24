@@ -226,6 +226,7 @@ class SessionPersistenceService:
                          processing_state: Optional[Dict[str, Any]] = None,
                          generated_prompts: Optional[List[str]] = None,
                          emotional_moments_data: Optional[List[Dict[str, Any]]] = None,
+                         is_resumable: bool = True,
                          next_action: Optional[str] = None) -> ProcessingCheckpoint:
         """Create a processing checkpoint.
 
@@ -242,6 +243,7 @@ class SessionPersistenceService:
             processing_state: Detailed processing state
             generated_prompts: List of prompts generated
             emotional_moments_data: Emotional moments data
+            is_resumable: Whether this checkpoint allows resuming
             next_action: Next action to take when resuming
 
         Returns:
@@ -261,7 +263,7 @@ class SessionPersistenceService:
             generated_prompts=json.dumps(generated_prompts or []),
             emotional_moments_data=json.dumps(emotional_moments_data or []),
             next_action=next_action,
-            is_resumable=True
+            is_resumable=is_resumable
         )
 
         self.db.add(checkpoint)
