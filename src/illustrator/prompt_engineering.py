@@ -461,6 +461,18 @@ class StyleTranslator:
             ]
         }
 
+    @staticmethod
+    def _coerce_to_list(value: Any) -> List[str]:
+        """Normalize potentially scalar modifier values to a list of strings."""
+
+        if value is None:
+            return []
+
+        if isinstance(value, (list, tuple, set)):
+            return [str(item) for item in value if item]
+
+        return [str(value)]
+
     def _load_rich_style_configs(self) -> Dict[str, Any]:
         """Load rich style configuration files like E.H. Shepard configs."""
         import json
@@ -580,7 +592,9 @@ class StyleTranslator:
         """Translate using rich configuration data."""
 
         # Start with base modifiers from rich config
-        style_modifiers = list(rich_config.get("base_prompt_modifiers", []))
+        style_modifiers = self._coerce_to_list(rich_config.get("base_prompt_modifiers"))
+        if not style_modifiers:
+            style_modifiers = [style_config.get('style_name', 'illustration')]
         atmosphere_guidance: List[str] = []
 
         # Add emotional adaptations if available
@@ -638,7 +652,8 @@ class StyleTranslator:
         if base_style.lower() in vocabulary['artistic_styles']:
             style_modifiers.append(vocabulary['artistic_styles'][base_style.lower()])
         else:
-            style_modifiers.extend(style_config.get('base_prompt_modifiers', [base_style]))
+            base_modifiers = self._coerce_to_list(style_config.get('base_prompt_modifiers'))
+            style_modifiers.extend(base_modifiers or [base_style])
 
         # Add composition-specific modifiers
         if scene_composition.composition_type == CompositionType.DRAMATIC:
@@ -673,9 +688,10 @@ class StyleTranslator:
         })
 
         # Negative prompt (DALL-E doesn't use them, but stored for consistency)
-        negative_prompt = style_config.get('negative_prompt', [])
-        if not negative_prompt:
-            negative_prompt = vocabulary['negative_defaults']
+        negative_prompt_candidates = self._coerce_to_list(style_config.get('negative_prompt'))
+        negative_prompt = (
+            negative_prompt_candidates if negative_prompt_candidates else list(vocabulary['negative_defaults'])
+        )
 
         return {
             "style_modifiers": style_modifiers,
@@ -703,7 +719,8 @@ class StyleTranslator:
         if base_style.lower() in vocabulary['artistic_styles']:
             style_modifiers.append(vocabulary['artistic_styles'][base_style.lower()])
         else:
-            style_modifiers.extend(style_config.get('base_prompt_modifiers', [base_style]))
+            base_modifiers = self._coerce_to_list(style_config.get('base_prompt_modifiers'))
+            style_modifiers.extend(base_modifiers or [base_style])
 
         # Imagen4 excels at photorealistic and cinematic styles
         style_modifiers.extend([
@@ -737,8 +754,8 @@ class StyleTranslator:
 
         # Enhanced negative prompt
         negative_prompt = list(vocabulary['negative_defaults'])
-        if style_config.get('negative_prompt'):
-            negative_prompt.extend(style_config['negative_prompt'])
+        extra_negative = self._coerce_to_list(style_config.get('negative_prompt'))
+        negative_prompt.extend(extra_negative)
 
         # Add composition-specific negative prompts
         if scene_composition.composition_type == CompositionType.INTIMATE:
@@ -842,10 +859,13 @@ class StyleTranslator:
 
     def _generic_translation(self, style_config: Dict[str, Any]) -> Dict[str, Any]:
         """Generic fallback translation."""
+        base_modifiers = self._coerce_to_list(style_config.get('base_prompt_modifiers'))
+        negative_prompt = self._coerce_to_list(style_config.get('negative_prompt'))
+
         return {
-            "style_modifiers": style_config.get('base_prompt_modifiers', ['digital art']),
+            "style_modifiers": base_modifiers or ['digital art'],
             "technical_params": style_config.get('technical_params', {}),
-            "negative_prompt": style_config.get('negative_prompt', ['low quality']),
+            "negative_prompt": negative_prompt or ['low quality'],
             "provider_optimizations": {}
         }
 
