@@ -41,7 +41,15 @@ class HuggingFaceEndpointChatWrapper:
         stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
     ) -> None:
         self._client = client
-        self._generation_kwargs = generation_kwargs
+        # Separate generation kwargs for text_generation and chat_completion
+        self._generation_kwargs = {
+            k: v for k, v in generation_kwargs.items()
+            if k not in {'messages', 'model_id'}
+        }
+        self._chat_kwargs = {
+            k: v for k, v in generation_kwargs.items()
+            if k in {'temperature', 'stream', 'model'}
+        }
         self._stream_callback = stream_callback
         self._supports_chat_completion = hasattr(client, "chat_completion")
 
@@ -105,8 +113,11 @@ class HuggingFaceEndpointChatWrapper:
             kwargs = dict(self._generation_kwargs)
 
             if self._supports_chat_completion:
-                chat_kwargs = dict(kwargs)
-                chat_kwargs.pop("return_full_text", None)
+                # Filter out parameters not supported by chat_completion
+                chat_kwargs = {
+                    k: v for k, v in kwargs.items()
+                    if k in {'temperature', 'stream', 'model'}
+                }
 
                 try:
                     if use_stream:
@@ -132,14 +143,25 @@ class HuggingFaceEndpointChatWrapper:
 
                     if generated_text:
                         return AIMessage(content=generated_text.strip())
-                except Exception:  # pragma: no cover - fallback for unsupported chat endpoints
-                    logger.exception("HuggingFace chat_completion failed; falling back to text_generation")
+                except Exception as e:  # pragma: no cover - fallback for unsupported chat endpoints
+                    logger.warning(
+                        "HuggingFace chat_completion failed with %s: %s; falling back to text_generation",
+                        type(e).__name__, str(e)
+                    )
 
             # Fallback to text-generation style invocation
-            raw_output = self._client.text_generation(
-                prompt,
-                **kwargs,
-            )
+            logger.debug("Using text_generation with parameters: %s", self._generation_kwargs)
+            try:
+                raw_output = self._client.text_generation(
+                    prompt,
+                    **self._generation_kwargs,
+                )
+            except Exception as e:
+                logger.error(
+                    "HuggingFace text_generation failed with %s: %s",
+                    type(e).__name__, str(e)
+                )
+                return AIMessage(content="")
 
             if use_stream:
                 aggregated_tokens = []
