@@ -160,8 +160,8 @@ except Exception:
 class NarrativeAnalyzer:
     def get_narrative_summary(self):
         """Return a summary of the last analysis (stub for tests)."""
-        import copy
-        summary = copy.deepcopy(getattr(self, 'last_analysis', {}))
+        base = getattr(self, 'last_analysis', {})
+        summary = dict(base) if isinstance(base, dict) else {}
         if 'primary_genre' not in summary:
             summary['primary_genre'] = 'unknown'
         return summary
