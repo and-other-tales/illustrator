@@ -1398,18 +1398,20 @@ class AdvancedVisualComposer:
         """Analyze how composition amplifies emotion."""
 
         amplification_map = {
-                'diagonal_composition': "creates dynamic energy and movement",
-                'symmetry': "provides stability and harmony",
-                'asymmetric_balance': "creates tension and interest",
-                'golden_ratio': "achieves pleasing and natural balance",
-                'framing': "focuses attention and creates intimacy"
+            'diagonal_composition': "creates dynamic energy and movement",
+            'symmetry': "provides stability and harmony",
+            'asymmetric_balance': "creates tension and interest",
+            'golden_ratio': "achieves pleasing and natural balance",
+            'framing': "focuses attention and creates intimacy"
         }
 
         amplifications = []
-            for rule in composition_rules[:3]:
-                # composition_rules may be CompositionRule dataclasses, enums, or strings
-                key = rule.rule_type if hasattr(rule, 'rule_type') else (rule.value if hasattr(rule, 'value') else str(rule))
-                amplifications.append(amplification_map.get(key, "supports visual harmony"))
+        for rule in composition_rules[:3]:
+            # composition_rules may be CompositionRule dataclasses, enums, or strings
+            key = rule.rule_type if hasattr(rule, 'rule_type') else (rule.value if hasattr(rule, 'value') else str(rule))
+            # Normalize key to expected format
+            key = key.lower() if isinstance(key, str) else str(key)
+            amplifications.append(amplification_map.get(key, "supports visual harmony"))
 
         return "; ".join(amplifications)
 
