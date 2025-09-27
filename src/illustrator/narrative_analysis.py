@@ -160,15 +160,49 @@ except Exception:
 class NarrativeAnalyzer:
     def get_narrative_summary(self):
         """Return a summary of the last analysis (stub for tests)."""
-        base = getattr(self, 'last_analysis', {})
-        summary = dict(base) if isinstance(base, dict) else {}
-        summary['primary_genre'] = summary.get('primary_genre', 'unknown')
-        return summary
+        return {'primary_genre': 'unknown'}
     """Advanced narrative structure and literary analysis system."""
 
     def get_narrative_summary(self):
-        """Return a summary of the last analysis (stub for tests)."""
-        return getattr(self, 'last_analysis', {})
+        """Return a summary dict with required keys for tests."""
+        analysis = getattr(self, 'last_analysis', {})
+        summary = {}
+        # Extract or synthesize required keys
+        # primary_genre
+        if 'genre_classification' in analysis and isinstance(analysis['genre_classification'], dict):
+            summary['primary_genre'] = analysis['genre_classification'].get('primary_genre', 'unknown')
+        else:
+            summary['primary_genre'] = 'unknown'
+        # structure_type
+        if 'narrative_structure' in analysis:
+            ns = analysis['narrative_structure']
+            if hasattr(ns, 'structure_type'):
+                summary['structure_type'] = getattr(ns, 'structure_type', 'unknown')
+            elif isinstance(ns, dict):
+                summary['structure_type'] = ns.get('structure_type', 'unknown')
+            else:
+                summary['structure_type'] = 'unknown'
+        else:
+            summary['structure_type'] = 'unknown'
+        # major_themes
+        if 'thematic_elements' in analysis:
+            themes = analysis['thematic_elements']
+            if isinstance(themes, list):
+                summary['major_themes'] = [getattr(t, 'theme', t.get('theme', '')) if hasattr(t, 'theme') or isinstance(t, dict) else str(t) for t in themes]
+            else:
+                summary['major_themes'] = []
+        else:
+            summary['major_themes'] = []
+        # character_count
+        if 'character_arcs' in analysis:
+            arcs = analysis['character_arcs']
+            if isinstance(arcs, list):
+                summary['character_count'] = len(arcs)
+            else:
+                summary['character_count'] = 0
+        else:
+            summary['character_count'] = 0
+        return summary
 
     # Narrative structure patterns
     STRUCTURE_PATTERNS = {
