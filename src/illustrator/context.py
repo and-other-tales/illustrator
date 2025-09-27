@@ -47,6 +47,10 @@ class ManuscriptContext(BaseModel):
         default=None,
         description="Timeout in seconds for HuggingFace endpoint requests",
     )
+    huggingface_flux_endpoint_url: str | None = Field(
+        default=None,
+        description="HuggingFace Inference Endpoint URL used for Flux image generation",
+    )
 
     # System prompts
     analysis_prompt: str = Field(
@@ -181,6 +185,10 @@ def get_default_context() -> IllustratorContext:
     except ValueError:
         huggingface_timeout = None
 
+    hf_flux_endpoint = os.getenv('HUGGINGFACE_FLUX_ENDPOINT_URL')
+    if not hf_flux_endpoint:
+        hf_flux_endpoint = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro"
+
     return IllustratorContext(
         user_id="default_user",
         llm_provider=provider,
@@ -196,4 +204,5 @@ def get_default_context() -> IllustratorContext:
         huggingface_temperature=huggingface_temperature,
         huggingface_endpoint_url=hf_endpoint,
         huggingface_timeout=huggingface_timeout,
+        huggingface_flux_endpoint_url=hf_flux_endpoint,
     )

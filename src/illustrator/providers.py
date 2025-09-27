@@ -19,6 +19,22 @@ from illustrator.error_handling import resilient_async, ErrorRecoveryHandler, sa
 from illustrator.llm_factory import HuggingFaceConfig, create_chat_model
 
 
+DEFAULT_FLUX_ENDPOINT_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro"
+
+
+def _async_generation_failure(provider: str):
+    """Return an async fallback function that reports a failed generation."""
+
+    async def _fallback() -> Dict[str, Any]:
+        return {
+            'success': False,
+            'error': f"{provider} generation fallback was triggered",
+            'status_code': 503,
+        }
+
+    return _fallback
+
+
 def _format_style_modifiers(style_modifiers: List[Any]) -> str:
     """Helper function to safely format style modifiers, handling tuples."""
     formatted = []
@@ -150,7 +166,7 @@ class DalleProvider(ImageGenerationProvider):
     @resilient_async(
         max_attempts=3,
         fallback_functions={
-            'simplified_processing': lambda: {"success": False, "error": "Used fallback"}
+            'simplified_processing': _async_generation_failure('dalle')
         }
     )
     async def generate_image(
@@ -197,15 +213,27 @@ class DalleProvider(ImageGenerationProvider):
                     elif response.status == 429:
                         # Rate limit - let error handler deal with it
                         error_data = await response.json()
-                        raise Exception(f"Rate limit exceeded: {error_data.get('error', {}).get('message', 'Unknown error')}")
+                        return {
+                            'success': False,
+                            'error': error_data.get('error', {}).get('message', 'Rate limit exceeded'),
+                            'status_code': 429,
+                        }
                     elif response.status in [401, 403]:
                         # Authentication error
                         error_data = await response.json()
-                        raise Exception(f"Authentication error: {error_data.get('error', {}).get('message', 'Invalid API key')}")
+                        return {
+                            'success': False,
+                            'error': error_data.get('error', {}).get('message', 'Authentication error'),
+                            'status_code': response.status,
+                        }
                     else:
                         error_data = await response.json()
                         error_msg = error_data.get('error', {}).get('message', 'Unknown error')
-                        raise Exception(f"DALL-E API error (status {response.status}): {error_msg}")
+                        return {
+                            'success': False,
+                            'error': error_msg,
+                            'status_code': response.status,
+                        }
 
         return await _generate_dalle_image()
 
@@ -221,11 +249,11 @@ class Imagen4Provider(ImageGenerationProvider):
         self,
         credentials_path: str,
         project_id: str,
+        anthropic_api_key: str | None = None,
         *,
         prompt_engineer: PromptEngineer | None = None,
         llm_provider: LLMProvider | str | None = None,
         llm_model: str | None = None,
-        anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
     ) -> None:
@@ -252,7 +280,7 @@ class Imagen4Provider(ImageGenerationProvider):
     @resilient_async(
         max_attempts=3,
         fallback_functions={
-            'simplified_processing': lambda: {"success": False, "error": "Used fallback"}
+            'simplified_processing': _async_generation_failure('imagen4')
         }
     )
     async def generate_image(
@@ -359,6 +387,7 @@ class FluxProvider(ImageGenerationProvider):
         anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        flux_endpoint_url: str | None = None,
     ) -> None:
         """Initialize Flux provider."""
         super().__init__(
@@ -370,7 +399,18 @@ class FluxProvider(ImageGenerationProvider):
             huggingface_config=huggingface_config,
         )
         self.api_key = api_key
-        self.base_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro"
+        if flux_endpoint_url:
+            self.base_url = flux_endpoint_url
+        elif huggingface_config and huggingface_config.endpoint_url:
+            self.base_url = huggingface_config.endpoint_url
+        else:
+            self.base_url = DEFAULT_FLUX_ENDPOINT_URL
+
+        self._request_timeout = (
+            huggingface_config.timeout
+            if huggingface_config and huggingface_config.timeout is not None
+            else None
+        )
 
     def get_provider_type(self) -> ImageProvider:
         """Return Flux provider type."""
@@ -382,7 +422,7 @@ class FluxProvider(ImageGenerationProvider):
     @resilient_async(
         max_attempts=3,
         fallback_functions={
-            'simplified_processing': lambda: {"success": False, "error": "Used fallback"}
+            'simplified_processing': _async_generation_failure('flux')
         }
     )
     async def generate_image(
@@ -402,7 +442,11 @@ class FluxProvider(ImageGenerationProvider):
             "parameters": prompt.technical_params
         }
 
-        async with aiohttp.ClientSession() as session:
+        timeout = None
+        if self._request_timeout is not None:
+            timeout = aiohttp.ClientTimeout(total=self._request_timeout)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
                 self.base_url,
                 headers=headers,
@@ -418,12 +462,13 @@ class FluxProvider(ImageGenerationProvider):
                         'format': 'base64',
                         'metadata': {
                             'provider': 'flux',
-                            'model': 'FLUX.1-pro',
+                            'model': prompt.technical_params.get('model', 'FLUX.1-pro'),
+                            'endpoint_url': self.base_url,
                             'prompt': prompt.prompt,
                             'negative_prompt': prompt.negative_prompt,
                             'parameters': prompt.technical_params,
                         }
-                    }
+                }
                 else:
                     try:
                         error_data = await response.json()
@@ -509,7 +554,11 @@ class ProviderFactory:
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
                 raise ValueError("HuggingFace API key required for Flux provider")
-            return FluxProvider(api_key, **common_llm_kwargs)
+            return FluxProvider(
+                api_key,
+                flux_endpoint_url=credentials.get('huggingface_flux_endpoint_url'),
+                **common_llm_kwargs,
+            )
 
         else:
             raise ValueError(f"Unsupported provider type: {provider_type}")
@@ -572,6 +621,7 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
             'huggingface_max_new_tokens': getattr(context, 'huggingface_max_new_tokens', None),
             'huggingface_temperature': getattr(context, 'huggingface_temperature', None),
             'huggingface_model_kwargs': getattr(context, 'huggingface_model_kwargs', None),
+            'huggingface_flux_endpoint_url': getattr(context, 'huggingface_flux_endpoint_url', None),
             **credentials
         }.items() if value is not None
     }

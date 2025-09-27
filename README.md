@@ -63,6 +63,7 @@ GOOGLE_PROJECT_ID=your-project-id
 
 # For Flux (HuggingFace)
 HUGGINGFACE_API_KEY=your-huggingface-key
+HUGGINGFACE_FLUX_ENDPOINT_URL=https://api.endpoints.huggingface.cloud/your-org/flux
 
 # Optional: Customize defaults
 DEFAULT_IMAGE_PROVIDER=dalle  # dalle, imagen4 (Vertex Imagen), or flux
@@ -103,6 +104,8 @@ DEFAULT_ILLUSTRATION_STYLE=digital_painting
 | **DALL-E (gpt-image-1)** | High-quality, coherent images | Character-focused scenes, detailed illustrations |
 | **Imagen (Vertex AI Imagen 3)** | Photorealistic output, fine control | Realistic settings, atmospheric scenes |
 | **Flux 1.1 Pro** | Artistic styles, creative interpretation | Stylized art, concept illustrations |
+
+> Flux 1.1 Pro uses HuggingFace Inference Endpoints for both full generations and web previews. Configure `HUGGINGFACE_API_KEY` and `HUGGINGFACE_FLUX_ENDPOINT_URL` to point at your deployed endpoint.
 
 ## 📋 Example Usage
 

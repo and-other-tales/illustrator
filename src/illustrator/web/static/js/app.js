@@ -9,6 +9,7 @@ window.illustratorApp = {
         OPENAI_API_KEY: '',
         HUGGINGFACE_API_KEY: '',
         HUGGINGFACE_ENDPOINT_URL: '',
+        HUGGINGFACE_FLUX_ENDPOINT_URL: '',
         GOOGLE_APPLICATION_CREDENTIALS: '',
         GOOGLE_PROJECT_ID: ''
     },
@@ -199,6 +200,7 @@ function saveApiKeys() {
         OPENAI_API_KEY: document.getElementById('openaiApiKey').value.trim(),
         HUGGINGFACE_API_KEY: document.getElementById('huggingfaceApiKey').value.trim(),
         HUGGINGFACE_ENDPOINT_URL: document.getElementById('huggingfaceEndpointUrl').value.trim(),
+        HUGGINGFACE_FLUX_ENDPOINT_URL: document.getElementById('huggingfaceFluxEndpointUrl').value.trim(),
         GOOGLE_APPLICATION_CREDENTIALS: document.getElementById('googleCredentials').value.trim(),
         GOOGLE_PROJECT_ID: document.getElementById('googleProjectId').value.trim()
     };
@@ -249,6 +251,7 @@ function populateApiKeyForm() {
     if (keys.OPENAI_API_KEY) document.getElementById('openaiApiKey').value = keys.OPENAI_API_KEY;
     if (keys.HUGGINGFACE_API_KEY) document.getElementById('huggingfaceApiKey').value = keys.HUGGINGFACE_API_KEY;
     if (keys.HUGGINGFACE_ENDPOINT_URL) document.getElementById('huggingfaceEndpointUrl').value = keys.HUGGINGFACE_ENDPOINT_URL;
+    if (keys.HUGGINGFACE_FLUX_ENDPOINT_URL) document.getElementById('huggingfaceFluxEndpointUrl').value = keys.HUGGINGFACE_FLUX_ENDPOINT_URL;
     if (keys.GOOGLE_APPLICATION_CREDENTIALS) document.getElementById('googleCredentials').value = keys.GOOGLE_APPLICATION_CREDENTIALS;
     if (keys.GOOGLE_PROJECT_ID) document.getElementById('googleProjectId').value = keys.GOOGLE_PROJECT_ID;
 }

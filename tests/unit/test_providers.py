@@ -79,9 +79,11 @@ class TestProviderFactory:
             ImageProvider.FLUX,
             huggingface_api_key="test-hf-key",
             anthropic_api_key="test-anthropic-key",
+            huggingface_flux_endpoint_url="https://custom.endpoint/flux",
         )
         assert isinstance(provider, FluxProvider)
         assert provider.api_key == "test-hf-key"
+        assert provider.base_url == "https://custom.endpoint/flux"
 
     def test_create_provider_missing_credentials(self):
         """Test error handling for missing credentials."""
@@ -375,6 +377,22 @@ class TestFluxProvider:
             assert 'error' in result
             assert result['status_code'] == 500
 
+    def test_custom_flux_endpoint_configuration(self):
+        """Ensure custom Flux endpoint URLs are respected."""
+        prompt_engineer = _stub_prompt_engineer(
+            ImageProvider.FLUX,
+            negative_prompt="test",
+            technical_params={},
+        )
+
+        provider = FluxProvider(
+            "test-hf-key",
+            prompt_engineer=prompt_engineer,
+            flux_endpoint_url="https://endpoint.example.com/custom/flux/",
+        )
+
+        assert provider.base_url == "https://endpoint.example.com/custom/flux/"
+
 
 class TestImagen4Provider:
     """Test Imagen4 provider functionality."""
@@ -382,7 +400,18 @@ class TestImagen4Provider:
     @pytest.fixture
     def imagen4_provider(self):
         """Create an Imagen4 provider for testing."""
-        return Imagen4Provider("path/to/creds", "test-project", "test-anthropic-key")
+        prompt_engineer = _stub_prompt_engineer(
+            ImageProvider.IMAGEN4,
+            negative_prompt="blurry, low quality",
+            technical_params={"aspect_ratio": "16:9"},
+        )
+
+        return Imagen4Provider(
+            "path/to/creds",
+            "test-project",
+            "test-anthropic-key",
+            prompt_engineer=prompt_engineer,
+        )
 
     @pytest.fixture
     def sample_emotional_moment(self):
