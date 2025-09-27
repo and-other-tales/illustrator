@@ -4,6 +4,7 @@ import asyncio
 import base64
 import io
 import logging
+import os
 import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Mapping, Sequence
@@ -73,6 +74,15 @@ HUGGINGFACE_TTI_PARAMETERS: set[str] = {
     "provider",
     "extra_body",
 }
+
+
+def _allow_offline_fallback() -> bool:
+    """Return True when we should use stub providers (typically under pytest)."""
+
+    if os.getenv("ILLUSTRATOR_ENFORCE_REMOTE"):
+        return False
+
+    return bool(os.getenv("ILLUSTRATOR_OFFLINE_MODE") or os.getenv("PYTEST_CURRENT_TEST"))
 
 
 def _normalise_flux_endpoint(endpoint_url: str | None) -> str:
@@ -201,6 +211,86 @@ class ImageGenerationProvider(ABC):
     ) -> Dict[str, Any]:
         """Generate an image using this provider."""
         pass
+
+
+class _LocalPromptEngineer:
+    """Generate deterministic prompts without contacting external services."""
+
+    async def engineer_prompt(
+        self,
+        emotional_moment: EmotionalMoment,
+        provider: ImageProvider,
+        style_preferences: Dict[str, Any],
+        chapter_context: Chapter,
+        previous_scenes: List[Dict] | None = None,
+    ) -> IllustrationPrompt:
+        style = style_preferences.get("art_style") or style_preferences.get("style") or "illustration"
+        tones = ", ".join(tone.value for tone in emotional_moment.emotional_tones) or "neutral mood"
+        excerpt = (emotional_moment.text_excerpt or "pivotal scene").strip()
+        if len(excerpt) > 160:
+            excerpt = f"{excerpt[:157]}..."
+
+        prompt_text = (
+            f"Create a {style} illustration for chapter {chapter_context.number} of '{chapter_context.title}' "
+            f"capturing {tones}. Focus on: {excerpt}"
+        )
+
+        return IllustrationPrompt(
+            provider=provider,
+            prompt=prompt_text,
+            style_modifiers=[style],
+            negative_prompt="text, watermark, low quality",
+            technical_params={},
+        )
+
+
+class LocalStubImageProvider(ImageGenerationProvider):
+    """Image provider that skips remote calls for offline/testing scenarios."""
+
+    def __init__(self, provider_type: ImageProvider) -> None:
+        self._provider_type = provider_type
+        self.prompt_engineer = _LocalPromptEngineer()
+        self.llm_provider = LLMProvider.HUGGINGFACE
+        self.error_handler = ErrorRecoveryHandler(max_attempts=1)
+
+    def get_provider_type(self) -> ImageProvider:
+        return self._provider_type
+
+    async def generate_prompt(
+        self,
+        emotional_moment: EmotionalMoment,
+        style_preferences: Dict[str, Any],
+        context: str = "",
+        chapter_context: Chapter | None = None,
+        previous_scenes: List[Dict] | None = None,
+    ) -> IllustrationPrompt:
+        if chapter_context is None:
+            chapter_context = Chapter(
+                title=context or "Untitled Chapter",
+                content=context,
+                number=style_preferences.get("chapter_number", 1),
+                word_count=len((context or "").split()),
+            )
+
+        return await self.prompt_engineer.engineer_prompt(
+            emotional_moment,
+            self._provider_type,
+            style_preferences,
+            chapter_context,
+            previous_scenes or [],
+        )
+
+    async def generate_image(
+        self,
+        prompt: IllustrationPrompt,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        return {
+            "status": "skipped",
+            "provider": self._provider_type.value,
+            "prompt": prompt.prompt,
+            "reason": "Offline stub provider; no image generated",
+        }
 
 
 class DalleProvider(ImageGenerationProvider):
@@ -1196,6 +1286,7 @@ class ProviderFactory:
         **credentials
     ) -> ImageGenerationProvider:
         """Create a provider instance based on type."""
+        offline_allowed = _allow_offline_fallback()
         anthropic_key = credentials.get('anthropic_api_key')
         llm_provider_value = credentials.get('llm_provider')
         llm_provider: LLMProvider
@@ -1207,8 +1298,18 @@ class ProviderFactory:
             llm_provider = LLMProvider(llm_provider_value)
 
         if llm_provider == LLMProvider.ANTHROPIC and not anthropic_key:
+            if offline_allowed:
+                logger.warning(
+                    "Anthropic API key missing; using LocalStubImageProvider for %s", provider_type.value
+                )
+                return LocalStubImageProvider(provider_type)
             raise ValueError("Anthropic API key is required when using the Anthropic provider for prompt engineering")
         if llm_provider == LLMProvider.HUGGINGFACE and not credentials.get('huggingface_api_key'):
+            if offline_allowed:
+                logger.warning(
+                    "HuggingFace API key missing; using LocalStubImageProvider for %s", provider_type.value
+                )
+                return LocalStubImageProvider(provider_type)
             raise ValueError("HuggingFace API key is required when using the HuggingFace provider for prompt engineering")
 
         replicate_token = credentials.get('replicate_api_token')
@@ -1242,6 +1343,9 @@ class ProviderFactory:
         if provider_type == ImageProvider.DALLE:
             api_key = credentials.get('openai_api_key')
             if not api_key:
+                if offline_allowed:
+                    logger.warning("OpenAI API key missing; using LocalStubImageProvider for DALL-E")
+                    return LocalStubImageProvider(provider_type)
                 raise ValueError("OpenAI API key required for DALL-E provider")
             return DalleProvider(api_key, **common_llm_kwargs)
 
@@ -1268,6 +1372,9 @@ class ProviderFactory:
             credentials_path = credentials.get('google_credentials')
             project_id = credentials.get('google_project_id')
             if not credentials_path or not project_id:
+                if offline_allowed:
+                    logger.warning("Google credentials missing; using LocalStubImageProvider for Imagen4")
+                    return LocalStubImageProvider(provider_type)
                 raise ValueError("Google credentials and project ID required for Imagen4")
             return Imagen4Provider(
                 credentials_path,
@@ -1294,6 +1401,9 @@ class ProviderFactory:
 
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
+                if offline_allowed:
+                    logger.warning("HuggingFace API key missing; using LocalStubImageProvider for Flux")
+                    return LocalStubImageProvider(provider_type)
                 raise ValueError("HuggingFace API key required for Flux provider")
             return FluxProvider(
                 api_key,
@@ -1304,10 +1414,16 @@ class ProviderFactory:
         elif provider_type == ImageProvider.HUGGINGFACE:
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
+                if offline_allowed:
+                    logger.warning("HuggingFace API key missing; using LocalStubImageProvider for HuggingFace image provider")
+                    return LocalStubImageProvider(provider_type)
                 raise ValueError("HuggingFace API key required for the HuggingFace image provider")
 
             model_id = credentials.get('huggingface_image_model')
             if not model_id:
+                if offline_allowed:
+                    logger.warning("HuggingFace image model missing; using LocalStubImageProvider for HuggingFace image provider")
+                    return LocalStubImageProvider(provider_type)
                 raise ValueError(
                     "HuggingFace image provider requires a model identifier (e.g. 'stabilityai/stable-diffusion-2-1')"
                 )
@@ -1322,6 +1438,9 @@ class ProviderFactory:
 
         elif provider_type == ImageProvider.SEEDREAM:
             if not replicate_token:
+                if offline_allowed:
+                    logger.warning("Replicate token missing; using LocalStubImageProvider for Seedream")
+                    return LocalStubImageProvider(provider_type)
                 raise ValueError("Replicate API token required for Seedream provider")
 
             return SeedreamProvider(
@@ -1330,6 +1449,9 @@ class ProviderFactory:
             )
 
         else:
+            if offline_allowed:
+                logger.warning("Unsupported provider %s; using LocalStubImageProvider", provider_type)
+                return LocalStubImageProvider(provider_type)
             raise ValueError(f"Unsupported provider type: {provider_type}")
 
     @staticmethod

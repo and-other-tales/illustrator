@@ -22,6 +22,7 @@ from illustrator.providers import (
     FluxProvider,
     HuggingFaceImageProvider,
     Imagen4Provider,
+    LocalStubImageProvider,
     ProviderFactory,
     ReplicateFluxProvider,
     ReplicateImagenProvider,
@@ -73,6 +74,11 @@ def _setup_replicate_stub(monkeypatch: pytest.MonkeyPatch, run_return: Any = Non
 
 class TestProviderFactory:
     """Test the ProviderFactory class."""
+
+    @pytest.fixture(autouse=True)
+    def enforce_remote_credentials(self, monkeypatch: pytest.MonkeyPatch):
+        """Ensure legacy tests still require real credentials by default."""
+        monkeypatch.setenv("ILLUSTRATOR_ENFORCE_REMOTE", "1")
 
     def test_create_dalle_provider(self):
         """Test creating DALL-E provider."""
@@ -153,6 +159,15 @@ class TestProviderFactory:
         )
 
         assert isinstance(provider, SeedreamProvider)
+
+    def test_offline_stub_provider_fallback(self, monkeypatch: pytest.MonkeyPatch):
+        """Provider factory should return a stub when credentials are missing in offline mode."""
+        monkeypatch.delenv("ILLUSTRATOR_ENFORCE_REMOTE", raising=False)
+        monkeypatch.setenv("ILLUSTRATOR_OFFLINE_MODE", "1")
+
+        provider = ProviderFactory.create_provider(ImageProvider.DALLE)
+
+        assert isinstance(provider, LocalStubImageProvider)
 
     def test_create_provider_missing_credentials(self):
         """Test error handling for missing credentials."""

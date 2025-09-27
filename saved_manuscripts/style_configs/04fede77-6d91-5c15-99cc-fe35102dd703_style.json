@@ -3,5 +3,7 @@
   "art_style": "pencil sketch",
   "color_palette": "Black and White",
   "artistic_influences": null,
-  "style_config_path": "advanced_eh_shepard_config.json"
+  "style_config_path": "advanced_eh_shepard_config.json",
+  "huggingface_model_id": null,
+  "huggingface_provider": null
 }
