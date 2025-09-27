@@ -301,15 +301,19 @@ class TestWebAppAPI:
         response = client.get("/manuscript/test-id/process")
         assert response.status_code == 200
 
-    def test_dashboard_includes_about_modal(self, client):
+    @patch('src.illustrator.web.app.subprocess.check_output')
+    def test_dashboard_includes_about_modal(self, mock_check_output, client):
         """Ensure the dashboard page renders the About modal."""
+        mock_check_output.return_value = b"1234567890\n"
+
         response = client.get("/")
         assert response.status_code == 200
 
         html = response.text
         assert 'id="aboutModal"' in html
-        assert 'Version 0.1.' in html
+        assert 'Version 0.1.1234567890' in html
         assert 'Copyright © 2025 PI & Other Tales, Inc. All Rights Reserved.' in html
+        assert 'text-uppercase" id="aboutModalLabel"' in html
 
 
 class TestProcessingWorkflow:

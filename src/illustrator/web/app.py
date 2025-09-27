@@ -3,6 +3,7 @@
 import os
 import json
 import inspect
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 from collections.abc import MutableMapping
@@ -63,8 +64,24 @@ app.mount("/generated", StaticFiles(directory=str(GENERATED_IMAGES_DIR)), name="
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
+def _latest_commit_timestamp() -> str | None:
+    """Return the latest git commit timestamp if available."""
+    try:
+        timestamp = subprocess.check_output(
+            ["git", "log", "-1", "--format=%ct"],
+            cwd=str(project_root),
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
+        return timestamp or None
+    except (subprocess.CalledProcessError, FileNotFoundError, PermissionError):
+        return None
+
+
 def _current_app_version() -> str:
-    """Return the About dialog version string using current server time."""
+    """Return the About dialog version string using git metadata when possible."""
+    commit_ts = _latest_commit_timestamp()
+    if commit_ts:
+        return f"0.1.{commit_ts}"
     return f"0.1.{int(datetime.now().timestamp())}"
 
 
