@@ -44,6 +44,7 @@ class EmotionalTone(str, Enum):
     COURAGE = "courage"
     TRIUMPH = "triumph"
     NEUTRAL = "neutral"
+    SERENITY = "serenity"
 
 
 class Chapter(BaseModel):
