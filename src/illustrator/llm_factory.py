@@ -228,19 +228,6 @@ def _messages_to_chat_messages(messages: Sequence[BaseMessage]) -> list[dict[str
         elif isinstance(msg, AIMessage):
             chat_messages.append({"role": "assistant", "content": msg.content})
     return chat_messages
-        "HumanMessage": "user",
-        "AIMessage": "assistant",
-    }
-
-    chat_messages: list[dict[str, str]] = []
-    for message in messages:
-        role = role_map.get(type(message).__name__, "user")
-        chat_messages.append({
-            "role": role,
-            "content": message.content,
-        })
-
-    return chat_messages
 
 
 def _extract_chat_chunk(chunk: Any) -> str:
