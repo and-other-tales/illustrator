@@ -332,6 +332,35 @@ class TestStyleTranslator:
         assert 'style_modifiers' in result
         assert 'provider_optimizations' in result
 
+    def test_translate_style_config_flux_with_null_modifiers(self):
+        """Flux translation should gracefully handle missing modifiers."""
+        style_config = {
+            'style_name': 'illustration sketch',
+            'base_prompt_modifiers': None,
+            'negative_prompt': None,
+        }
+
+        composition = SceneComposition(
+            composition_type=CompositionType.MEDIUM_SHOT,
+            focal_point="character",
+            background_elements=[],
+            foreground_elements=[],
+            lighting_mood=LightingMood.NATURAL,
+            atmosphere="balanced",
+            color_palette_suggestion="neutral",
+            emotional_weight=0.3
+        )
+
+        result = self.translator.translate_style_config(
+            style_config,
+            ImageProvider.FLUX,
+            composition
+        )
+
+        assert result['style_modifiers'][0].startswith('illustration')
+        assert isinstance(result['negative_prompt'], list)
+        assert 'low quality' in result['negative_prompt']
+
 
 class TestPromptEngineer:
     """Test PromptEngineer master class."""

@@ -628,7 +628,7 @@ class StyleTranslator:
         # Build translation result
         translation = {
             "style_modifiers": ordered_modifiers,
-            "negative_prompt": rich_config.get("negative_prompt", []),
+            "negative_prompt": self._coerce_to_list(rich_config.get("negative_prompt")),
             "technical_params": technical_params,
             "provider_optimizations": provider_opts,
             "atmosphere_guidance": atmosphere_guidance,
@@ -787,7 +787,8 @@ class StyleTranslator:
         if base_style.lower() in vocabulary['artistic_styles']:
             style_modifiers.append(vocabulary['artistic_styles'][base_style.lower()])
         else:
-            style_modifiers.extend(style_config.get('base_prompt_modifiers', [base_style]))
+            base_modifiers = self._coerce_to_list(style_config.get('base_prompt_modifiers'))
+            style_modifiers.extend(base_modifiers or [base_style])
 
         # Flux excels at artistic detail and style flexibility
         style_modifiers.extend([
@@ -835,8 +836,8 @@ class StyleTranslator:
 
         # Comprehensive negative prompt
         negative_prompt = list(vocabulary['negative_defaults'])
-        if style_config.get('negative_prompt'):
-            negative_prompt.extend(style_config['negative_prompt'])
+        extra_negative = self._coerce_to_list(style_config.get('negative_prompt'))
+        negative_prompt.extend(extra_negative)
 
         # Add artistic quality negatives
         negative_prompt.extend([
