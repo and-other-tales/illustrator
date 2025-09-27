@@ -56,7 +56,20 @@ class HuggingFaceEndpointChatWrapper:
         # Harmony-specific behaviour: some HF-hosted models (e.g. gpt-oss-120b) use
         # a structured "harmony" stream/response format. Consumers can opt-in by
         # setting generation_kwargs['harmony_format'] = True in create_chat_model.
+        # Record the harmony flag but remove it from kwargs we forward to HF client
         self._is_harmony = bool(generation_kwargs.get("harmony_format"))
+        if "harmony_format" in self._generation_kwargs:
+            # Ensure we don't pass unknown kwargs to the InferenceClient
+            try:
+                self._generation_kwargs.pop("harmony_format", None)
+            except Exception:
+                pass
+        # Also ensure it's not in chat kwargs
+        if "harmony_format" in self._chat_kwargs:
+            try:
+                self._chat_kwargs.pop("harmony_format", None)
+            except Exception:
+                pass
 
     async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
         """Generate a response asynchronously using the configured endpoint."""
