@@ -66,3 +66,76 @@ def validate_manuscript_before_save(data: Dict[str, Any]) -> Dict[str, Any]:
     data = ensure_chapter_required_fields(data)
     
     return data
+
+
+def extract_json_from_text(s: str) -> str:
+    """Extract JSON string from text, handling common LLM output formats."""
+    if s is None:
+        return None
+
+    # Strip code fences if present
+    if s.startswith("```"):
+        # remove starting fence with optional language
+        s = re.sub(r"^```(json|JSON)?\s*", "", s)
+        # remove trailing fence
+        s = re.sub(r"\s*```\s*$", "", s)
+
+    # Quick path: already starts with JSON
+    if s.startswith("{") or s.startswith("["):
+        return s
+
+    # Fallback: search for the first {..} or [..] block
+    obj_match = re.search(r"\{[\s\S]*\}", s)
+    arr_match = re.search(r"\[[\s\S]*\]", s)
+
+    # Prefer object over array if both found and object starts earlier
+    candidates = []
+    if obj_match:
+        candidates.append((obj_match.start(), obj_match.group(0)))
+    if arr_match:
+        candidates.append((arr_match.start(), arr_match.group(0)))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: x[0])
+    return candidates[0][1]
+
+
+def parse_llm_json(text: str) -> Any:
+    """Parse JSON from LLM output robustly.
+
+    Returns Python object or raises ValueError on failure.
+    """
+    candidate = extract_json_from_text(text)
+    if candidate is None:
+        raise ValueError("No JSON found in LLM output")
+
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError as e:
+        # Attempt progressive cleanup strategies
+
+        # Strategy 1: Remove trailing ellipses or stray characters
+        try:
+            cleaned = candidate.strip().rstrip('.').rstrip()
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 2: Fix unclosed quotes
+        try:
+            cleaned = re.sub(r'([{,]\s*"[^"]*?)(\s*[},])', r'\1"\2', candidate)
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 3: Fix missing commas
+        try:
+            cleaned = re.sub(r'"\s*}\s*"', '", "', candidate)
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+        # If all strategies fail, raise the original error
+        raise ValueError(f"Failed to parse JSON after cleanup attempts: {e}")
