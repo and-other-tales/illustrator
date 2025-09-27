@@ -780,8 +780,10 @@ class AdvancedVisualComposer:
                     return first
                 elif isinstance(first, LightingSetupEnum):
                     # Map enum to LightingSetup dataclass
-                    lt = LightingType.DRAMATIC if 'dramatic' in first.value or 'chiaroscuro' in first.value else LightingType.NATURAL
-                    return LightingSetup(lighting_type=lt)
+                    lt = LightingType.DRAMATIC if 'dramatic' in first.value or 'chiaroscuro' in first.value else (
+                        LightingType.NATURAL if 'golden' in first.value or 'natural' in first.value or 'window' in first.value else LightingType.SOFT
+                    )
+                    return LightingSetup(lighting_type=lt, mood_description=first.value)
                 else:
                     # Fallback: construct from value
                     return LightingSetup(lighting_type=LightingType.NATURAL)
@@ -831,7 +833,16 @@ class AdvancedVisualComposer:
                     return first
                 elif isinstance(first, ColorHarmonyEnum):
                     # Map to ColorHarmony dataclass
-                    scheme = ColorScheme.WARM if 'warm' in first.value else (ColorScheme.COOL if 'cool' in first.value else ColorScheme.MONOCHROMATIC)
+                    if 'warm' in first.value or 'warm_palette' in first.value:
+                        scheme = ColorScheme.WARM
+                    elif 'cool' in first.value or 'cool_palette' in first.value:
+                        scheme = ColorScheme.COOL
+                    elif 'analog' in first.value:
+                        scheme = ColorScheme.ANALOGOUS
+                    elif 'high_contrast' in first.value or 'low_contrast' in first.value:
+                        scheme = ColorScheme.COMPLEMENTARY
+                    else:
+                        scheme = ColorScheme.MONOCHROMATIC
                     return ColorHarmony(scheme=scheme)
                 else:
                     return ColorHarmony(scheme=ColorScheme.MONOCHROMATIC)
@@ -1205,14 +1216,15 @@ class AdvancedVisualComposer:
 
         # Lighting-based descriptors
         lighting_descriptors = {
-            LightingSetup.GOLDEN_HOUR: ['warm', 'golden', 'magical'],
-            LightingSetup.DRAMATIC_CHIAROSCURO: ['dramatic', 'high-contrast', 'sculptural'],
-            LightingSetup.SOFT_DIFFUSED: ['gentle', 'even', 'flattering'],
-            LightingSetup.RIM_LIGHT: ['silhouetted', 'mysterious', 'defined'],
-            LightingSetup.BLUE_HOUR: ['cool', 'tranquil', 'ethereal']
+            LightingSetupEnum.GOLDEN_HOUR.value: ['warm', 'golden', 'magical'],
+            LightingSetupEnum.DRAMATIC_CHIAROSCURO.value: ['dramatic', 'high-contrast', 'sculptural'],
+            LightingSetupEnum.SOFT_DIFFUSED.value: ['gentle', 'even', 'flattering'],
+            LightingSetupEnum.RIM_LIGHT.value: ['silhouetted', 'mysterious', 'defined'],
+            LightingSetupEnum.BLUE_HOUR.value: ['cool', 'tranquil', 'ethereal']
         }
 
-        descriptors.extend(lighting_descriptors.get(lighting_setup, ['balanced'])[:2])
+        key = self._normalize_lighting_key(lighting_setup)
+        descriptors.extend(lighting_descriptors.get(key, ['balanced'])[:2])
 
         return list(set(descriptors))[:6]  # Remove duplicates, limit to 6
 
@@ -1396,13 +1408,14 @@ class AdvancedVisualComposer:
         """Determine shading approach."""
 
         shading_map = {
-            LightingSetup.DRAMATIC_CHIAROSCURO: "high_contrast_shading",
-            LightingSetup.SOFT_DIFFUSED: "gentle_gradient_shading",
-            LightingSetup.RIM_LIGHT: "selective_rim_shading",
-            LightingSetup.GOLDEN_HOUR: "warm_directional_shading"
+            LightingSetupEnum.DRAMATIC_CHIAROSCURO.value: "high_contrast_shading",
+            LightingSetupEnum.SOFT_DIFFUSED.value: "gentle_gradient_shading",
+            LightingSetupEnum.RIM_LIGHT.value: "selective_rim_shading",
+            LightingSetupEnum.GOLDEN_HOUR.value: "warm_directional_shading"
         }
 
-        base_shading = shading_map.get(lighting_setup, "balanced_shading")
+        key = self._normalize_lighting_key(lighting_setup)
+        base_shading = shading_map.get(key, "balanced_shading")
 
         if style_preferences and 'pencil sketch' in str(style_preferences).lower():
             return f"pencil_{base_shading}"
@@ -1491,7 +1504,15 @@ class AdvancedVisualComposer:
 
         # Composition rules
         if composition.composition_rules:
-            rules_desc = ", ".join([rule.value.replace('_', ' ') for rule in composition.composition_rules])
+            rule_texts = []
+            for rule in composition.composition_rules:
+                if hasattr(rule, 'rule_type'):
+                    rule_texts.append(rule.rule_type.replace('_', ' '))
+                elif hasattr(rule, 'value'):
+                    rule_texts.append(rule.value.replace('_', ' '))
+                else:
+                    rule_texts.append(str(rule).replace('_', ' '))
+            rules_desc = ", ".join(rule_texts)
             prompt_parts.append(f"using {rules_desc} composition")
 
         # Visual focus
