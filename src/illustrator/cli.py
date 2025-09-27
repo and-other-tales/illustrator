@@ -18,12 +18,13 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.text import Text
 
-from illustrator.context import ManuscriptContext
+from illustrator.context import ManuscriptContext, get_default_context
 from illustrator.models import (
     Chapter,
     ChapterAnalysis,
     ManuscriptMetadata,
     SavedManuscript,
+    LLMProvider,
 )
 
 console = Console()
@@ -82,6 +83,8 @@ class ManuscriptCLI:
         self.chapters: List[Chapter] = []
         self.manuscript_metadata: ManuscriptMetadata | None = None
         self.completed_analyses: List[ChapterAnalysis] = []
+        self.llm_provider: LLMProvider | None = None
+        self.available_llm_providers: List[LLMProvider] = []
 
     def setup_environment(self):
         """Load environment variables and validate configuration."""
@@ -102,9 +105,80 @@ class ManuscriptCLI:
             console.print("[red]Error: HUGGINGFACE_API_KEY required for Flux[/red]")
             sys.exit(1)
 
-        if not os.getenv('ANTHROPIC_API_KEY'):
-            console.print("[red]Error: ANTHROPIC_API_KEY required for Claude analysis[/red]")
+        self._determine_llm_providers()
+
+        if not self.available_llm_providers:
+            console.print(
+                "[red]Error: Configure at least one LLM provider (set ANTHROPIC_API_KEY or HUGGINGFACE_API_KEY)[/red]"
+            )
             sys.exit(1)
+
+        if self.llm_provider and self.llm_provider not in self.available_llm_providers:
+            console.print(
+                "[yellow]Warning: DEFAULT_LLM_PROVIDER is set but required credentials are missing. The provider will be re-selected.[/yellow]"
+            )
+            self.llm_provider = None
+
+    def _determine_llm_providers(self) -> None:
+        """Populate the available LLM providers based on configured credentials."""
+        providers: List[LLMProvider] = []
+
+        if os.getenv('ANTHROPIC_API_KEY'):
+            providers.append(LLMProvider.ANTHROPIC)
+
+        if os.getenv('HUGGINGFACE_API_KEY'):
+            providers.append(LLMProvider.HUGGINGFACE)
+
+        self.available_llm_providers = providers
+
+        preferred = (os.getenv('DEFAULT_LLM_PROVIDER') or '').strip().lower()
+        if preferred:
+            try:
+                preferred_provider = LLMProvider(preferred)
+            except ValueError:
+                self.llm_provider = None
+            else:
+                if preferred_provider in providers:
+                    self.llm_provider = preferred_provider
+                else:
+                    self.llm_provider = None
+
+    def select_llm_provider(self, interactive: bool = True) -> LLMProvider:
+        """Resolve which LLM provider should be used for analysis."""
+        if self.llm_provider and self.llm_provider in self.available_llm_providers:
+            return self.llm_provider
+
+        if not self.available_llm_providers:
+            console.print(
+                "[red]Error: No LLM providers available. Configure ANTHROPIC_API_KEY or HUGGINGFACE_API_KEY.[/red]"
+            )
+            sys.exit(1)
+
+        if len(self.available_llm_providers) == 1:
+            self.llm_provider = self.available_llm_providers[0]
+        elif interactive:
+            console.print("\n[bold cyan]🧠 Select Language Model Provider[/bold cyan]")
+            for idx, provider in enumerate(self.available_llm_providers, 1):
+                provider_name = "Anthropic Claude" if provider == LLMProvider.ANTHROPIC else "HuggingFace Inference"
+                console.print(f"  {idx}. {provider_name}")
+
+            while True:
+                try:
+                    choice = int(Prompt.ask("\nSelect provider", default="1"))
+                    if 1 <= choice <= len(self.available_llm_providers):
+                        self.llm_provider = self.available_llm_providers[choice - 1]
+                        break
+                    console.print(f"[red]Invalid choice. Please select 1-{len(self.available_llm_providers)}.[/red]")
+                except ValueError:
+                    console.print("[red]Please enter a number.[/red]")
+        else:
+            console.print(
+                "[red]Error: Multiple LLM providers detected. Set DEFAULT_LLM_PROVIDER to choose one in batch mode.[/red]"
+            )
+            sys.exit(1)
+
+        os.environ['DEFAULT_LLM_PROVIDER'] = self.llm_provider.value
+        return self.llm_provider
 
     def display_welcome(self):
         """Display welcome message and application information."""
@@ -294,7 +368,6 @@ class ManuscriptCLI:
 
         # Import necessary components
         from illustrator.graph import graph
-        from illustrator.context import ManuscriptContext
         from illustrator.state import ManuscriptState
         from illustrator.models import ImageProvider
         from langgraph.store.memory import InMemoryStore
@@ -302,17 +375,38 @@ class ManuscriptCLI:
         import uuid
 
         # Create runtime context
-        context = ManuscriptContext(
-            user_id=str(uuid.uuid4()),
-            image_provider=ImageProvider(style_preferences["image_provider"]),
-            default_art_style=style_preferences.get("art_style", "digital painting"),
-            color_palette=style_preferences.get("color_palette"),
-            artistic_influences=style_preferences.get("artistic_influences"),
-            openai_api_key=os.getenv('OPENAI_API_KEY'),
-            anthropic_api_key=os.getenv('ANTHROPIC_API_KEY'),
-            google_credentials=os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
-            huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),
-        )
+        context = get_default_context()
+        context.user_id = str(uuid.uuid4())
+        context.image_provider = ImageProvider(style_preferences["image_provider"])
+        context.default_art_style = style_preferences.get("art_style", context.default_art_style)
+        context.color_palette = style_preferences.get("color_palette")
+        context.artistic_influences = style_preferences.get("artistic_influences")
+
+        resolved_provider = self.llm_provider or context.llm_provider
+        if resolved_provider not in self.available_llm_providers and self.available_llm_providers:
+            resolved_provider = self.available_llm_providers[0]
+
+        context.llm_provider = resolved_provider
+        self.llm_provider = resolved_provider
+        os.environ['DEFAULT_LLM_PROVIDER'] = resolved_provider.value
+
+        default_model = (os.getenv('DEFAULT_LLM_MODEL') or '').strip()
+        if default_model:
+            context.model = default_model
+        elif context.llm_provider == LLMProvider.ANTHROPIC and context.model and context.model.startswith("anthropic/"):
+            context.model = context.model.split('/', 1)[1]
+        elif context.llm_provider == LLMProvider.HUGGINGFACE and not context.model:
+            context.model = "gpt-oss-120b"
+
+        if context.llm_provider == LLMProvider.ANTHROPIC and not context.anthropic_api_key:
+            context.anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
+
+        if context.llm_provider == LLMProvider.HUGGINGFACE:
+            if not context.huggingface_api_key:
+                context.huggingface_api_key = os.getenv('HUGGINGFACE_API_KEY')
+            if not context.huggingface_endpoint_url:
+                endpoint_override = os.getenv('HUGGINGFACE_ENDPOINT_URL')
+                context.huggingface_endpoint_url = endpoint_override or f"https://api-inference.huggingface.co/models/{context.model}"
 
         # Apply overrides if provided
         if max_moments is not None:
@@ -782,6 +876,7 @@ def analyze(interactive: bool, config_file: str | None, style_config: str | None
     try:
         # Setup
         cli.setup_environment()
+        cli.select_llm_provider(interactive=interactive)
 
         # Handle list-saved flag
         if list_saved:
