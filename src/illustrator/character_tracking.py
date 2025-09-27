@@ -16,69 +16,17 @@ from illustrator.models import EmotionalMoment, EmotionalTone, Chapter
 class CharacterRelationshipType(str, Enum):
     """Types of character relationships."""
     FAMILY = "family"
-    ROMANTIC = "rom    def _update_character_profile(self, name: str, character_data: dict, chapter_id: str, scene_context: str):
-        """Update an existing character profile with new information."""
-
-        # Handle existing character update
-        if name in self.characters:
-            profile = self.characters[name]
-            
-            # Add a new appearance
-            physical_desc = self._merge_physical_descriptions(
-                profile.physical_description, character_data.get('physical_traits', [])
-            )
-            
-            appearance = CharacterAppearance(
-                chapter_id=chapter_id,
-                scene_context=scene_context,
-                physical_description=physical_desc,
-                emotional_state=character_data.get('emotional_state'),
-                actions=character_data.get('actions', []),
-                dialogue_tone=character_data.get('dialogue_tone')
-            )
-            
-            profile.appearances.append(appearance)
-            return
-            
-        # Create new character profile
-        physical_desc = PhysicalDescription()
-        for trait in character_data.get('physical_traits', []):
-            if 'hair' in trait.lower():
-                physical_desc.hair_color = trait
-            elif 'eye' in trait.lower():
-                physical_desc.eye_color = trait
-            elif any(word in trait.lower() for word in ['tall', 'short', 'average']):
-                physical_desc.height = trait
-            elif any(word in trait.lower() for word in ['slim', 'thin', 'muscular', 'heavy']):
-                physical_desc.build = trait
-            else:
-                if not physical_desc.distinguishing_features:
-                    physical_desc.distinguishing_features = []
-                physical_desc.distinguishing_features.append(trait)
-                
-        profile = CharacterProfile(
-            name=name,
-            primary_role=character_data.get('role'),
-            physical_description=physical_desc,
-            personality_traits=character_data.get('personality_traits', []),
-            background=''
-        )
-        
-        # Add appearance
-        appearance = CharacterAppearance(
-            chapter_id=chapter_id,
-            scene_context=scene_context,
-            physical_description=physical_desc,
-            emotional_state=character_data.get('emotional_state')
-        )
-        
-        profile.appearances.append(appearance)
-        self.characters[name] = profile
+    ROMANTIC = "romantic"
+    FRIEND = "friend"
+    ENEMY = "enemy"
+    ACQUAINTANCE = "acquaintance"
+    MENTOR = "mentor"
     FRIENDSHIP = "friendship"
     PROFESSIONAL = "professional"
     ANTAGONISTIC = "antagonistic"
     MENTOR_STUDENT = "mentor_student"
     UNKNOWN = "unknown"
+    OTHER = "other"
 
 
 @dataclass
