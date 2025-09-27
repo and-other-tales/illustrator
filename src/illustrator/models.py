@@ -11,6 +11,7 @@ class ImageProvider(str, Enum):
     DALLE = "dalle"
     IMAGEN4 = "imagen4"
     FLUX = "flux"
+    SEEDREAM = "seedream"
 
 
 class LLMProvider(str, Enum):

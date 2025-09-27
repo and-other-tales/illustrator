@@ -528,7 +528,7 @@ class StyleTranslator:
                 return self._translate_for_dalle(style_config, scene_composition)
             elif provider == ImageProvider.IMAGEN4:
                 return self._translate_for_imagen4(style_config, scene_composition)
-            elif provider == ImageProvider.FLUX:
+            elif provider in (ImageProvider.FLUX, ImageProvider.SEEDREAM):
                 return self._translate_for_flux(style_config, scene_composition)
             else:
                 return self._generic_translation(style_config)
@@ -1444,7 +1444,7 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 enhanced_parts = [f"Cinematic artistic scene with detailed environmental and emotional elements: {prompt}"]
                 enhanced_parts.append("Professional artistic rendering with rich atmospheric detail")
 
-        elif provider == ImageProvider.FLUX:
+        elif provider in (ImageProvider.FLUX, ImageProvider.SEEDREAM):
             enhanced_parts = []
 
             if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):
@@ -1470,7 +1470,8 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         max_length = {
             ImageProvider.DALLE: 400,
             ImageProvider.IMAGEN4: 500,
-            ImageProvider.FLUX: 600
+            ImageProvider.FLUX: 600,
+            ImageProvider.SEEDREAM: 600,
         }.get(provider, 400)
 
         if len(enhanced_prompt) > max_length:

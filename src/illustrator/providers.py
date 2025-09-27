@@ -1,10 +1,11 @@
-"""Image generation providers for DALL-E, Imagen4, and Flux."""
+"""Image generation providers for DALL-E, Imagen4, Flux, and Replicate hosts."""
 
+import asyncio
 import base64
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 import aiohttp
 from langchain.chat_models import init_chat_model
@@ -51,6 +52,12 @@ ALLOWED_FLUX_PARAMETERS: set[str] = {
 }
 
 MAX_FLUX_PROMPT_TOKENS = 60
+
+
+REPLICATE_FLUX_PARAMETERS: set[str] = ALLOWED_FLUX_PARAMETERS | {
+    "aspect_ratio",
+    "output_format",
+}
 
 
 def _normalise_flux_endpoint(endpoint_url: str | None) -> str:
@@ -592,6 +599,350 @@ class FluxProvider(ImageGenerationProvider):
                     }
 
 
+class ReplicateImageProvider(ImageGenerationProvider):
+    """Base provider for models hosted on Replicate."""
+
+    def __init__(
+        self,
+        api_token: str,
+        model_identifier: str,
+        *,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+        model_version: str | None = None,
+    ) -> None:
+        """Initialise the Replicate provider with authentication and prompt tools."""
+
+        super().__init__(
+            prompt_engineer=prompt_engineer,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            anthropic_api_key=anthropic_api_key,
+            huggingface_api_key=huggingface_api_key,
+            huggingface_config=huggingface_config,
+        )
+
+        try:
+            from replicate import Client
+        except ImportError as exc:  # pragma: no cover - dependency guard
+            raise ValueError(
+                "The 'replicate' package is required to use Replicate-hosted image providers."
+            ) from exc
+
+        self._replicate_client = Client(api_token=api_token)
+        self._replicate_model = model_identifier
+        self._replicate_model_version = model_version
+
+    def _resolve_model_reference(self) -> str:
+        if self._replicate_model_version:
+            return f"{self._replicate_model}:{self._replicate_model_version}"
+        return self._replicate_model
+
+    def _sanitize_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter technical parameters to those accepted by Replicate models."""
+        if not parameters:
+            return {}
+
+        sanitized: Dict[str, Any] = {}
+        seed = parameters.get('seed')
+        if seed is not None:
+            sanitized['seed'] = seed
+
+        return sanitized
+
+    def _prepare_input(
+        self,
+        prompt: IllustrationPrompt,
+        **kwargs
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        """Prepare the payload sent to Replicate along with metadata hints."""
+        payload: Dict[str, Any] = {
+            "prompt": prompt.prompt,
+        }
+
+        if prompt.negative_prompt:
+            payload["negative_prompt"] = prompt.negative_prompt
+
+        payload.update(self._sanitize_parameters(prompt.technical_params))
+
+        overrides = kwargs.get("replicate_input_overrides")
+        if isinstance(overrides, dict):
+            payload.update({key: value for key, value in overrides.items() if value is not None})
+
+        return payload, {}
+
+    def _extract_image_urls(self, output: Any) -> List[str]:
+        """Normalise Replicate outputs into a list of downloadable URLs."""
+        urls: List[str] = []
+
+        if output is None:
+            return urls
+
+        if isinstance(output, str):
+            return [output]
+
+        if isinstance(output, Sequence) and not isinstance(output, (bytes, bytearray)):
+            for item in output:
+                urls.extend(self._extract_image_urls(item))
+            return urls
+
+        if isinstance(output, dict):
+            for value in output.values():
+                urls.extend(self._extract_image_urls(value))
+            return urls
+
+        if hasattr(output, "__iter__") and not isinstance(output, (bytes, bytearray)):
+            try:
+                sequence = list(output)
+            except TypeError:
+                sequence = [output]
+
+            for item in sequence:
+                urls.extend(self._extract_image_urls(item))
+            return urls
+
+        potential_url = getattr(output, "url", None)
+        if isinstance(potential_url, str):
+            urls.append(potential_url)
+
+        return urls
+
+    async def _download_as_base64(self, url: str) -> str:
+        """Download an image URL and return its base64-encoded content."""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise ValueError(f"Failed to download Replicate image: HTTP {response.status}")
+                data = await response.read()
+
+        return base64.b64encode(data).decode("utf-8")
+
+    async def generate_image(
+        self,
+        prompt: IllustrationPrompt,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate an image by invoking a Replicate-hosted model."""
+
+        payload, metadata_overrides = self._prepare_input(prompt, **kwargs)
+        model_reference = self._resolve_model_reference()
+
+        async def _run_model() -> Any:
+            loop = asyncio.get_running_loop()
+
+            def _call_model() -> Any:
+                return self._replicate_client.run(model_reference, input=payload)
+
+            return await loop.run_in_executor(None, _call_model)
+
+        try:
+            output = await _run_model()
+        except Exception as exc:  # pragma: no cover - depends on external service
+            logger.error("Replicate generation failed", exc_info=exc)
+            return {
+                'success': False,
+                'error': f"Replicate generation failed: {exc}",
+                'status_code': 502,
+            }
+
+        image_urls = self._extract_image_urls(output)
+        if not image_urls:
+            return {
+                'success': False,
+                'error': 'Replicate returned no image URLs',
+                'status_code': 502,
+            }
+
+        image_url = image_urls[0]
+
+        try:
+            image_b64 = await self._download_as_base64(image_url)
+        except Exception as exc:  # pragma: no cover - network dependent
+            logger.error("Failed to download Replicate image", exc_info=exc)
+            return {
+                'success': False,
+                'error': f"Could not download image from Replicate: {exc}",
+                'status_code': 502,
+            }
+
+        metadata = {
+            'provider': self.get_provider_type().value,
+            'replicate_model': model_reference,
+            'prompt': payload.get('prompt', prompt.prompt),
+            'image_url': image_url,
+        }
+        metadata.update(metadata_overrides)
+
+        return {
+            'success': True,
+            'image_data': image_b64,
+            'format': 'base64',
+            'metadata': metadata,
+        }
+
+
+class ReplicateFluxProvider(ReplicateImageProvider):
+    """Flux text-to-image generation via Replicate."""
+
+    def __init__(
+        self,
+        api_token: str,
+        *,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+    ) -> None:
+        super().__init__(
+            api_token,
+            "black-forest-labs/flux-1.1-pro",
+            prompt_engineer=prompt_engineer,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            anthropic_api_key=anthropic_api_key,
+            huggingface_api_key=huggingface_api_key,
+            huggingface_config=huggingface_config,
+        )
+
+    def get_provider_type(self) -> ImageProvider:
+        return ImageProvider.FLUX
+
+    def _sanitize_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        base_params = super()._sanitize_parameters(parameters)
+        if not parameters:
+            return base_params
+
+        for key in REPLICATE_FLUX_PARAMETERS:
+            value = parameters.get(key)
+            if value is not None:
+                base_params[key] = value
+
+        return base_params
+
+    def _prepare_input(
+        self,
+        prompt: IllustrationPrompt,
+        **kwargs
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        truncated_prompt, prompt_truncated = FluxProvider._truncate_text(prompt.prompt)
+        truncated_negative, negative_truncated = FluxProvider._truncate_text(prompt.negative_prompt)
+
+        payload = {
+            "prompt": truncated_prompt,
+        }
+
+        if truncated_negative:
+            payload["negative_prompt"] = truncated_negative
+        elif prompt.negative_prompt:
+            payload["negative_prompt"] = prompt.negative_prompt
+
+        payload.update(self._sanitize_parameters(prompt.technical_params))
+
+        overrides = kwargs.get("replicate_input_overrides")
+        if isinstance(overrides, dict):
+            payload.update({key: value for key, value in overrides.items() if value is not None})
+
+        metadata: Dict[str, Any] = {}
+        if prompt_truncated:
+            metadata["prompt_truncated"] = True
+        if negative_truncated:
+            metadata["negative_prompt_truncated"] = True
+
+        return payload, metadata
+
+
+class ReplicateImagenProvider(ReplicateImageProvider):
+    """Google Imagen 4 served via Replicate."""
+
+    _ALLOWED_PARAMETERS: set[str] = {"aspect_ratio", "safety_filter_level", "seed"}
+
+    def __init__(
+        self,
+        api_token: str,
+        *,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+    ) -> None:
+        super().__init__(
+            api_token,
+            "google/imagen-4",
+            prompt_engineer=prompt_engineer,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            anthropic_api_key=anthropic_api_key,
+            huggingface_api_key=huggingface_api_key,
+            huggingface_config=huggingface_config,
+        )
+
+    def get_provider_type(self) -> ImageProvider:
+        return ImageProvider.IMAGEN4
+
+    def _sanitize_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        base_params = super()._sanitize_parameters(parameters)
+        if not parameters:
+            return base_params
+
+        for key in self._ALLOWED_PARAMETERS:
+            value = parameters.get(key)
+            if value is not None:
+                base_params[key] = value
+
+        return base_params
+
+
+class SeedreamProvider(ReplicateImageProvider):
+    """ByteDance Seedream 4 provider via Replicate."""
+
+    _ALLOWED_PARAMETERS: set[str] = {"width", "height", "cfg_scale", "steps", "seed"}
+
+    def __init__(
+        self,
+        api_token: str,
+        *,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+    ) -> None:
+        super().__init__(
+            api_token,
+            "bytedance/seedream-4",
+            prompt_engineer=prompt_engineer,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            anthropic_api_key=anthropic_api_key,
+            huggingface_api_key=huggingface_api_key,
+            huggingface_config=huggingface_config,
+        )
+
+    def get_provider_type(self) -> ImageProvider:
+        return ImageProvider.SEEDREAM
+
+    def _sanitize_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        base_params = super()._sanitize_parameters(parameters)
+        if not parameters:
+            return base_params
+
+        for key in self._ALLOWED_PARAMETERS:
+            value = parameters.get(key)
+            if value is not None:
+                base_params[key] = value
+
+        return base_params
+
+
 class ProviderFactory:
     """Factory for creating image generation providers."""
 
@@ -615,6 +966,8 @@ class ProviderFactory:
             raise ValueError("Anthropic API key is required when using the Anthropic provider for prompt engineering")
         if llm_provider == LLMProvider.HUGGINGFACE and not credentials.get('huggingface_api_key'):
             raise ValueError("HuggingFace API key is required when using the HuggingFace provider for prompt engineering")
+
+        replicate_token = credentials.get('replicate_api_token')
 
         llm_model = (
             credentials.get('model')
@@ -649,6 +1002,12 @@ class ProviderFactory:
             return DalleProvider(api_key, **common_llm_kwargs)
 
         elif provider_type == ImageProvider.IMAGEN4:
+            if replicate_token:
+                return ReplicateImagenProvider(
+                    replicate_token,
+                    **common_llm_kwargs,
+                )
+
             credentials_path = credentials.get('google_credentials')
             project_id = credentials.get('google_project_id')
             if not credentials_path or not project_id:
@@ -660,12 +1019,27 @@ class ProviderFactory:
             )
 
         elif provider_type == ImageProvider.FLUX:
+            if replicate_token:
+                return ReplicateFluxProvider(
+                    replicate_token,
+                    **common_llm_kwargs,
+                )
+
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
                 raise ValueError("HuggingFace API key required for Flux provider")
             return FluxProvider(
                 api_key,
                 flux_endpoint_url=credentials.get('huggingface_flux_endpoint_url'),
+                **common_llm_kwargs,
+            )
+
+        elif provider_type == ImageProvider.SEEDREAM:
+            if not replicate_token:
+                raise ValueError("Replicate API token required for Seedream provider")
+
+            return SeedreamProvider(
+                replicate_token,
                 **common_llm_kwargs,
             )
 
@@ -701,6 +1075,14 @@ class ProviderFactory:
         if credentials.get('huggingface_api_key'):
             available.append(ImageProvider.FLUX)
 
+        replicate_token = credentials.get('replicate_api_token')
+        if replicate_token:
+            if ImageProvider.IMAGEN4 not in available:
+                available.append(ImageProvider.IMAGEN4)
+            if ImageProvider.FLUX not in available:
+                available.append(ImageProvider.FLUX)
+            available.append(ImageProvider.SEEDREAM)
+
         return available
 
 
@@ -731,6 +1113,7 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
             'huggingface_temperature': getattr(context, 'huggingface_temperature', None),
             'huggingface_model_kwargs': getattr(context, 'huggingface_model_kwargs', None),
             'huggingface_flux_endpoint_url': getattr(context, 'huggingface_flux_endpoint_url', None),
+            'replicate_api_token': getattr(context, 'replicate_api_token', None),
             **credentials
         }.items() if value is not None
     }

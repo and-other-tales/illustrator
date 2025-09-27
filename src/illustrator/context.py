@@ -100,6 +100,7 @@ Scene context: {scene_context}""",
     google_credentials: str | None = Field(default=None, description="Google Cloud credentials for Imagen4")
     google_project_id: str | None = Field(default=None, description="Google Cloud project ID for Imagen4")
     huggingface_api_key: str | None = Field(default=None, description="HuggingFace API key for language models and Flux")
+    replicate_api_token: str | None = Field(default=None, description="Replicate API token for hosted image models")
 
     # Advanced settings
     enable_content_filtering: bool = Field(default=True, description="Enable content filtering for generated images")
@@ -189,6 +190,8 @@ def get_default_context() -> IllustratorContext:
     if not hf_flux_endpoint:
         hf_flux_endpoint = "https://qj029p0ofvfmjxus.us-east-1.aws.endpoints.huggingface.cloud"
 
+    replicate_token = os.getenv('REPLICATE_API_TOKEN')
+
     return IllustratorContext(
         user_id="default_user",
         llm_provider=provider,
@@ -198,6 +201,7 @@ def get_default_context() -> IllustratorContext:
         google_credentials=os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
         google_project_id=os.getenv('GOOGLE_PROJECT_ID'),
         huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),
+        replicate_api_token=replicate_token,
         huggingface_task=huggingface_task,
         huggingface_device=huggingface_device,
         huggingface_max_new_tokens=huggingface_max_new_tokens,
