@@ -1,7 +1,9 @@
 """Unit tests for image generation providers."""
 
 import base64
-from unittest.mock import AsyncMock, patch
+import sys
+import types
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -18,6 +20,29 @@ from illustrator.providers import (
     Imagen4Provider,
     ProviderFactory,
 )
+
+
+def _setup_vertexai_stubs(monkeypatch: pytest.MonkeyPatch, model_instance: MagicMock):
+    """Register minimal Vertex AI modules so Imagen4 provider can import them during tests."""
+
+    vertexai_module = types.ModuleType("vertexai")
+    vertexai_module.init = MagicMock()
+
+    preview_module = types.ModuleType("vertexai.preview")
+    vision_models_module = types.ModuleType("vertexai.preview.vision_models")
+
+    image_model_cls = MagicMock()
+    image_model_cls.from_pretrained.return_value = model_instance
+    vision_models_module.ImageGenerationModel = image_model_cls
+
+    preview_module.vision_models = vision_models_module
+    setattr(vertexai_module, "preview", preview_module)
+
+    monkeypatch.setitem(sys.modules, "vertexai", vertexai_module)
+    monkeypatch.setitem(sys.modules, "vertexai.preview", preview_module)
+    monkeypatch.setitem(sys.modules, "vertexai.preview.vision_models", vision_models_module)
+
+    return vertexai_module, image_model_cls
 
 
 class TestProviderFactory:
@@ -392,3 +417,52 @@ class TestImagen4Provider:
             assert tone.value in ["joy", "sadness", "fear", "anger", "mystery"]
             # The expected_style would be used in actual prompt generation tests
             assert expected_style is not None
+
+    @pytest.mark.asyncio
+    async def test_generate_image_successful_response(self, imagen4_provider, monkeypatch):
+        """Ensure Imagen4 provider handles successful responses without index errors."""
+
+        prompt = IllustrationPrompt(
+            provider=ImageProvider.IMAGEN4,
+            prompt="Preview prompt",
+            style_modifiers=["cinematic lighting"],
+            technical_params={}
+        )
+
+        fake_image = MagicMock()
+        fake_image._as_base64_string.return_value = "ZmFrZQ=="
+
+        mock_model_instance = MagicMock()
+        mock_model_instance.generate_images.return_value = [fake_image]
+
+        vertexai_module, image_model_cls = _setup_vertexai_stubs(monkeypatch, mock_model_instance)
+
+        result = await imagen4_provider.generate_image(prompt)
+
+        assert result['success'] is True
+        assert result['image_data'] == "ZmFrZQ=="
+        vertexai_module.init.assert_called_once_with(project="test-project")
+        image_model_cls.from_pretrained.assert_called_once_with("imagen-3.0-generate-001")
+        mock_model_instance.generate_images.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_image_handles_empty_response(self, imagen4_provider, monkeypatch):
+        """The provider should surface helpful errors when the API returns no images."""
+
+        prompt = IllustrationPrompt(
+            provider=ImageProvider.IMAGEN4,
+            prompt="Preview prompt",
+            style_modifiers=[],
+            technical_params={}
+        )
+
+        mock_model_instance = MagicMock()
+        mock_model_instance.generate_images.return_value = []
+
+        _setup_vertexai_stubs(monkeypatch, mock_model_instance)
+
+        result = await imagen4_provider.generate_image(prompt)
+
+        assert result['success'] is False
+        assert "returned no images" in result['error']
+        assert result['status_code'] == 500
