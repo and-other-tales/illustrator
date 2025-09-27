@@ -186,12 +186,6 @@ class CharacterTracker:
         self.name_aliases: Dict[str, str] = {}  # Aliases -> canonical names
         self.relationship_network: Dict[str, Set[str]] = {}
         self.tracking_history: List[Dict] = []
-
-    # Removed broken async def and misplaced dataclass fields
-
-    def __init__(self, llm: BaseChatModel):
-        self.llm = llm
-        self.characters = {}
         self.chapter_character_cache = {}
 
     def _extract_character_names(self, text):
