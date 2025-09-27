@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Callable, Coroutine, TypeVar, Generic
 from functools import wraps
 import time
@@ -36,16 +36,123 @@ class ProcessingTask(Generic[T, R]):
 
 
 @dataclass
+class BatchConfig:
+    """Configuration for batch processing behavior."""
+    batch_size: int = 5
+    max_concurrent: int = 3
+    delay_between_batches: float = 1.0
+    timeout_per_item: float = 30.0
+
+
+@dataclass
+class RateLimitConfig:
+    """Configuration for provider-specific rate limiting."""
+    requests_per_minute: int = 60
+    requests_per_hour: int = 3600
+    burst_limit: int = 10
+
+
+class CircuitBreakerState(str, Enum):
+    """Simple circuit breaker states."""
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+@dataclass
+class CircuitBreakerConfig:
+    """Configuration for circuit breaker behavior."""
+    failure_threshold: int = 5
+    recovery_timeout: float = 30.0
+    half_open_max_calls: int = 3
+
+
+@dataclass
+class ProcessingStats:
+    """Aggregate processing statistics."""
+    total_items: int = 0
+    successful_items: int = 0
+    failed_items: int = 0
+    total_processing_time: float = 0.0
+    start_time: float = field(default_factory=time.time)
+
+    @property
+    def success_rate(self) -> float:
+        return self.successful_items / self.total_items if self.total_items else 0.0
+
+    @property
+    def failure_rate(self) -> float:
+        return self.failed_items / self.total_items if self.total_items else 0.0
+
+    @property
+    def average_processing_time(self) -> float:
+        return self.total_processing_time / self.total_items if self.total_items else 0.0
+
+
+class CircuitBreakerController:
+    """Lightweight circuit breaker management."""
+
+    def __init__(self, config: CircuitBreakerConfig):
+        self.config = config
+        self.state = CircuitBreakerState.CLOSED
+        self.failure_count = 0
+        self.last_failure_time: float = 0.0
+        self.half_open_attempts = 0
+
+    def allow_request(self) -> bool:
+        if self.state == CircuitBreakerState.OPEN:
+            if time.time() - self.last_failure_time >= self.config.recovery_timeout:
+                self.state = CircuitBreakerState.HALF_OPEN
+                self.half_open_attempts = 0
+            else:
+                return False
+
+        if self.state == CircuitBreakerState.HALF_OPEN:
+            if self.half_open_attempts >= self.config.half_open_max_calls:
+                return False
+            self.half_open_attempts += 1
+
+        return True
+
+    def record_result(self, success: bool):
+        if success:
+            self.failure_count = 0
+            self.state = CircuitBreakerState.CLOSED
+            self.half_open_attempts = 0
+            return
+
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+
+        if self.failure_count >= self.config.failure_threshold:
+            self.state = CircuitBreakerState.OPEN
+        elif self.state == CircuitBreakerState.HALF_OPEN:
+            self.state = CircuitBreakerState.OPEN
+
+
+@dataclass
 class ProcessingResult(Generic[R]):
     """Result of a processing task."""
-    task_id: str
+    item_id: str = ""
     success: bool
-    result: Optional[R]
-    error: Optional[str]
-    duration: float
-    retry_count: int
-    start_time: float
-    end_time: float
+    result: Optional[R] = None
+    error: Optional[str] = None
+    processing_time: float = 0.0
+    retry_count: int = 0
+    task_id: Optional[str] = None
+    start_time: float = field(default_factory=time.time)
+    end_time: float = field(default_factory=time.time)
+
+    def __post_init__(self):
+        if not self.item_id and self.task_id:
+            self.item_id = self.task_id
+        if not self.task_id:
+            self.task_id = self.item_id
+
+    @property
+    def duration(self) -> float:
+        """Backwards compatible duration alias."""
+        return self.processing_time
 
 
 class TaskQueue(Generic[T, R]):
@@ -244,11 +351,18 @@ class ParallelProcessor:
         max_concurrent_image: int = 5,
         max_workers: int = None,
         enable_rate_limiting: bool = True,
-        enable_circuit_breaker: bool = True
+        enable_circuit_breaker: bool = True,
+        batch_config: BatchConfig | None = None,
     ):
         self.max_concurrent_llm = max_concurrent_llm
         self.max_concurrent_image = max_concurrent_image
         self.max_workers = max_workers or min(32, (os.cpu_count() or 1) + 4)
+
+        self.batch_config = batch_config or BatchConfig()
+        self.rate_limits: Dict[str, RateLimitConfig] = {}
+        self.rate_limit_history: Dict[str, deque] = defaultdict(deque)
+        self.circuit_breakers: Dict[str, CircuitBreakerController] = {}
+        self.stats = ProcessingStats()
 
         # Semaphores for controlling concurrency
         self.llm_semaphore = asyncio.Semaphore(max_concurrent_llm)
@@ -256,7 +370,7 @@ class ParallelProcessor:
 
         # Rate limiting and circuit breakers
         self.rate_limiter = RateLimiter() if enable_rate_limiting else None
-        self.circuit_breakers = {} if enable_circuit_breaker else None
+        self._async_circuit_breakers = {} if enable_circuit_breaker else None
 
         # Task management
         self.task_queues: Dict[str, TaskQueue] = {}
@@ -497,14 +611,14 @@ class ParallelProcessor:
                 raise Exception(f"Rate limit exceeded for {provider}")
 
         # Circuit breaker protection
-        if self.circuit_breakers:
-            if provider not in self.circuit_breakers:
-                self.circuit_breakers[provider] = CircuitBreaker()
+        if self._async_circuit_breakers is not None:
+            if provider not in self._async_circuit_breakers:
+                self._async_circuit_breakers[provider] = CircuitBreaker()
 
             try:
-                return await self.circuit_breakers[provider].call(func, *args, **kwargs)
+                return await self._async_circuit_breakers[provider].call(func, *args, **kwargs)
             except Exception as e:
-                if self.circuit_breakers[provider]._state == 'OPEN':
+                if self._async_circuit_breakers[provider]._state == 'OPEN':
                     self.performance_stats['circuit_breaker_opens'] += 1
                 raise e
         else:
