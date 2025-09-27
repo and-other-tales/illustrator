@@ -244,6 +244,7 @@ def count_generated_images(manuscript_title: str) -> int:
 @router.get("/stats")
 async def get_dashboard_stats() -> DashboardStats:
     """Get dashboard statistics."""
+    logger.debug("API CALL: GET /stats")
     manuscripts = get_saved_manuscripts()
 
     total_chapters = sum(len(m.chapters) for m in manuscripts)
