@@ -27,6 +27,19 @@ from illustrator.models import (
     LLMProvider,
 )
 
+try:
+    import uvicorn as _uvicorn  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    _uvicorn = None  # type: ignore
+
+try:
+    import requests as _requests  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    _requests = None  # type: ignore
+
+uvicorn = _uvicorn
+requests = _requests
+
 console = Console()
 
 

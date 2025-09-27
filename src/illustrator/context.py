@@ -18,7 +18,7 @@ class ManuscriptContext(BaseModel):
         default=LLMProvider.HUGGINGFACE,
         description="Language model provider for manuscript analysis",
     )
-    model: str = Field(default="microsoft/phi-2", description="Primary analysis model")
+    model: str = Field(default="anthropic/claude-3-5-sonnet-20241022", description="Primary analysis model")
     huggingface_task: str = Field(
         default="text-generation",
         description="HuggingFace pipeline task used for local inference",

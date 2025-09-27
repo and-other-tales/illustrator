@@ -500,6 +500,8 @@ class TestCLICommands:
         from click.testing import CliRunner
 
         runner = CliRunner()
+        mock_instance = mock_cli_class.return_value
+        mock_instance.select_llm_provider.return_value = LLMProvider.HUGGINGFACE
         with patch('illustrator.cli.console'):
             result = runner.invoke(analyze, ['--list-saved'])
 
@@ -521,6 +523,7 @@ class TestCLICommands:
         try:
             mock_instance = MagicMock()
             mock_instance.load_manuscript_draft.return_value = True
+            mock_instance.select_llm_provider.return_value = LLMProvider.HUGGINGFACE
             mock_cli_class.return_value = mock_instance
 
             runner = CliRunner()
