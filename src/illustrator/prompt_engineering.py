@@ -503,11 +503,20 @@ class StyleTranslator:
         emotional_tones: List[str] | None
     ) -> tuple[List[str], List[str]]:
         """Extract emotional style modifiers and atmosphere adjustments from rich configuration."""
+        logger.debug("_get_emotional_style_modifiers called with emotional_tones type: %s, value: %r", type(emotional_tones), emotional_tones)
         modifiers: List[str] = []
         atmosphere_notes: List[str] = []
 
-        # Handle None emotional_tones
+        # Handle None or non-iterable emotional_tones
         if emotional_tones is None:
+            emotional_tones = []
+
+        # Additional safety check to ensure it's iterable
+        try:
+            # Test if it's iterable
+            iter(emotional_tones)
+        except (TypeError, AttributeError):
+            logger.warning("emotional_tones is not iterable, type: %s, value: %r", type(emotional_tones), emotional_tones)
             emotional_tones = []
 
         # Check if we have emotional adaptations in the config
