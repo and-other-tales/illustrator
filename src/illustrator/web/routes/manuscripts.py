@@ -87,14 +87,23 @@ _ROUTES_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _ROUTES_DIR.parents[4]
 
 
-def _normalize_style_modifiers(modifiers: Iterable[Any]) -> List[str]:
+def _normalize_style_modifiers(modifiers: Iterable[Any] | None) -> List[str]:
     """Convert style modifiers into a list of readable strings."""
+    if modifiers is None:
+        return []
+
     normalized: List[str] = []
-    for modifier in modifiers or []:
-        if isinstance(modifier, (list, tuple)):
-            normalized.append(" ".join(str(part) for part in modifier if part))
-        else:
-            normalized.append(str(modifier))
+    try:
+        for modifier in modifiers:
+            if isinstance(modifier, (list, tuple)):
+                normalized.append(" ".join(str(part) for part in modifier if part))
+            else:
+                normalized.append(str(modifier))
+    except TypeError:
+        # Handle case where modifiers is not iterable
+        logger.warning("Received non-iterable style modifiers: %r", modifiers)
+        return []
+
     return [m for m in normalized if m]
 
 
