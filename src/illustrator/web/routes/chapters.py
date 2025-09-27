@@ -88,8 +88,15 @@ def save_manuscript(manuscript: SavedManuscript, file_path: Path):
     manuscript.saved_at = datetime.now().isoformat()
     manuscript.file_path = str(file_path)
 
+    # Prepare data for saving, ensuring all required fields
+    data = manuscript.model_dump()
+    
+    # Import validation helpers
+    from illustrator.utils.validation_helpers import validate_manuscript_before_save
+    validated_data = validate_manuscript_before_save(data)
+
     with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(manuscript.model_dump(), f, indent=2, ensure_ascii=False)
+        json.dump(validated_data, f, indent=2, ensure_ascii=False)
 
 
 def load_chapter_analysis(chapter_id: str) -> Optional[dict]:

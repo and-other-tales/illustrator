@@ -187,15 +187,10 @@ def get_saved_manuscripts() -> List[SavedManuscript]:
             # Load from file
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                
-            # Fix for missing required fields in chapters
-            if 'chapters' in data:
-                for chapter in data['chapters']:
-                    # Add missing required fields
-                    if 'id' not in chapter:
-                        chapter['id'] = f"ch-{chapter.get('number', 0)}" if 'number' in chapter else str(uuid.uuid4())
-                    if 'summary' not in chapter:
-                        chapter['summary'] = f"Summary for {chapter.get('title', 'untitled chapter')}"
+            
+            # Import validation helpers
+            from illustrator.utils.validation_helpers import ensure_chapter_required_fields
+            data = ensure_chapter_required_fields(data)
                 
             manuscript = SavedManuscript(**data)
             new_cache[cache_key] = (manuscript, file_mtime)
@@ -225,9 +220,16 @@ def save_manuscript_to_disk(manuscript: SavedManuscript) -> Path:
     # Update file path in manuscript
     manuscript.file_path = str(file_path)
 
+    # Prepare data for saving, ensuring all required fields
+    data = manuscript.model_dump()
+    
+    # Import validation helpers
+    from illustrator.utils.validation_helpers import validate_manuscript_before_save
+    validated_data = validate_manuscript_before_save(data)
+
     # Save to file
     with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(manuscript.model_dump(), f, indent=2, ensure_ascii=False)
+        json.dump(validated_data, f, indent=2, ensure_ascii=False)
 
     return file_path
 
