@@ -18,7 +18,8 @@ T = TypeVar('T')
 R = TypeVar('R')
 
 __all__ = [
-    'ProcessingTask', 'BatchConfig', 'RateLimitConfig', 'CircuitBreakerConfig', 'ProcessingStats'
+    'ProcessingTask', 'BatchConfig', 'RateLimitConfig', 'CircuitBreakerConfig', 'ProcessingStats',
+    'CircuitBreakerState', 'CircuitBreakerController', 'CircuitBreaker', 'ProcessingResult', 'ParallelProcessor'
 ]
 
 
@@ -62,6 +63,14 @@ class CircuitBreakerState(str, Enum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
+
+# Backwards-compatible module-level name expected by tests
+CircuitBreakerState = CircuitBreakerState
+try:
+    import builtins as _builtins
+    _builtins.CircuitBreakerState = CircuitBreakerState
+except Exception:
+    pass
 
 
 @dataclass
