@@ -42,6 +42,8 @@ SAVED_MANUSCRIPTS_DIR = Path("saved_manuscripts")
 SCENE_ILLUSTRATIONS_DIR = Path("scene_illustrations")
 ILLUSTRATOR_OUTPUT_DIR = Path("illustrator_output")
 
+logger = logging.getLogger("api")
+
 
 def load_manuscript_by_id(manuscript_id: str) -> tuple[SavedManuscript, Path]:
     """Load a manuscript by its ID."""
@@ -131,7 +133,6 @@ def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
 @router.get("/{manuscript_id}")
 async def get_manuscript_chapters(manuscript_id: str) -> List[ChapterResponse]:
     """Get all chapters for a manuscript."""
-    logger = logging.getLogger("api")
     logger.debug(f"API CALL: GET /{{manuscript_id}} (get_manuscript_chapters) with manuscript_id={manuscript_id}")
 
     manuscript, _ = load_manuscript_by_id(manuscript_id)
@@ -151,8 +152,10 @@ async def get_manuscript_chapters(manuscript_id: str) -> List[ChapterResponse]:
 
 
 @router.get("/detail/{chapter_id}")
-async def get_chapter(chapter_id: str) -> ChapterResponse:
+async def get_chapter_detail(chapter_id: str) -> ChapterResponse:
     """Get a specific chapter by ID."""
+    logger.debug(f"API CALL: GET /detail/{{chapter_id}} (get_chapter_detail) with chapter_id={chapter_id}")
+
     # Parse chapter ID to get manuscript ID and chapter number
     # Format: uuid5(manuscript_id_chapter_number)
 
@@ -201,6 +204,8 @@ async def add_chapter(
     request: ChapterCreateRequest
 ) -> ChapterResponse:
     """Add a new chapter to a manuscript."""
+    logger.debug(f"API CALL: POST /{{manuscript_id}} (add_chapter) with manuscript_id={manuscript_id}")
+
     manuscript, file_path = load_manuscript_by_id(manuscript_id)
 
     # Determine chapter number
@@ -239,6 +244,8 @@ async def update_chapter(
     request: ChapterCreateRequest
 ) -> ChapterResponse:
     """Update an existing chapter."""
+    logger.debug(f"API CALL: PUT /{{chapter_id}} (update_chapter) with chapter_id={chapter_id}")
+
     # Find the manuscript and chapter
     if not SAVED_MANUSCRIPTS_DIR.exists():
         raise HTTPException(
@@ -284,6 +291,8 @@ async def update_chapter(
 @router.delete("/{chapter_id}")
 async def delete_chapter(chapter_id: str) -> SuccessResponse:
     """Delete a chapter."""
+    logger.debug(f"API CALL: DELETE /{{chapter_id}} (delete_chapter) with chapter_id={chapter_id}")
+
     # Find the manuscript and chapter
     if not SAVED_MANUSCRIPTS_DIR.exists():
         raise HTTPException(
@@ -333,6 +342,8 @@ async def reorder_chapters(
     chapter_order: List[str]
 ) -> SuccessResponse:
     """Reorder chapters in a manuscript."""
+    logger.debug(f"API CALL: POST /{{manuscript_id}}/reorder (reorder_chapters) with manuscript_id={manuscript_id}")
+
     manuscript, file_path = load_manuscript_by_id(manuscript_id)
 
     # Create a mapping of chapter IDs to chapters
@@ -367,6 +378,8 @@ async def generate_chapter_headers(
     style_config: dict = None
 ) -> ChapterHeaderResponse:
     """Generate 4 header illustration options for a chapter."""
+
+    logger.debug(f"API CALL: POST /{{chapter_id}}/headers (generate_chapter_headers) with chapter_id={chapter_id}")
 
     # Find the chapter
     if not SAVED_MANUSCRIPTS_DIR.exists():
@@ -473,6 +486,8 @@ async def generate_chapter_headers(
 @router.post("/{chapter_id}/analyze")
 async def analyze_chapter(chapter_id: str) -> dict:
     """Perform comprehensive analysis of a chapter including emotional moments, scenes, and visual potential."""
+
+    logger.debug(f"API CALL: POST /{{chapter_id}}/analyze (analyze_chapter) with chapter_id={chapter_id}")
 
     # Find the chapter
     if not SAVED_MANUSCRIPTS_DIR.exists():
