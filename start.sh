@@ -14,4 +14,4 @@ cd /app
 
 # Start the application
 echo "Starting illustrator on ${HOST}:${PORT}..."
-exec illustrator start --host ${HOST} --port ${PORT} --no-open-browser
+exec illustrator start --host ${HOST} --port ${PORT}
