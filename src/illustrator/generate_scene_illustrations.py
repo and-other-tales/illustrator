@@ -28,21 +28,33 @@ from illustrator.models import (
 from illustrator.analysis import EmotionalAnalyzer
 from illustrator.providers import ProviderFactory
 from illustrator.parallel_processor import ParallelProcessor, parallel_processor_decorator
-from langchain.chat_models import init_chat_model
+from illustrator.context import ManuscriptContext, get_default_context
+from illustrator.llm_factory import create_chat_model_from_context
 
 console = Console()
 
 class ComprehensiveSceneAnalyzer:
     """Performs comprehensive analysis to extract 10 illustration-worthy scenes per chapter."""
 
-    def __init__(self, llm_model: str = "anthropic/claude-3-5-sonnet-20241022", enable_parallel: bool = True):
+    def __init__(
+        self,
+        context: ManuscriptContext | None = None,
+        enable_parallel: bool = True,
+    ):
         """Initialize with enhanced analysis parameters and optional parallel processing."""
-        # Use unified model naming style used across the codebase
-        if "/" in llm_model:
-            provider, model_name = llm_model.split("/", 1)
-            self.llm = init_chat_model(model=model_name, model_provider=provider)
-        else:
-            self.llm = init_chat_model(model=llm_model)
+
+        if context is None:
+            context = get_default_context()
+
+        self.context = context
+
+        try:
+            self.llm = create_chat_model_from_context(self.context)
+        except Exception as exc:  # pragma: no cover - surfaced to CLI
+            raise RuntimeError(
+                "Failed to initialize analysis language model."
+            ) from exc
+
         self.emotional_analyzer = EmotionalAnalyzer(self.llm)
 
         # Initialize parallel processor
@@ -505,21 +517,34 @@ Respond in JSON format:
 class IllustrationGenerator:
     """Generates high-quality illustrations from analyzed scenes."""
 
-    def __init__(self, provider: ImageProvider, output_dir: Path):
+    def __init__(
+        self,
+        provider: ImageProvider,
+        output_dir: Path,
+        context: ManuscriptContext,
+    ):
         """Initialize illustration generator."""
         self.provider = provider
         self.output_dir = output_dir
+        self.context = context
         self.image_provider = self._setup_provider()
 
     def _setup_provider(self):
         """Setup the image generation provider."""
         return ProviderFactory.create_provider(
             self.provider,
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            google_credentials=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
-            google_project_id=os.getenv("GOOGLE_PROJECT_ID"),
-            huggingface_api_key=os.getenv("HUGGINGFACE_API_KEY"),
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
+            openai_api_key=self.context.openai_api_key,
+            google_credentials=self.context.google_credentials,
+            google_project_id=self.context.google_project_id,
+            huggingface_api_key=self.context.huggingface_api_key,
+            anthropic_api_key=self.context.anthropic_api_key,
+            llm_provider=self.context.llm_provider,
+            llm_model=self.context.model,
+            huggingface_task=self.context.huggingface_task,
+            huggingface_device=self.context.huggingface_device,
+            huggingface_max_new_tokens=self.context.huggingface_max_new_tokens,
+            huggingface_temperature=self.context.huggingface_temperature,
+            huggingface_model_kwargs=self.context.huggingface_model_kwargs,
         )
 
     async def generate_illustration_prompts(
@@ -839,8 +864,11 @@ This script will:
     }
 
     # Initialize components
-    analyzer = ComprehensiveSceneAnalyzer()
-    generator = IllustrationGenerator(provider, output_dir)
+    context = get_default_context()
+    context.image_provider = provider
+
+    analyzer = ComprehensiveSceneAnalyzer(context=context)
+    generator = IllustrationGenerator(provider, output_dir, context)
 
     # Process each chapter
     total_scenes_generated = 0

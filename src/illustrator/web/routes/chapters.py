@@ -9,7 +9,9 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from illustrator.models import Chapter, SavedManuscript
+from illustrator.context import ManuscriptContext, get_default_context
+from illustrator.llm_factory import create_chat_model_from_context
+from illustrator.models import Chapter, LLMProvider, SavedManuscript
 from illustrator.web.models.web_models import (
     ChapterCreateRequest,
     ChapterResponse,
@@ -401,24 +403,24 @@ async def generate_chapter_headers(
 
     try:
         # Initialize the advanced PromptEngineer system for chapter header generation
-        import os
-        from langchain.chat_models import init_chat_model
         from illustrator.prompt_engineering import PromptEngineer
         from illustrator.models import ImageProvider
 
-        # Check for required API key
-        anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
-        if not anthropic_api_key:
+        context: ManuscriptContext = get_default_context()
+        if context.llm_provider == LLMProvider.ANTHROPIC and not context.anthropic_api_key:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Anthropic API key is required for advanced prompt engineering"
             )
 
-        # Initialize LLM and PromptEngineer
-        llm = init_chat_model(
-            model="anthropic/claude-3-5-sonnet-20241022",
-            api_key=anthropic_api_key
-        )
+        try:
+            llm = create_chat_model_from_context(context)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to initialize language model: {exc}"
+            ) from exc
+
         prompt_engineer = PromptEngineer(llm)
 
         # Set default style preferences if not provided
@@ -510,19 +512,20 @@ async def analyze_chapter(chapter_id: str) -> dict:
         import os
 
         # Check for required API key
-        anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
-        if not anthropic_api_key:
+        context: ManuscriptContext = get_default_context()
+        if context.llm_provider == LLMProvider.ANTHROPIC and not context.anthropic_api_key:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Anthropic API key is required for chapter analysis"
             )
 
-        # Initialize LLM and analyzers
-        llm = init_chat_model(
-            model="claude-sonnet-4-20250514",
-            model_provider="anthropic",
-            api_key=anthropic_api_key
-        )
+        try:
+            llm = create_chat_model_from_context(context)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to initialize language model: {exc}"
+            ) from exc
 
         # Resolve analyzers (use patched module-level names if set; otherwise import lazily)
         from illustrator import analysis as _analysis_mod
@@ -536,7 +539,7 @@ async def analyze_chapter(chapter_id: str) -> dict:
         emotional_analyzer = EA(llm)
         scene_detector = SD(llm)
         narrative_analyzer = NA(llm)
-        comprehensive_analyzer = ComprehensiveSceneAnalyzer()
+        comprehensive_analyzer = ComprehensiveSceneAnalyzer(context=context)
 
         # Perform comprehensive analysis
         analysis_results = {}

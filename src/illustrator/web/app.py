@@ -1068,15 +1068,35 @@ async def run_processing_workflow(
 class WebSocketComprehensiveSceneAnalyzer:
     """Enhanced analyzer that sends progress updates via WebSocket."""
 
-    def __init__(self, connection_manager, session_id, llm_model: str = "claude-sonnet-4-20250514"):
+    def __init__(
+        self,
+        connection_manager,
+        session_id,
+        llm_model: str | None = "claude-sonnet-4-20250514",
+    ):
         # Import here to avoid circular imports
         try:
             from illustrator import generate_scene_illustrations as _scene_tools
         except ModuleNotFoundError:
             import generate_scene_illustrations as _scene_tools  # type: ignore
 
+        from illustrator.context import get_default_context, ManuscriptContext
+        from illustrator.models import LLMProvider
+
         ComprehensiveSceneAnalyzer = _scene_tools.ComprehensiveSceneAnalyzer
-        self.analyzer = ComprehensiveSceneAnalyzer(llm_model)
+
+        context: ManuscriptContext = get_default_context()
+
+        if llm_model:
+            context.model = llm_model
+            if "/" in llm_model:
+                provider_prefix = llm_model.split("/", 1)[0]
+                try:
+                    context.llm_provider = LLMProvider(provider_prefix)
+                except ValueError:
+                    pass
+
+        self.analyzer = ComprehensiveSceneAnalyzer(context=context)
         self.connection_manager = connection_manager
         self.session_id = session_id
 
