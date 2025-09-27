@@ -650,18 +650,32 @@ Return ONLY a decimal number between 0.0 and 1.0."""
             logger.error(f"LLM intensity scoring failed: {e}")
             return self._calculate_pattern_score(segment.text)
 
-        score_text = _extract_text(response)
+        score_text_raw = _extract_text(response)
+        score_text = str(score_text_raw or "").strip()
+
+        match_source = score_text
 
         if not score_text:
             logger.warning("LLM intensity scoring returned empty output; applying fallback parsing.")
         else:
-            try:
-                score = float(score_text)
-                return max(0.0, min(1.0, score))
-            except ValueError as e:
-                logger.warning(f"LLM intensity scoring returned non-numeric output: {e}. Applying fallback parsing.")
+            # Guard against stray wrapping quotes or formatting artefacts like "0.82" or '0.7'
+            sanitized_score = score_text.strip("'\"")
+            if not sanitized_score:
+                logger.warning(
+                    "LLM intensity scoring returned only formatting characters; applying fallback parsing."
+                )
+            else:
+                try:
+                    score = float(sanitized_score)
+                    return max(0.0, min(1.0, score))
+                except ValueError as e:
+                    logger.warning(
+                        "LLM intensity scoring returned non-numeric output: %s. Applying fallback parsing.",
+                        e,
+                    )
+            match_source = sanitized_score
 
-        match = re.search(r"(0?\.\d+|1(?:\.0+)?)", score_text)
+        match = re.search(r"(0?\.\d+|1(?:\.0+)?)", match_source)
         if match:
             try:
                 score = float(match.group(1))
