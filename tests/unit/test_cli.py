@@ -110,12 +110,14 @@ class TestManuscriptCLI:
         cli.setup_environment()
         # Should not raise an exception
 
+    @patch('illustrator.cli.find_dotenv', return_value='')
+    @patch('illustrator.cli.load_dotenv')
     @patch.dict(os.environ, {
         'DEFAULT_IMAGE_PROVIDER': 'dalle',
         'OPENAI_API_KEY': 'openai',
         'HUGGINGFACE_API_KEY': 'hf_key'
     }, clear=True)
-    def test_select_llm_provider_single_option(self, cli):
+    def test_select_llm_provider_single_option(self, mock_load_dotenv, mock_find_dotenv, cli):
         """When only one provider is configured it should be selected automatically."""
         cli.setup_environment()
         provider = cli.select_llm_provider(interactive=False)
@@ -124,13 +126,15 @@ class TestManuscriptCLI:
         assert cli.llm_provider == LLMProvider.HUGGINGFACE
 
     @patch('illustrator.cli.Prompt.ask', return_value='2')
+    @patch('illustrator.cli.find_dotenv', return_value='')
+    @patch('illustrator.cli.load_dotenv')
     @patch.dict(os.environ, {
         'DEFAULT_IMAGE_PROVIDER': 'dalle',
         'OPENAI_API_KEY': 'openai',
         'HUGGINGFACE_API_KEY': 'hf_key',
         'ANTHROPIC_API_KEY': 'anth_key'
     }, clear=True)
-    def test_select_llm_provider_interactive(self, mock_prompt, cli):
+    def test_select_llm_provider_interactive(self, mock_load_dotenv, mock_find_dotenv, mock_prompt, cli):
         """Interactive selection should honor the user's choice."""
         cli.setup_environment()
         provider = cli.select_llm_provider(interactive=True)
@@ -139,13 +143,15 @@ class TestManuscriptCLI:
         assert provider == LLMProvider.HUGGINGFACE
         assert cli.llm_provider == LLMProvider.HUGGINGFACE
 
+    @patch('illustrator.cli.find_dotenv', return_value='')
+    @patch('illustrator.cli.load_dotenv')
     @patch.dict(os.environ, {
         'DEFAULT_IMAGE_PROVIDER': 'dalle',
         'OPENAI_API_KEY': 'openai',
         'HUGGINGFACE_API_KEY': 'hf_key',
         'ANTHROPIC_API_KEY': 'anth_key'
     }, clear=True)
-    def test_select_llm_provider_batch_requires_env(self, cli):
+    def test_select_llm_provider_batch_requires_env(self, mock_load_dotenv, mock_find_dotenv, cli):
         """Batch mode without DEFAULT_LLM_PROVIDER should exit when multiple providers exist."""
         cli.setup_environment()
 

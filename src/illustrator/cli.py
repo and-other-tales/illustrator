@@ -176,8 +176,10 @@ class ManuscriptCLI:
                 "[red]Error: Multiple LLM providers detected. Set DEFAULT_LLM_PROVIDER to choose one in batch mode.[/red]"
             )
             sys.exit(1)
+            return self.llm_provider
 
-        os.environ['DEFAULT_LLM_PROVIDER'] = self.llm_provider.value
+        if self.llm_provider:
+            os.environ['DEFAULT_LLM_PROVIDER'] = self.llm_provider.value
         return self.llm_provider
 
     def display_welcome(self):
