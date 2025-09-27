@@ -391,7 +391,86 @@ class TestFluxProvider:
             flux_endpoint_url="https://endpoint.example.com/custom/flux/",
         )
 
-        assert provider.base_url == "https://endpoint.example.com/custom/flux/"
+        assert provider.base_url == "https://endpoint.example.com/custom/flux"
+
+    def test_flux_endpoint_preserves_model_paths(self):
+        """Ensure hosted model endpoints are not mutated."""
+        prompt_engineer = _stub_prompt_engineer(
+            ImageProvider.FLUX,
+            negative_prompt="test",
+            technical_params={},
+        )
+
+        provider = FluxProvider(
+            "test-hf-key",
+            prompt_engineer=prompt_engineer,
+            flux_endpoint_url="https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro",
+        )
+
+        assert provider.base_url == "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro"
+
+    @pytest.mark.asyncio
+    async def test_flux_sanitises_unsupported_parameters(self, flux_provider):
+        """Verify that unsupported technical params are stripped before the request."""
+        prompt = IllustrationPrompt(
+            provider=ImageProvider.FLUX,
+            prompt="A mystical forest",
+            style_modifiers=["mystical", "atmospheric"],
+            negative_prompt="blurry, low quality",
+            technical_params={
+                "guidance_scale": 7.5,
+                "style": "artistic",  # should be removed
+                "quality": "high",     # should be removed
+            }
+        )
+
+        fake_image_bytes = b"fake_flux_image_data"
+
+        with patch('aiohttp.ClientSession') as mock_session:
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.read = AsyncMock(return_value=fake_image_bytes)
+
+            mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session.return_value)
+            mock_session.return_value.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_session.return_value.post.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await flux_provider.generate_image(prompt)
+
+            assert result['success'] is True
+            post_kwargs = mock_session.return_value.post.call_args.kwargs
+            assert post_kwargs['json']['parameters'] == {"guidance_scale": 7.5}
+
+    @pytest.mark.asyncio
+    async def test_flux_truncates_long_prompts(self, flux_provider):
+        """Ensure overly long prompts are truncated to Flux token limits."""
+        long_prompt = " ".join(f"token{i}" for i in range(100))
+
+        prompt = IllustrationPrompt(
+            provider=ImageProvider.FLUX,
+            prompt=long_prompt,
+            style_modifiers=["detailed"],
+            negative_prompt="experimental",
+            technical_params={"guidance_scale": 7.5}
+        )
+
+        fake_image_bytes = b"fake_flux_image_data"
+
+        with patch('aiohttp.ClientSession') as mock_session:
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.read = AsyncMock(return_value=fake_image_bytes)
+
+            mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session.return_value)
+            mock_session.return_value.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_session.return_value.post.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            await flux_provider.generate_image(prompt)
+
+            post_kwargs = mock_session.return_value.post.call_args.kwargs
+            truncated_prompt = post_kwargs['json']['inputs']
+            assert len(truncated_prompt.split()) == 60
+            assert truncated_prompt.startswith("token0 token1 token2")
 
 
 class TestImagen4Provider:

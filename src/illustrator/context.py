@@ -187,7 +187,7 @@ def get_default_context() -> IllustratorContext:
 
     hf_flux_endpoint = os.getenv('HUGGINGFACE_FLUX_ENDPOINT_URL')
     if not hf_flux_endpoint:
-        hf_flux_endpoint = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro"
+        hf_flux_endpoint = "https://qj029p0ofvfmjxus.us-east-1.aws.endpoints.huggingface.cloud"
 
     return IllustratorContext(
         user_id="default_user",

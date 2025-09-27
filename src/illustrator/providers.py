@@ -1,6 +1,8 @@
 """Image generation providers for DALL-E, Imagen4, and Flux."""
 
 import base64
+import logging
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
@@ -19,7 +21,54 @@ from illustrator.error_handling import resilient_async, ErrorRecoveryHandler, sa
 from illustrator.llm_factory import HuggingFaceConfig, create_chat_model
 
 
-DEFAULT_FLUX_ENDPOINT_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro"
+logger = logging.getLogger(__name__)
+
+
+DEFAULT_FLUX_ENDPOINT_URL = "https://qj029p0ofvfmjxus.us-east-1.aws.endpoints.huggingface.cloud"
+
+
+ALLOWED_FLUX_PARAMETERS: set[str] = {
+    "guidance_scale",
+    "num_inference_steps",
+    "width",
+    "height",
+    "seed",
+    "num_images_per_prompt",
+    "scheduler",
+    "strength",
+    "prompt_strength",
+    "max_sequence_length",
+    "clip_skip",
+    "tiling",
+    "high_noise_frac",
+    "lora_scale",
+    "use_refiner",
+    "refiner_steps",
+    "refiner_guidance_scale",
+    "controlnet_conditioning_scale",
+    "controlnet_guidance_start",
+    "controlnet_guidance_end",
+}
+
+MAX_FLUX_PROMPT_TOKENS = 60
+
+
+def _normalise_flux_endpoint(endpoint_url: str | None) -> str:
+    """Return a HuggingFace Flux endpoint URL without trailing slashes."""
+
+    if not endpoint_url:
+        return DEFAULT_FLUX_ENDPOINT_URL
+
+    cleaned = endpoint_url.strip()
+    if not cleaned:
+        return DEFAULT_FLUX_ENDPOINT_URL
+
+    if "?" in cleaned:
+        base_part, query = cleaned.split("?", 1)
+        trimmed = base_part.rstrip("/")
+        return f"{trimmed or base_part}?{query}" if trimmed or query else DEFAULT_FLUX_ENDPOINT_URL
+
+    return cleaned.rstrip("/") or DEFAULT_FLUX_ENDPOINT_URL
 
 
 def _async_generation_failure(provider: str):
@@ -400,9 +449,9 @@ class FluxProvider(ImageGenerationProvider):
         )
         self.api_key = api_key
         if flux_endpoint_url:
-            self.base_url = flux_endpoint_url
+            self.base_url = _normalise_flux_endpoint(flux_endpoint_url)
         elif huggingface_config and huggingface_config.endpoint_url:
-            self.base_url = huggingface_config.endpoint_url
+            self.base_url = _normalise_flux_endpoint(huggingface_config.endpoint_url)
         else:
             self.base_url = DEFAULT_FLUX_ENDPOINT_URL
 
@@ -411,6 +460,45 @@ class FluxProvider(ImageGenerationProvider):
             if huggingface_config and huggingface_config.timeout is not None
             else None
         )
+
+    @staticmethod
+    def _sanitize_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove parameters unsupported by the Flux inference endpoint."""
+        if not parameters:
+            return {}
+
+        sanitized: Dict[str, Any] = {}
+        dropped: List[str] = []
+
+        for key, value in parameters.items():
+            if value is None:
+                continue
+
+            if key in ALLOWED_FLUX_PARAMETERS:
+                sanitized[key] = value
+            else:
+                dropped.append(key)
+
+        if dropped:
+            logger.debug(
+                "Dropped unsupported Flux parameters: %s", ", ".join(sorted(set(dropped)))
+            )
+
+        return sanitized
+
+    @staticmethod
+    def _truncate_text(text: str | None) -> tuple[str | None, bool]:
+        """Restrict text to Flux token limits (approximate by whitespace tokens)."""
+
+        if not text:
+            return text, False
+
+        tokens = re.findall(r"\S+", text)
+        if len(tokens) <= MAX_FLUX_PROMPT_TOKENS:
+            return text, False
+
+        truncated_text = " ".join(tokens[:MAX_FLUX_PROMPT_TOKENS])
+        return truncated_text, True
 
     def get_provider_type(self) -> ImageProvider:
         """Return Flux provider type."""
@@ -433,13 +521,19 @@ class FluxProvider(ImageGenerationProvider):
         """Generate image using Flux via HuggingFace API."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "image/png, application/json"
         }
 
+        sanitized_params = self._sanitize_parameters(prompt.technical_params)
+
+        truncated_prompt, prompt_truncated = self._truncate_text(prompt.prompt)
+        truncated_negative, negative_truncated = self._truncate_text(prompt.negative_prompt)
+
         payload = {
-            "inputs": prompt.prompt,
-            "negative_prompt": prompt.negative_prompt,
-            "parameters": prompt.technical_params
+            "inputs": truncated_prompt,
+            "negative_prompt": truncated_negative,
+            "parameters": sanitized_params
         }
 
         timeout = None
@@ -453,8 +547,21 @@ class FluxProvider(ImageGenerationProvider):
                 json=payload
             ) as response:
                 if response.status == 200:
-                    image_bytes = await response.read()
-                    image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+                    content_type = response.headers.get("Content-Type", "").lower()
+
+                    if "application/json" in content_type:
+                        json_payload = await response.json()
+                        image_field = (
+                            json_payload.get("generated_image_base64")
+                            or json_payload.get("image_base64")
+                            or json_payload.get("image")
+                        )
+                        if not image_field:
+                            raise ValueError("Flux endpoint returned JSON without image data")
+                        image_b64 = image_field
+                    else:
+                        image_bytes = await response.read()
+                        image_b64 = base64.b64encode(image_bytes).decode('utf-8')
 
                     return {
                         'success': True,
@@ -464,11 +571,13 @@ class FluxProvider(ImageGenerationProvider):
                             'provider': 'flux',
                             'model': prompt.technical_params.get('model', 'FLUX.1-pro'),
                             'endpoint_url': self.base_url,
-                            'prompt': prompt.prompt,
-                            'negative_prompt': prompt.negative_prompt,
-                            'parameters': prompt.technical_params,
+                            'prompt': truncated_prompt,
+                            'prompt_truncated': prompt_truncated,
+                            'negative_prompt': truncated_negative,
+                            'negative_prompt_truncated': negative_truncated,
+                            'parameters': sanitized_params,
                         }
-                }
+                    }
                 else:
                     try:
                         error_data = await response.json()

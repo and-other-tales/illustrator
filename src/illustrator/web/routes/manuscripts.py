@@ -1,5 +1,6 @@
 """API routes for manuscript management."""
 
+import base64
 import json
 import uuid
 import logging
@@ -10,7 +11,7 @@ from typing import Any, Dict, List, Optional, Iterable
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from illustrator.models import ManuscriptMetadata, SavedManuscript, Chapter
+from illustrator.models import ManuscriptMetadata, SavedManuscript, Chapter, ImageProvider
 from illustrator.web.models.web_models import (
     ManuscriptCreateRequest,
     ManuscriptResponse,
@@ -33,10 +34,14 @@ logger = logging.getLogger(__name__)
 # Storage paths
 SAVED_MANUSCRIPTS_DIR = Path("saved_manuscripts")
 ILLUSTRATOR_OUTPUT_DIR = Path("illustrator_output")
+GENERATED_IMAGES_DIR = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
+PREVIEW_IMAGES_DIR = GENERATED_IMAGES_DIR / "previews"
 
 # Ensure directories exist
 SAVED_MANUSCRIPTS_DIR.mkdir(exist_ok=True)
 ILLUSTRATOR_OUTPUT_DIR.mkdir(exist_ok=True)
+GENERATED_IMAGES_DIR.mkdir(exist_ok=True)
+PREVIEW_IMAGES_DIR.mkdir(exist_ok=True)
 
 
 def generate_manuscript_id() -> str:
@@ -521,6 +526,16 @@ async def preview_style_image(
         style_modifiers = _normalize_style_modifiers(style_translation.get("style_modifiers", []))
         provider_opts = style_translation.get("provider_optimizations", {}) or {}
 
+        # Flux prompts are sensitive to length; trim verbose quality modifiers
+        if (
+            style_config.image_provider == ImageProvider.FLUX
+            and provider_opts.get("quality_modifiers")
+        ):
+            provider_opts = {
+                **provider_opts,
+                "quality_modifiers": provider_opts["quality_modifiers"][:2],
+            }
+
         technical_params = dict(style_translation.get("technical_params", {}) or {})
         technical_params.update(provider_opts.get("technical_adjustments", {}) or {})
 
@@ -529,7 +544,7 @@ async def preview_style_image(
 
         # Build a preview prompt that reflects the configured style settings
         prompt_sections: List[str] = []
-        base_description = f"Preview illustration in {style_config.art_style}"
+        base_description = f"Concept illustration in {style_config.art_style}"
         if style_config.color_palette:
             base_description += f" using the {style_config.color_palette} palette"
         if style_config.artistic_influences:
@@ -540,14 +555,17 @@ async def preview_style_image(
             prompt_sections.append("featuring " + ", ".join(style_modifiers))
         if provider_opts.get("style_emphasis"):
             prompt_sections.append(provider_opts["style_emphasis"])
-        if provider_opts.get("quality_modifiers"):
+        if (
+            provider_opts.get("quality_modifiers")
+            and style_config.image_provider != ImageProvider.FLUX
+        ):
             prompt_sections.append(
                 "quality focus: " + ", ".join(provider_opts["quality_modifiers"])
             )
 
         preview_prompt_text = ". ".join(section for section in prompt_sections if section)
         if not preview_prompt_text:
-            preview_prompt_text = "Preview illustration showcasing the configured style settings"
+            preview_prompt_text = "Concept illustration showcasing the configured style settings"
         if not preview_prompt_text.endswith('.'):
             preview_prompt_text += '.'
 
@@ -566,13 +584,25 @@ async def preview_style_image(
         # Extract image URL from result
         if result.get('success'):
             if result.get('image_data'):
-                # Convert base64 to data URL
-                image_url = f"data:image/png;base64,{result['image_data']}"
+                # Persist preview image to disk so the browser can load it reliably
+                image_bytes = base64.b64decode(result['image_data'])
+                preview_filename = f"{manuscript_id}_style_preview_{uuid.uuid4().hex}.png"
+                preview_path = PREVIEW_IMAGES_DIR / preview_filename
+
+                with open(preview_path, 'wb') as preview_file:
+                    preview_file.write(image_bytes)
+
+                image_url = f"/generated/previews/{preview_filename}"
             else:
                 # Use direct URL if available
                 image_url = result.get('image_url', '')
         else:
-            raise Exception(result.get('error', 'Image generation failed'))
+            status_code = result.get('status_code') or status.HTTP_502_BAD_GATEWAY
+            error_message = result.get('error', 'Image generation failed')
+            raise HTTPException(
+                status_code=status_code,
+                detail=f"Flux preview failed: {error_message}"
+            )
 
         style_summary: Dict[str, Any] = {
             "provider": style_config.image_provider.value,

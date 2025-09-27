@@ -105,7 +105,7 @@ DEFAULT_ILLUSTRATION_STYLE=digital_painting
 | **Imagen (Vertex AI Imagen 3)** | Photorealistic output, fine control | Realistic settings, atmospheric scenes |
 | **Flux 1.1 Pro** | Artistic styles, creative interpretation | Stylized art, concept illustrations |
 
-> Flux 1.1 Pro uses HuggingFace Inference Endpoints for both full generations and web previews. Configure `HUGGINGFACE_API_KEY` and `HUGGINGFACE_FLUX_ENDPOINT_URL` to point at your deployed endpoint.
+> Flux 1.1 Pro uses HuggingFace Inference Endpoints for both full generations and web previews. Configure `HUGGINGFACE_API_KEY` and `HUGGINGFACE_FLUX_ENDPOINT_URL` to point at your deployed endpoint. If you omit it, the app defaults to `https://qj029p0ofvfmjxus.us-east-1.aws.endpoints.huggingface.cloud` and automatically targets the `/text-to-image` invocation path for custom endpoints.
 
 ## 📋 Example Usage
 
