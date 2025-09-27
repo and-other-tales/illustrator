@@ -116,15 +116,23 @@ def _async_generation_failure(provider: str):
     return _fallback
 
 
-def _format_style_modifiers(style_modifiers: List[Any]) -> str:
+def _format_style_modifiers(style_modifiers: List[Any] | None) -> str:
     """Helper function to safely format style modifiers, handling tuples."""
+    if not style_modifiers:
+        return ""
+
     formatted = []
-    for m in style_modifiers:
-        if isinstance(m, tuple):
-            # For tuples, join the elements with spaces
-            formatted.append(" ".join(str(elem) for elem in m))
-        else:
-            formatted.append(str(m))
+    try:
+        for m in style_modifiers:
+            if isinstance(m, tuple):
+                # For tuples, join the elements with spaces
+                formatted.append(" ".join(str(elem) for elem in m))
+            else:
+                formatted.append(str(m))
+    except TypeError:
+        logger.warning("Received non-iterable style_modifiers: %r", style_modifiers)
+        return ""
+
     return ", ".join(formatted)
 
 

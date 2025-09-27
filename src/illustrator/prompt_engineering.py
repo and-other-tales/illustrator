@@ -687,7 +687,12 @@ class StyleTranslator:
             style_modifiers.append(lighting_map[scene_composition.lighting_mood])
 
         # Add quality modifiers (limited for DALL-E)
-        style_modifiers.extend(vocabulary['quality_modifiers'][:3])
+        quality_modifiers = vocabulary.get('quality_modifiers', [])
+        if quality_modifiers:
+            try:
+                style_modifiers.extend(quality_modifiers[:3])
+            except TypeError:
+                logger.warning("Invalid quality_modifiers in dalle_vocabulary: %r", quality_modifiers)
 
         # Technical parameters optimized for DALL-E (OpenAI Images API)
         technical_params = style_config.get('technical_params', {})
@@ -700,9 +705,15 @@ class StyleTranslator:
 
         # Negative prompt (DALL-E doesn't use them, but stored for consistency)
         negative_prompt_candidates = self._coerce_to_list(style_config.get('negative_prompt'))
-        negative_prompt = (
-            negative_prompt_candidates if negative_prompt_candidates else list(vocabulary['negative_defaults'])
-        )
+        if negative_prompt_candidates:
+            negative_prompt = negative_prompt_candidates
+        else:
+            negative_defaults = vocabulary.get('negative_defaults', [])
+            try:
+                negative_prompt = list(negative_defaults) if negative_defaults else []
+            except TypeError:
+                logger.warning("Invalid negative_defaults in dalle_vocabulary: %r", negative_defaults)
+                negative_prompt = []
 
         return {
             "style_modifiers": style_modifiers,
@@ -753,7 +764,12 @@ class StyleTranslator:
             style_modifiers.append(lighting_modifiers[scene_composition.lighting_mood])
 
         # High-quality modifiers
-        style_modifiers.extend(vocabulary['quality_modifiers'])
+        quality_modifiers = vocabulary.get('quality_modifiers', [])
+        if quality_modifiers:
+            try:
+                style_modifiers.extend(quality_modifiers)
+            except TypeError:
+                logger.warning("Invalid quality_modifiers in imagen4_vocabulary: %r", quality_modifiers)
 
         # Technical parameters for Imagen4
         technical_params = {
@@ -764,9 +780,16 @@ class StyleTranslator:
         }
 
         # Enhanced negative prompt
-        negative_prompt = list(vocabulary['negative_defaults'])
+        negative_defaults = vocabulary.get('negative_defaults', [])
+        try:
+            negative_prompt = list(negative_defaults) if negative_defaults else []
+        except TypeError:
+            logger.warning("Invalid negative_defaults in imagen4_vocabulary: %r", negative_defaults)
+            negative_prompt = []
+
         extra_negative = self._coerce_to_list(style_config.get('negative_prompt'))
-        negative_prompt.extend(extra_negative)
+        if extra_negative:
+            negative_prompt.extend(extra_negative)
 
         # Add composition-specific negative prompts
         if scene_composition.composition_type == CompositionType.INTIMATE:
@@ -835,7 +858,12 @@ class StyleTranslator:
                 break
 
         # Quality and technique modifiers
-        style_modifiers.extend(vocabulary['quality_modifiers'])
+        quality_modifiers = vocabulary.get('quality_modifiers', [])
+        if quality_modifiers:
+            try:
+                style_modifiers.extend(quality_modifiers)
+            except TypeError:
+                logger.warning("Invalid quality_modifiers in flux_vocabulary: %r", quality_modifiers)
 
         # Technical parameters optimized for Flux
         technical_params = {
@@ -846,9 +874,16 @@ class StyleTranslator:
         }
 
         # Comprehensive negative prompt
-        negative_prompt = list(vocabulary['negative_defaults'])
+        negative_defaults = vocabulary.get('negative_defaults', [])
+        try:
+            negative_prompt = list(negative_defaults) if negative_defaults else []
+        except TypeError:
+            logger.warning("Invalid negative_defaults in flux_vocabulary: %r", negative_defaults)
+            negative_prompt = []
+
         extra_negative = self._coerce_to_list(style_config.get('negative_prompt'))
-        negative_prompt.extend(extra_negative)
+        if extra_negative:
+            negative_prompt.extend(extra_negative)
 
         # Add artistic quality negatives
         negative_prompt.extend([

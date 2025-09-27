@@ -578,7 +578,14 @@ async def preview_style_image(
         if style_config.huggingface_provider:
             technical_params.setdefault('provider', style_config.huggingface_provider)
 
-        negative_prompt_items = [str(item) for item in style_translation.get("negative_prompt", []) or []]
+        negative_prompt_items = []
+        negative_prompt_data = style_translation.get("negative_prompt", []) or []
+        if negative_prompt_data:
+            try:
+                negative_prompt_items = [str(item) for item in negative_prompt_data]
+            except TypeError:
+                logger.warning("Received non-iterable negative_prompt data: %r", negative_prompt_data)
+                negative_prompt_items = []
 
         # Build a baseline preview prompt from style settings
         prompt_sections: List[str] = []
