@@ -1535,28 +1535,30 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             enhanced_description = str(raw_content).strip()
 
             if not enhanced_description or "asyncmock" in enhanced_description.lower():
+                sentences = self._split_sentences(original_text)
+                summary = self._summarize_text_excerpt(original_text, max_sentences=2)
+                setting_sentence = self._find_sentence_with_keywords(sentences, self._SETTING_KEYWORDS)
+                character_sentence = self._find_sentence_with_keywords(sentences, self._CHARACTER_KEYWORDS)
+
                 fallback_sections: List[str] = []
-                focal = scene_composition.focal_point or "the primary subject"
-                lighting = getattr(scene_composition, 'lighting_mood', LightingMood.NATURAL).value.replace('_', ' ')
-                fallback_sections.append(
-                    f"A {lighting} scene focusing on {focal}, capturing {getattr(scene_composition, 'atmosphere', 'the emotional atmosphere')}"
-                )
+                if summary:
+                    fallback_sections.append(f"Illustrate the moment: {summary}")
 
-                if scene_composition.background_elements:
-                    fallback_sections.append(
-                        "Background details: " + ", ".join(scene_composition.background_elements)
-                    )
+                if setting_sentence and setting_sentence not in fallback_sections:
+                    fallback_sections.append(f"Setting and environment: {setting_sentence.rstrip(' .')}")
 
-                if scene_composition.foreground_elements:
-                    fallback_sections.append(
-                        "Foreground focus: " + ", ".join(scene_composition.foreground_elements)
-                    )
+                if character_sentence and character_sentence not in fallback_sections:
+                    fallback_sections.append(f"Character focus: {character_sentence.rstrip(' .')}")
 
                 if visual_elements:
-                    prominent = ", ".join(elem.description for elem in visual_elements[:3])
-                    fallback_sections.append(f"Key visual elements include {prominent}.")
+                    key_elements = ", ".join(elem.description for elem in visual_elements[:3])
+                    fallback_sections.append(f"Key visual details: {key_elements}")
 
-                fallback_sections.append(f"Narrative prompt reference: {original_text.strip()}" )
+                lighting = getattr(scene_composition, 'lighting_mood', LightingMood.NATURAL).value.replace('_', ' ')
+                fallback_sections.append(
+                    f"Rendered in a {lighting} atmosphere with {scene_composition.color_palette_suggestion}, captured as a classic E.H. Shepard pencil illustration with delicate linework, crosshatching, and gentle shading."
+                )
+
                 enhanced_description = " ".join(section for section in fallback_sections if section)
 
             # Ensure we have a substantive description
