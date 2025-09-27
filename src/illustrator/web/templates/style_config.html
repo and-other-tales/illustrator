@@ -268,6 +268,13 @@ async function previewStyle() {
     const formData = new FormData(document.getElementById('styleConfigForm'));
     const styleConfig = Object.fromEntries(formData.entries());
 
+    try {
+        normalizeStyleProvider(styleConfig);
+    } catch (error) {
+        showAlert(error.message, 'warning');
+        return;
+    }
+
     const previewCard = document.getElementById('previewCard');
     const previewContent = document.getElementById('previewContent');
 
@@ -359,6 +366,13 @@ async function previewStyle() {
 async function saveStyleConfig() {
     const formData = new FormData(document.getElementById('styleConfigForm'));
     const styleConfig = Object.fromEntries(formData.entries());
+
+    try {
+        normalizeStyleProvider(styleConfig);
+    } catch (error) {
+        showAlert(error.message, 'warning');
+        return;
+    }
 
     // Convert string numbers to actual numbers
     styleConfig.max_emotional_moments = parseInt(styleConfig.max_emotional_moments);
