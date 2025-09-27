@@ -43,11 +43,13 @@ class HuggingFaceEndpointChatWrapper:
         self._client = client
         self._generation_kwargs = generation_kwargs
         self._stream_callback = stream_callback
+        self._supports_chat_completion = hasattr(client, "chat_completion")
 
     async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
         """Generate a response asynchronously using the configured endpoint."""
 
         prompt = _messages_to_prompt(messages)
+        chat_payload = _messages_to_chat_messages(messages)
         use_stream = bool(self._generation_kwargs.get("stream"))
         loop = asyncio.get_running_loop()
         stream_callback = self._stream_callback
@@ -101,13 +103,46 @@ class HuggingFaceEndpointChatWrapper:
 
         def _run_endpoint() -> AIMessage:
             kwargs = dict(self._generation_kwargs)
+
+            if self._supports_chat_completion:
+                chat_kwargs = dict(kwargs)
+                chat_kwargs.pop("return_full_text", None)
+
+                try:
+                    if use_stream:
+                        aggregated_tokens: list[str] = []
+
+                        for chunk in self._client.chat_completion(
+                            messages=chat_payload,
+                            **chat_kwargs,
+                        ):
+                            chunk_text = _extract_chat_chunk(chunk)
+                            if chunk_text:
+                                aggregated_tokens.append(chunk_text)
+                                _schedule_stream_callback(chunk_text)
+
+                        generated_text = "".join(aggregated_tokens)
+                    else:
+                        completion = self._client.chat_completion(
+                            messages=chat_payload,
+                            **chat_kwargs,
+                        )
+
+                        generated_text = _extract_chat_completion_text(completion)
+
+                    if generated_text:
+                        return AIMessage(content=generated_text.strip())
+                except Exception:  # pragma: no cover - fallback for unsupported chat endpoints
+                    logger.exception("HuggingFace chat_completion failed; falling back to text_generation")
+
+            # Fallback to text-generation style invocation
             raw_output = self._client.text_generation(
                 prompt,
                 **kwargs,
             )
 
             if use_stream:
-                aggregated_tokens: list[str] = []
+                aggregated_tokens = []
                 final_text: str | None = None
 
                 for chunk in raw_output:
@@ -156,6 +191,84 @@ def _messages_to_prompt(messages: Sequence[BaseMessage]) -> str:
     # Encourage the model to respond in the assistant role
     lines.append("Assistant:")
     return "\n".join(lines)
+
+
+def _messages_to_chat_messages(messages: Sequence[BaseMessage]) -> list[dict[str, str]]:
+    """Convert LangChain messages into HuggingFace chat-completion payload."""
+
+    role_map = {
+        "SystemMessage": "system",
+        "HumanMessage": "user",
+        "AIMessage": "assistant",
+    }
+
+    chat_messages: list[dict[str, str]] = []
+    for message in messages:
+        role = role_map.get(type(message).__name__, "user")
+        chat_messages.append({
+            "role": role,
+            "content": message.content,
+        })
+
+    return chat_messages
+
+
+def _extract_chat_chunk(chunk: Any) -> str:
+    """Extract incremental text from a HuggingFace chat completion stream chunk."""
+
+    if chunk is None:
+        return ""
+
+    choices = getattr(chunk, "choices", None)
+    if not choices and isinstance(chunk, dict):
+        choices = chunk.get("choices")
+
+    if not choices:
+        return ""
+
+    collected: list[str] = []
+    for choice in choices:
+        delta = getattr(choice, "delta", None)
+        if delta is None and isinstance(choice, dict):
+            delta = choice.get("delta")
+
+        if delta is None:
+            continue
+
+        content = getattr(delta, "content", None)
+        if content is None and isinstance(delta, dict):
+            content = delta.get("content")
+
+        if content:
+            collected.append(str(content))
+
+    return "".join(collected)
+
+
+def _extract_chat_completion_text(completion: Any) -> str:
+    """Extract full text from a HuggingFace chat-completion response."""
+
+    if completion is None:
+        return ""
+
+    choices = getattr(completion, "choices", None)
+    if not choices and isinstance(completion, dict):
+        choices = completion.get("choices")
+
+    if not choices:
+        return ""
+
+    first_choice = choices[0]
+    message = getattr(first_choice, "message", None)
+    if message is None and isinstance(first_choice, dict):
+        message = first_choice.get("message")
+
+    if isinstance(message, dict):
+        content = message.get("content")
+    else:
+        content = getattr(message, "content", None)
+
+    return str(content or "")
 
 
 def _normalize_provider(provider: LLMProvider | str | None, anthropic_key: str | None) -> LLMProvider:
