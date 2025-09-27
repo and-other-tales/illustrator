@@ -232,6 +232,7 @@ def create_chat_model(
         "max_new_tokens": config.max_new_tokens,
         "temperature": config.temperature,
         "return_full_text": False,
+        "stream": True,  # Enable streaming for HuggingFace models
     }
 
     if config.model_kwargs:
