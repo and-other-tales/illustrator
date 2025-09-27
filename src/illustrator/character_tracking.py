@@ -210,7 +210,30 @@ class CharacterTracker:
         return names
 
     async def _analyze_character_mentions(self, text, character_names):
-        return {}
+        """Use LLM to analyze character mentions in text."""
+        if not character_names:
+            return {}
+            
+        character_prompt = ", ".join(character_names)
+        
+        messages = [
+            SystemMessage(content=
+                "You are a literary analysis expert. Analyze the text and extract details about the characters mentioned."
+                "For each character, identify their role, physical appearance, personality traits, and emotional state in this scene."
+            ),
+            HumanMessage(content=
+                f"Analyze the following characters in this text: {character_prompt}\n\n"
+                f"TEXT: {text}\n\n"
+                f"Provide a character analysis for each of these characters, describing their appearance, role, and emotional state in this scene."
+            )
+        ]
+        
+        try:
+            response = await self.llm.ainvoke(messages)
+            return self._parse_character_analysis(response.content)
+        except Exception as e:
+            print(f"Error analyzing character mentions: {e}")
+            return {}
 
     def _parse_character_analysis(self, response):
         """Parse character analysis from LLM response."""
