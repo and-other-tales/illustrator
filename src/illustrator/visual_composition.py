@@ -27,14 +27,14 @@ logger = logging.getLogger(__name__)
 
 
 class CompositionRuleEnum(str, Enum):
-    """Internal enum for composition rules (kept for internal logic)."""
-    RULE_OF_THIRDS = "rule_of_thirds"
-    GOLDEN_RATIO = "golden_ratio"
-    LEADING_LINES = "leading_lines"
-    FRAMING = "framing"
-    SYMMETRY = "symmetry"
-    ASYMMETRIC_BALANCE = "asymmetric_balance"
-    DEPTH_OF_FIELD = "depth_of_field"
+        analysis_obj = CompositionAnalysis(
+            visual_elements=composition.composition_elements,
+            composition_guide=CompositionGuide(
+                shot_type=composition.shot_type,
+                camera_angle=composition.camera_angle,
+                focal_point=composition.focal_point_position,
+                depth_layers=[l.layer_type for l in composition.visual_layers]
+            ),
     FOREGROUND_MIDGROUND_BACKGROUND = "foreground_midground_background"
     DIAGONAL_COMPOSITION = "diagonal_composition"
     TRIANGULAR_COMPOSITION = "triangular_composition"
