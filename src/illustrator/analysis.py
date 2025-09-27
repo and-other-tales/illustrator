@@ -1,5 +1,7 @@
 """Enhanced emotional analysis and NLP processing for manuscript text with scene-aware analysis."""
 
+import asyncio
+import json
 import logging
 import re
 from dataclasses import dataclass
