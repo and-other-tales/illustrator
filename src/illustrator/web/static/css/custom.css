@@ -205,6 +205,12 @@ h5, h6 { font: var(--md-type-scale-label); }
     padding: 1.5rem;
 }
 
+.style-action-btn {
+    height: 100%;
+    min-height: 3.25rem;
+    padding: 0.75rem 1rem;
+}
+
 /* Elevated cards */
 .card.shadow {
     box-shadow: var(--md-elevation-2);
