@@ -811,6 +811,12 @@ class ReplicateImageProvider(ImageGenerationProvider):
             'prompt': payload.get('prompt', prompt.prompt),
             'image_url': image_url,
         }
+        if prompt.style_modifiers:
+            metadata['style_modifiers'] = list(prompt.style_modifiers)
+        if prompt.technical_params:
+            metadata['technical_params'] = dict(prompt.technical_params)
+        if prompt.negative_prompt:
+            metadata['negative_prompt'] = prompt.negative_prompt
         metadata.update(metadata_overrides)
 
         return {

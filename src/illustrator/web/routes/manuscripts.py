@@ -627,12 +627,21 @@ async def preview_style_image(
             style_summary["style_emphasis"] = provider_opts["style_emphasis"]
         if provider_opts.get("quality_modifiers") and not is_flux_family:
             style_summary["quality_modifiers"] = provider_opts["quality_modifiers"]
-        if is_flux_family:
-            effective_prompt = metadata.get('prompt') or preview_prompt_text
+        effective_prompt = metadata.get('prompt')
+        if effective_prompt:
             style_summary["effective_prompt"] = effective_prompt
+        if metadata.get('technical_params'):
+            style_summary["technical_params_applied"] = metadata['technical_params']
+        if metadata.get('style_modifiers'):
+            style_summary["applied_style_modifiers"] = metadata['style_modifiers']
+
+        if is_flux_family:
+            effective_prompt = style_summary.get('effective_prompt', preview_prompt_text)
             if metadata.get('prompt_truncated'):
                 style_summary["prompt_truncated"] = True
-                preview_prompt_text = effective_prompt
+            preview_prompt_text = effective_prompt
+        elif effective_prompt:
+            preview_prompt_text = effective_prompt
 
         return {
             "image_url": image_url,
