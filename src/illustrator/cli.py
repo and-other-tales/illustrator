@@ -1041,7 +1041,7 @@ def analyze(interactive: bool, config_file: str | None, style_config: str | None
         else:
             # Batch mode (could read from files, etc.)
             console.print("[yellow]Batch mode not yet implemented.[/yellow]")
-            sys.exit(1)
+            return
 
     except KeyboardInterrupt:
         console.print("\n\n[yellow]⚠️  Operation cancelled by user.[/yellow]")
