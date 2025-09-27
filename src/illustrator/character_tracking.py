@@ -698,6 +698,7 @@ class CharacterTracker:
                 "character_arc_stage": "introduction"
             }
 
+    # Keep the original version for backward compatibility
     async def _update_character_profile(self, name: str, chapter: Chapter):
         """Update an existing character profile with new information."""
 

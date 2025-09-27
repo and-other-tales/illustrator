@@ -612,6 +612,7 @@ class TestCharacterTracker:
         chapter = Chapter(
             id="ch-1",
             title="Test Chapter",
+            summary="A brief meeting between John and Mary",
             content="John walked into the room where Mary was waiting. She smiled at him warmly.",
             emotional_moments=[]
         )
