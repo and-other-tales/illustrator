@@ -176,6 +176,14 @@ class ColorHarmony:
 for _member in ColorScheme:
     setattr(ColorHarmony, _member.name, _member)
 
+# Also expose the more complete ColorHarmonyEnum members for code that expects those names
+for _member in ColorHarmonyEnum:
+    # map names like WARM_PALETTE to the enum member
+    try:
+        setattr(ColorHarmony, _member.name, _member)
+    except Exception:
+        pass
+
 
 class VisualFocus(str, Enum):
     """Types of visual focus and emphasis."""
@@ -1259,6 +1267,9 @@ LightingSetup = LightingSetup
 ColorHarmony = ColorHarmony
 CompositionElement = CompositionElement
 VisualLayer = VisualLayer
+
+# Some tests import CompositionAnalysis directly; provide a simple alias
+CompositionAnalysis = CompositionAnalysis
 
 
 
