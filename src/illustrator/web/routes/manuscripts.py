@@ -676,7 +676,6 @@ async def preview_style_image(
                 logger.debug("LLM created successfully: %s", type(llm))
                 emotional_analyzer = EmotionalAnalyzer(llm)
 
-                import uuid
                 excerpt_id = f"preview-{uuid.uuid4()}"
                 chapter_excerpt = Chapter(
                     id=excerpt_id,
