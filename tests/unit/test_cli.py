@@ -527,7 +527,7 @@ class TestCLICommands:
             mock_cli_class.return_value = mock_instance
 
             runner = CliRunner()
-            result = runner.invoke(analyze, ['--load', temp_file])
+            result = runner.invoke(analyze, ['--load', temp_file, '--batch'])
 
             assert result.exit_code == 0
         finally:

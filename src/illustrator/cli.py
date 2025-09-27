@@ -5,8 +5,12 @@ import importlib
 import json
 import os
 import sys
+import threading
+import time
+import webbrowser
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List
 
 import click
@@ -35,10 +39,12 @@ except ImportError:  # pragma: no cover - optional dependency
 try:
     import requests as _requests  # type: ignore
 except ImportError:  # pragma: no cover - optional dependency
-    _requests = None  # type: ignore
+    _requests = SimpleNamespace()
 
 uvicorn = _uvicorn
 requests = _requests
+create_api_only_app = None
+create_web_client_app = None
 
 console = Console()
 
@@ -1141,8 +1147,14 @@ def api_server(host: str, port: int, api_key: str, reload: bool):
     """Start API server only (no web interface)."""
     try:
         ensure_web_dependencies()
-        from illustrator.web.app import create_api_only_app
-        import uvicorn
+        global create_api_only_app
+        global uvicorn
+        if create_api_only_app is None:
+            from illustrator.web.app import create_api_only_app as _create_api_only_app
+            create_api_only_app = _create_api_only_app
+        if uvicorn is None:
+            import uvicorn as _uvicorn  # type: ignore
+            uvicorn = _uvicorn
 
         console.print(Panel.fit(
             f"[bold green]🚀 Starting API Server (No Web UI)[/bold green]\n\n"
@@ -1186,6 +1198,10 @@ def api_server(host: str, port: int, api_key: str, reload: bool):
         sys.exit(1)
 
 
+cli.add_command(api_server, name="web-server")
+web_server = api_server
+
+
 @cli.command()
 @click.option(
     '--server-url',
@@ -1216,11 +1232,18 @@ def api_server(host: str, port: int, api_key: str, reload: bool):
 def web_client(server_url: str, api_key: str, host: str, port: int, open_browser: bool):
     """Start web interface only (connects to remote API server)."""
     try:
-        from illustrator.web.app import create_web_client_app
-        import uvicorn
-        import webbrowser
-        import threading
-        import time
+        global create_web_client_app
+        global uvicorn
+        global requests
+        if create_web_client_app is None:
+            from illustrator.web.app import create_web_client_app as _create_web_client_app
+            create_web_client_app = _create_web_client_app
+        if uvicorn is None:
+            import uvicorn as _uvicorn  # type: ignore
+            uvicorn = _uvicorn
+        if not hasattr(requests, 'get'):
+            import requests as _requests  # type: ignore
+            requests = _requests
 
         console.print(Panel.fit(
             f"[bold blue]🌐 Starting Web Client[/bold blue]\n\n"
@@ -1234,7 +1257,6 @@ def web_client(server_url: str, api_key: str, host: str, port: int, open_browser
 
         # Test connection to remote server
         try:
-            import requests
             response = requests.get(f"{server_url}/health", timeout=5)
             if response.status_code == 200:
                 console.print("[green]✅ Successfully connected to remote server[/green]")
