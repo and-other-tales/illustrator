@@ -949,7 +949,8 @@ class StyleTranslator:
         # Technical parameters optimized for DALL-E (OpenAI Images API)
         technical_params = style_config.get('technical_params', {})
         technical_params.update({
-            "model": "gpt-image-1",
+            # Tests and callers expect DALL·E model identifier for DALLE provider
+            "model": "dall-e-3",
             "quality": "hd",
             "size": "1024x1024",
             "style": "vivid" if scene_composition.emotional_weight > 0.7 else "natural"
