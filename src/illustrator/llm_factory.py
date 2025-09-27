@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from huggingface_hub import InferenceClient
 
 from illustrator.models import LLMProvider
+import json
 
 if TYPE_CHECKING:  # pragma: no cover - typing helpers
     from illustrator.context import ManuscriptContext
@@ -52,6 +53,10 @@ class HuggingFaceEndpointChatWrapper:
         }
         self._stream_callback = stream_callback
         self._supports_chat_completion = hasattr(client, "chat_completion")
+        # Harmony-specific behaviour: some HF-hosted models (e.g. gpt-oss-120b) use
+        # a structured "harmony" stream/response format. Consumers can opt-in by
+        # setting generation_kwargs['harmony_format'] = True in create_chat_model.
+        self._is_harmony = bool(generation_kwargs.get("harmony_format"))
 
     async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
         """Generate a response asynchronously using the configured endpoint."""
@@ -109,6 +114,68 @@ class HuggingFaceEndpointChatWrapper:
 
             return ""
 
+
+        def _extract_harmony_token(chunk: Any) -> str:
+            """Extract incremental token text from a harmony-format chunk if present."""
+            if chunk is None:
+                return ""
+
+            # Harmony streaming chunks may be dicts with a 'harmony' key containing
+            # a nested delta/token structure. Be defensive about shapes.
+            try:
+                if isinstance(chunk, dict) and "harmony" in chunk:
+                    h = chunk.get("harmony")
+                    if isinstance(h, dict):
+                        # common shapes: {'harmony': {'delta': {'content': '...'}}}
+                        delta = h.get("delta") or h.get("token") or {}
+                        if isinstance(delta, dict):
+                            text = delta.get("content") or delta.get("text")
+                            if text:
+                                return str(text)
+                        # other shape: {'harmony': {'tokens': [{'text': '...'}]}}
+                        tokens = h.get("tokens")
+                        if isinstance(tokens, list) and tokens:
+                            first = tokens[0]
+                            if isinstance(first, dict):
+                                return str(first.get("text", ""))
+                    if isinstance(h, str):
+                        return h
+            except Exception:
+                return ""
+
+            return ""
+
+
+        def _extract_harmony_full_text(chunk: Any) -> str:
+            """Extract full generated text from a harmony-format completion or chunk."""
+            if chunk is None:
+                return ""
+
+            try:
+                if isinstance(chunk, dict) and "harmony" in chunk:
+                    h = chunk.get("harmony")
+                    if isinstance(h, dict):
+                        # try several common keys
+                        text = h.get("generated_text") or h.get("text")
+                        if text:
+                            return str(text)
+                        # nested message list
+                        messages = h.get("messages") or h.get("content")
+                        if isinstance(messages, list):
+                            parts = []
+                            for m in messages:
+                                if isinstance(m, dict):
+                                    parts.append(str(m.get("content", "")))
+                                else:
+                                    parts.append(str(m))
+                            return "".join(parts).strip()
+                        if isinstance(h, str):
+                            return h
+                # fallback to usual generated_text
+                return _extract_full_text(chunk)
+            except Exception:
+                return _extract_full_text(chunk)
+
         def _run_endpoint() -> AIMessage:
             kwargs = dict(self._generation_kwargs)
 
@@ -127,7 +194,10 @@ class HuggingFaceEndpointChatWrapper:
                             messages=chat_payload,
                             **chat_kwargs,
                         ):
-                            chunk_text = _extract_chat_chunk(chunk)
+                            if self._is_harmony:
+                                chunk_text = _extract_harmony_token(chunk)
+                            else:
+                                chunk_text = _extract_chat_chunk(chunk)
                             if chunk_text:
                                 aggregated_tokens.append(chunk_text)
                                 _schedule_stream_callback(chunk_text)
@@ -168,12 +238,20 @@ class HuggingFaceEndpointChatWrapper:
                 final_text: str | None = None
 
                 for chunk in raw_output:
-                    token_text = _extract_token(chunk)
+                    if self._is_harmony:
+                        token_text = _extract_harmony_token(chunk)
+                    else:
+                        token_text = _extract_token(chunk)
+
                     if token_text:
                         aggregated_tokens.append(token_text)
                         _schedule_stream_callback(token_text)
 
-                    chunk_full_text = _extract_full_text(chunk)
+                    if self._is_harmony:
+                        chunk_full_text = _extract_harmony_full_text(chunk)
+                    else:
+                        chunk_full_text = _extract_full_text(chunk)
+
                     if chunk_full_text:
                         final_text = chunk_full_text
 
@@ -367,6 +445,15 @@ def create_chat_model(
 
     if config.model_kwargs:
         generation_kwargs.update(config.model_kwargs)
+
+    # Auto-detect Harmony-format models (e.g. gpt-oss-120b) and set flag so
+    # the wrapper knows how to parse structured harmony responses.
+    try:
+        model_lower = (model or "").lower()
+        if "gpt-oss" in model_lower or (config.model_kwargs or {}).get("harmony_format"):
+            generation_kwargs.setdefault("harmony_format", True)
+    except Exception:
+        pass
 
     if endpoint_url:
         # Custom endpoints expect routing to be handled by the base URL

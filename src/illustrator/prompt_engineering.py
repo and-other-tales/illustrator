@@ -1293,10 +1293,19 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             visual_elements,
             scene_composition
         )
-        # Ensure explicit focal point phrase is present; if not, add a short preservation clause.
+        # Ensure explicit focal point phrase is present; if not, embed a short natural clause into the description.
         focal = getattr(scene_composition, 'focal_point', '') or ''
         if focal and focal.lower() not in scene_desc.lower():
-            scene_desc = scene_desc + f". Note: the scene specifically includes '{focal}'."
+            # Use exact token(s) from focal and inject a short sentence near the end of the scene description.
+            try:
+                fp = str(focal).strip()
+                if fp:
+                    if not scene_desc.strip().endswith('.'):
+                        scene_desc = scene_desc.strip() + '.'
+                    scene_desc = scene_desc + f" The scene focuses on {fp}."
+            except Exception:
+                # Fallback to conservative note if any string operations fail
+                scene_desc = scene_desc + f". Note: the scene specifically includes '{focal}'."
         prompt_parts.append(scene_desc)
 
         # Composition guidance
@@ -1321,10 +1330,36 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         combined_preview = " ".join(prompt_parts).lower()
         atmosphere_phrase = (getattr(scene_composition, 'atmosphere', '') or '').lower()
         lighting_phrase = (getattr(scene_composition, 'lighting_mood', None) and getattr(scene_composition.lighting_mood, 'value', '').replace('_', ' ')) or ''
+        # Prefer embedding atmosphere and lighting phrases into the scene description body
+        # so downstream substring checks find them reliably.
         if atmosphere_phrase and atmosphere_phrase not in combined_preview:
-            prompt_parts.append(f"Atmosphere: {scene_composition.atmosphere}.")
+            try:
+                # Insert a short, normalized phrase into scene_desc if possible
+                if atmosphere_phrase not in scene_desc.lower():
+                    if not scene_desc.strip().endswith('.'):
+                        scene_desc = scene_desc.strip() + '.'
+                    scene_desc = scene_desc + f" The atmosphere is {scene_composition.atmosphere}."
+                    # update preview
+                    combined_preview = " ".join(prompt_parts).lower()
+                else:
+                    prompt_parts.append(f"Atmosphere: {scene_composition.atmosphere}.")
+            except Exception:
+                prompt_parts.append(f"Atmosphere: {scene_composition.atmosphere}.")
         if lighting_phrase and lighting_phrase not in combined_preview:
-            prompt_parts.append(f"Lighting: {lighting_phrase}.")
+            try:
+                if lighting_phrase not in scene_desc.lower():
+                    if not scene_desc.strip().endswith('.'):
+                        scene_desc = scene_desc.strip() + '.'
+                    scene_desc = scene_desc + f" Lighting: {lighting_phrase}."
+                    combined_preview = " ".join(prompt_parts).lower()
+                else:
+                    prompt_parts.append(f"Lighting: {lighting_phrase}.")
+            except Exception:
+                prompt_parts.append(f"Lighting: {lighting_phrase}.")
+
+        # Replace the scene description in prompt_parts (it was appended earlier)
+        if prompt_parts:
+            prompt_parts[0] = scene_desc
 
         # Style modifiers (handle tuples properly)
         style_modifiers_formatted = []
@@ -1789,14 +1824,27 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                         if ngrams_added >= max_ngrams:
                             break
 
-            # Ensure each explicit phrase is present in the output (case-insensitive). If absent, append a short clause preserving it.
+            # Ensure each explicit phrase is present in the output (case-insensitive).
+            # Prefer embedding short preserved phrases into the main descriptive body rather
+            # than only appending them as separate Note clauses which break substring checks.
             notes_added = 0
+            embedded_phrases: List[str] = []
             for phrase in explicit_phrases:
                 if notes_added >= 5:
                     break
                 phrase_norm = phrase.lower()
                 if phrase_norm and phrase_norm not in out.lower():
-                    out += f". Note: the scene includes the original detail '{phrase.strip()}'."
+                    # For short phrases (<=4 words), embed as a short natural sentence;
+                    # otherwise append a concise note as a fallback.
+                    word_count = len(phrase.split())
+                    safe_phrase = phrase.strip()
+                    if 1 < word_count <= 4:
+                        # Insert a short sentence near the end of the description using exact tokens.
+                        insertion = f" The scene shows {safe_phrase}."
+                        out = out.rstrip('.') + '.' + insertion
+                        embedded_phrases.append(safe_phrase)
+                    else:
+                        out += f". Note: the scene includes the original detail '{safe_phrase}'."
                     notes_added += 1
 
             # Conservative removal of invented objects: find simple furniture/object nouns the LLM may invent
@@ -1808,6 +1856,9 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
 
             # Cleanup extra whitespace from removals
             out = re.sub(r"\s{2,}", " ", out).strip()
+
+            # Normalize spacing around embedded sentences
+            out = re.sub(r"\s+\.", ".", out)
 
             return out
         except Exception:
