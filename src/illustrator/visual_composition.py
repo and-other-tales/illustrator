@@ -500,6 +500,21 @@ class AdvancedVisualComposer:
             color_harmony=composition.color_harmony,
         )
 
+        # Provide a CompositionAnalysis object for callers/tests expecting that type
+        analysis_obj = CompositionAnalysis(
+            visual_elements=composition.composition_elements,
+            composition_guide=CompositionGuide(
+                shot_type=composition.shot_type,
+                camera_angle=composition.camera_angle,
+                focal_point=focal_point,
+                depth_layers=[l.layer_type for l in visual_layers]
+            ),
+            lighting_setup=composition.lighting_setup,
+            color_harmony=composition.color_harmony,
+            overall_mood=composition.emotional_amplification,
+            composition_strength=getattr(composition, 'composition_strength', 0.5)
+        )
+
         technical_specifications = {
             "shot_type": composition.shot_type,
             "camera_angle": composition.camera_angle,
@@ -512,7 +527,7 @@ class AdvancedVisualComposer:
         prompt_summary = self.generate_composition_prompt(composition)
 
         return {
-            "composition_analysis": analysis_summary,
+            "composition_analysis": analysis_obj,
             "technical_specifications": technical_specifications,
             "visual_prompt_enhancement": prompt_summary,
         }
@@ -780,9 +795,13 @@ class AdvancedVisualComposer:
                     return first
                 elif isinstance(first, LightingSetupEnum):
                     # Map enum to LightingSetup dataclass
-                    lt = LightingType.DRAMATIC if 'dramatic' in first.value or 'chiaroscuro' in first.value else (
-                        LightingType.NATURAL if 'golden' in first.value or 'natural' in first.value or 'window' in first.value else LightingType.SOFT
-                    )
+                    # Map specific named presets to appropriate lighting types
+                    if 'dramatic' in first.value or 'chiaroscuro' in first.value or 'rembrandt' in first.value:
+                        lt = LightingType.DRAMATIC
+                    elif 'golden' in first.value or 'natural' in first.value or 'window' in first.value:
+                        lt = LightingType.NATURAL
+                    else:
+                        lt = LightingType.SOFT
                     return LightingSetup(lighting_type=lt, mood_description=first.value)
                 else:
                     # Fallback: construct from value
@@ -851,13 +870,14 @@ class AdvancedVisualComposer:
         if narrative_structure and narrative_structure.genre_indicators:
             primary_genre = narrative_structure.genre_indicators[0].value
             if primary_genre == 'horror':
-                return ColorHarmony.HIGH_CONTRAST
+                return ColorHarmony(scheme=ColorScheme.COMPLEMENTARY)
             elif primary_genre == 'romance':
-                return ColorHarmony.WARM_PALETTE
+                return ColorHarmony(scheme=ColorScheme.WARM)
             elif primary_genre == 'mystery':
-                return ColorHarmony.MONOCHROMATIC
+                return ColorHarmony(scheme=ColorScheme.MONOCHROMATIC)
 
-        return ColorHarmony.ANALOGOUS
+        # Return a dataclass instance (tests expect a ColorHarmony object)
+        return ColorHarmony(scheme=ColorScheme.ANALOGOUS)
 
     def _generate_depth_layers(self, visual_elements: List[VisualElement]) -> List[str]:
         """Simple depth layer generator used by unit tests."""
@@ -920,6 +940,9 @@ class AdvancedVisualComposer:
         lighting_terms = [composition.lighting_setup.value.replace('_', ' ')] if composition.lighting_setup else []
         color_terms = [composition.color_harmony.value.replace('_', ' ')] if composition.color_harmony else []
         mood = composition.overall_mood or ''
+
+        # Make lighting terms more descriptive (e.g., 'dramatic lighting')
+        lighting_terms = [f"{t} lighting" if not t.endswith('lighting') else t for t in lighting_terms]
 
         return {
             'composition_terms': comp_terms,
