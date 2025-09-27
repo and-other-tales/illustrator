@@ -267,6 +267,7 @@ Extract the most important visual elements for illustration.""")
             visual_elements.append(VisualElement(
                 element_type="character",
                 description=description,
+                modifier="",  # Fallback: no modifier
                 importance=0.82,
                 attributes={
                     "context": context,
@@ -280,6 +281,7 @@ Extract the most important visual elements for illustration.""")
             visual_elements.append(VisualElement(
                 element_type="environment",
                 description=setting_sentence.rstrip(' .'),
+                modifier="",  # Fallback: no modifier
                 importance=0.75,
                 attributes={"fallback": True}
             ))
