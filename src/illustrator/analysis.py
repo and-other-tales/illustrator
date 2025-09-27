@@ -648,10 +648,13 @@ CRITICAL: Your response must ONLY be a decimal between 0.0 and 1.0 with no other
 
             return str(content).strip()
 
+        # Initialize variables outside try block
+        score_text_raw = ""
+        score_text = ""
+        
         # First try the LLM call itself; on transport/LLM failures, fall back
         try:
-            # Set a reasonable timeout
-            response = await self.llm.ainvoke(messages, timeout=10.0)
+            response = await self.llm.ainvoke(messages)
             
             # Extract and validate response
             score_text_raw = _extract_text(response)
@@ -663,14 +666,10 @@ CRITICAL: Your response must ONLY be a decimal between 0.0 and 1.0 with no other
                 if 0.0 <= score <= 1.0:
                     return score
                     
-        except asyncio.TimeoutError:
-            logger.warning("LLM intensity scoring timed out after 10s")
-            # Fall through to pattern scoring
         except Exception as e:
             logger.error(f"LLM intensity scoring failed: {str(e)}")
-            # Fall through to pattern scoring
-            
-        score_text = str(score_text_raw or "").strip()
+            # On any error, use pattern scoring
+            return self._calculate_pattern_score(segment.text)
 
         match_source = score_text
 
