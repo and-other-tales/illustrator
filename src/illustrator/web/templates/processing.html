@@ -304,16 +304,16 @@ async function initializeProcessing() {
                         addLogMessage('info', `Restored ${session.logs.length} log entries`);
                     }
 
-                    // Restore images
-                    if (session.images && session.images.length > 0) {
-                        session.images.forEach(imageEntry => {
-                            addGeneratedImage(imageEntry.url, imageEntry.prompt);
-                        });
+                // Restore images
+                if (session.images && session.images.length > 0) {
+                    session.images.forEach(imageEntry => {
+                        addGeneratedImage(imageEntry.url, imageEntry.prompt, true); // true = skip counter increment
+                    });
 
-                        addLogMessage('info', `Restored ${session.images.length} generated images`);
-                    }
-
-                    // Connect WebSocket for real-time updates
+                    // Set the image count directly
+                    document.getElementById('imagesGenerated').textContent = session.images.length;
+                    addLogMessage('info', `Restored ${session.images.length} generated images`);
+                }                    // Connect WebSocket for real-time updates
                     connectWebSocket();
 
                     // Start time tracking
@@ -395,9 +395,11 @@ async function initializeProcessing() {
                 // Restore images
                 if (session.images && session.images.length > 0) {
                     session.images.forEach(imageEntry => {
-                        addGeneratedImage(imageEntry.url, imageEntry.prompt);
+                        addGeneratedImage(imageEntry.url, imageEntry.prompt, true); // true = skip counter increment
                     });
 
+                    // Set the image count directly
+                    document.getElementById('imagesGenerated').textContent = session.images.length;
                     addLogMessage('info', `Restored ${session.images.length} generated images from previous session`);
                 }
 
@@ -595,7 +597,7 @@ function updateProcessingStep(stepIndex, status) {
     }
 }
 
-function addGeneratedImage(imageUrl, prompt) {
+function addGeneratedImage(imageUrl, prompt, skipIncrementCounter = false) {
     const imagesList = document.getElementById('imagesList');
     const imagesPreview = document.getElementById('imagesPreview');
 
@@ -613,9 +615,11 @@ function addGeneratedImage(imageUrl, prompt) {
     imagesList.appendChild(imageCol);
     imagesPreview.style.display = 'block';
 
-    // Update counter
-    const counter = document.getElementById('imagesGenerated');
-    counter.textContent = parseInt(counter.textContent) + 1;
+    // Update counter only for new images (not when restoring session)
+    if (!skipIncrementCounter) {
+        const counter = document.getElementById('imagesGenerated');
+        counter.textContent = parseInt(counter.textContent) + 1;
+    }
 }
 
 function addLogMessage(level, message) {
