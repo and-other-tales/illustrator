@@ -179,6 +179,7 @@ class ColorScheme(str, Enum):
     WARM = "warm"
     COOL = "cool"
     NATURAL = "natural"
+    ANALOGOUS = "analogous"
 
 
 @dataclass
@@ -292,44 +293,44 @@ class AdvancedVisualComposer:
         EmotionalTone.JOY: {
             'preferred_rules': [CompositionRule.SYMMETRY, CompositionRule.GOLDEN_RATIO],
             'shot_types': [ShotType.MEDIUM_SHOT, ShotType.WIDE_SHOT],
-            'lighting': [LightingSetup.GOLDEN_HOUR, LightingSetup.SOFT_DIFFUSED],
-            'colors': [ColorHarmony.WARM_PALETTE, ColorHarmony.ANALOGOUS],
+            'lighting': [LightingSetupEnum.GOLDEN_HOUR, LightingSetupEnum.SOFT_DIFFUSED],
+            'colors': [ColorHarmonyEnum.WARM_PALETTE, ColorHarmonyEnum.ANALOGOUS],
             'camera_angles': [CameraAngle.EYE_LEVEL, CameraAngle.LOW_ANGLE]
         },
         EmotionalTone.FEAR: {
             'preferred_rules': [CompositionRule.ASYMMETRIC_BALANCE, CompositionRule.DIAGONAL_COMPOSITION],
             'shot_types': [ShotType.CLOSE_UP, ShotType.EXTREME_CLOSE_UP],
-            'lighting': [LightingSetup.DRAMATIC_CHIAROSCURO, LightingSetup.SPLIT],
-            'colors': [ColorHarmony.HIGH_CONTRAST, ColorHarmony.COOL_PALETTE],
+            'lighting': [LightingSetupEnum.DRAMATIC_CHIAROSCURO, LightingSetupEnum.SPLIT],
+            'colors': [ColorHarmonyEnum.HIGH_CONTRAST, ColorHarmonyEnum.COOL_PALETTE],
             'camera_angles': [CameraAngle.HIGH_ANGLE, CameraAngle.DUTCH_ANGLE]
         },
         EmotionalTone.TENSION: {
             'preferred_rules': [CompositionRule.DIAGONAL_COMPOSITION, CompositionRule.ASYMMETRIC_BALANCE],
             'shot_types': [ShotType.MEDIUM_CLOSE_UP, ShotType.TWO_SHOT],
-            'lighting': [LightingSetup.REMBRANDT, LightingSetup.THREE_POINT],
-            'colors': [ColorHarmony.SPLIT_COMPLEMENTARY, ColorHarmony.HIGH_CONTRAST],
+            'lighting': [LightingSetupEnum.REMBRANDT, LightingSetupEnum.THREE_POINT] if hasattr(LightingSetupEnum, 'THREE_POINT') else [LightingSetupEnum.REMBRANDT],
+            'colors': [ColorHarmonyEnum.SPLIT_COMPLEMENTARY, ColorHarmonyEnum.HIGH_CONTRAST],
             'camera_angles': [CameraAngle.DUTCH_ANGLE, CameraAngle.HIGH_ANGLE]
         },
         EmotionalTone.MYSTERY: {
             'preferred_rules': [CompositionRule.FRAMING, CompositionRule.DEPTH_OF_FIELD],
             'shot_types': [ShotType.MEDIUM_SHOT, ShotType.WIDE_SHOT],
-            'lighting': [LightingSetup.RIM_LIGHT, LightingSetup.SILHOUETTE],
-            'colors': [ColorHarmony.MONOCHROMATIC, ColorHarmony.LOW_CONTRAST],
+            'lighting': [LightingSetupEnum.RIM_LIGHT, LightingSetupEnum.SILHOUETTE],
+            'colors': [ColorHarmonyEnum.MONOCHROMATIC, ColorHarmonyEnum.LOW_CONTRAST],
             'camera_angles': [CameraAngle.HIGH_ANGLE, CameraAngle.SUBJECTIVE]
         },
         EmotionalTone.ROMANCE: {
             'preferred_rules': [CompositionRule.GOLDEN_RATIO, CompositionRule.DEPTH_OF_FIELD],
             'shot_types': [ShotType.CLOSE_UP, ShotType.TWO_SHOT],
-            'lighting': [LightingSetup.BUTTERFLY, LightingSetup.GOLDEN_HOUR],
-            'colors': [ColorHarmony.WARM_PALETTE, ColorHarmony.ANALOGOUS],
+            'lighting': [LightingSetupEnum.BUTTERFLY, LightingSetupEnum.GOLDEN_HOUR],
+            'colors': [ColorHarmonyEnum.WARM_PALETTE, ColorHarmonyEnum.ANALOGOUS],
             'camera_angles': [CameraAngle.EYE_LEVEL, CameraAngle.LOW_ANGLE]
         }
         ,
         EmotionalTone.SERENITY: {
             'preferred_rules': [CompositionRule.SYMMETRY, CompositionRule.GOLDEN_RATIO],
             'shot_types': [ShotType.MEDIUM_SHOT],
-            'lighting': [LightingSetup.SOFT_DIFFUSED, LightingSetup.NATURAL_WINDOW] if hasattr(LightingSetup, 'NATURAL_WINDOW') else [LightingSetup.SOFT_DIFFUSED],
-            'colors': [ColorHarmony.ANALOGOUS, ColorHarmony.WARM_PALETTE],
+            'lighting': [LightingSetupEnum.SOFT_DIFFUSED, LightingSetupEnum.NATURAL_WINDOW] if hasattr(LightingSetupEnum, 'NATURAL_WINDOW') else [LightingSetupEnum.SOFT_DIFFUSED],
+            'colors': [ColorHarmonyEnum.ANALOGOUS, ColorHarmonyEnum.WARM_PALETTE],
             'camera_angles': [CameraAngle.EYE_LEVEL]
         }
     }
@@ -338,19 +339,19 @@ class AdvancedVisualComposer:
     GENRE_COMPOSITION_MAP = {
         'fantasy': {
             'preferred_shots': [ShotType.WIDE_SHOT, ShotType.EXTREME_WIDE_SHOT],
-            'lighting': [LightingSetup.GOLDEN_HOUR, LightingSetup.DRAMATIC_CHIAROSCURO],
+            'lighting': [LightingSetupEnum.GOLDEN_HOUR, LightingSetupEnum.DRAMATIC_CHIAROSCURO],
             'composition_rules': [CompositionRule.RULE_OF_THIRDS, CompositionRule.FOREGROUND_MIDGROUND_BACKGROUND],
             'artistic_techniques': ['epic_scale', 'atmospheric_perspective', 'magical_lighting']
         },
         'mystery': {
             'preferred_shots': [ShotType.MEDIUM_SHOT, ShotType.CLOSE_UP],
-            'lighting': [LightingSetup.RIM_LIGHT, LightingSetup.SPLIT],
+            'lighting': [LightingSetupEnum.RIM_LIGHT, LightingSetupEnum.SPLIT],
             'composition_rules': [CompositionRule.FRAMING, CompositionRule.ASYMMETRIC_BALANCE],
             'artistic_techniques': ['shadow_play', 'selective_focus', 'noir_aesthetics']
         },
         'romance': {
             'preferred_shots': [ShotType.CLOSE_UP, ShotType.TWO_SHOT],
-            'lighting': [LightingSetup.BUTTERFLY, LightingSetup.GOLDEN_HOUR],
+            'lighting': [LightingSetupEnum.BUTTERFLY, LightingSetupEnum.GOLDEN_HOUR],
             'composition_rules': [CompositionRule.GOLDEN_RATIO, CompositionRule.SYMMETRY],
             'artistic_techniques': ['soft_focus', 'warm_tones', 'intimate_framing']
         }
@@ -637,6 +638,48 @@ class AdvancedVisualComposer:
         # Convert internal enum-based rules to CompositionRule dataclass instances
         converted = [CompositionRule(rule_type=r.value) if isinstance(r, CompositionRuleEnum) else CompositionRule(rule_type=str(r)) for r in unique_rules]
         return converted[:3] if converted else [CompositionRule(rule_type=CompositionRuleEnum.RULE_OF_THIRDS.value)]
+
+
+    # --- Normalization helpers to avoid using unhashable dataclass instances as dict keys ---
+    def _normalize_lighting_key(self, lighting: Any) -> str:
+        """Return a stable string key for a lighting descriptor.
+
+        Accepts LightingSetup dataclass instances, LightingSetupEnum/LightingType,
+        or plain strings and normalizes them to the internal enum value string.
+        """
+        try:
+            # dataclass instance
+            if isinstance(lighting, LightingSetup):
+                # Use descriptive mood_description where it encodes specific presets
+                md = getattr(lighting, 'mood_description', None)
+                if md:
+                    md_l = md.lower()
+                    if 'golden' in md_l:
+                        return LightingSetupEnum.GOLDEN_HOUR.value
+                    if 'chiaroscuro' in md_l or 'dramatic' in md_l:
+                        return LightingSetupEnum.DRAMATIC_CHIAROSCURO.value
+                    if 'soft' in md_l or 'diffused' in md_l:
+                        return LightingSetupEnum.SOFT_DIFFUSED.value
+                    if 'blue' in md_l:
+                        return LightingSetupEnum.BLUE_HOUR.value
+                    if 'rim' in md_l or 'silhouett' in md_l:
+                        return LightingSetupEnum.RIM_LIGHT.value
+                # Fall back to the lighting_type value
+                return getattr(lighting.lighting_type, 'value', str(lighting.lighting_type))
+
+            if isinstance(lighting, LightingSetupEnum):
+                return lighting.value
+
+            if isinstance(lighting, LightingType):
+                return lighting.value
+
+            if isinstance(lighting, str):
+                return lighting
+
+            # Last resort: str()
+            return str(lighting)
+        except Exception:
+            return str(lighting)
 
     def _determine_shot_type(
         self,
