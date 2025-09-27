@@ -41,9 +41,24 @@
                                     <option value="dalle">DALL-E</option>
                                     <option value="imagen4">Imagen 4</option>
                                     <option value="flux">Flux</option>
-                                    <option value="seedream">Seedream 4</option>
+                                    <option value="replicate">Replicate</option>
                                 </select>
                                 <div class="form-text">Choose the AI image generation provider</div>
+                            </div>
+
+                            <!-- Replicate Model Selection -->
+                            <div class="mb-4" id="replicateModelGroup" style="display: none;">
+                                <label for="replicateModel" class="form-label fw-semibold d-flex align-items-center">
+                                    <span class="material-icons-outlined me-2">hub</span>
+                                    Replicate Model
+                                </label>
+                                <select class="form-select" id="replicateModel" name="replicate_model" disabled>
+                                    <option value="">Select Model...</option>
+                                    <option value="flux">Flux 1.1 Pro</option>
+                                    <option value="imagen4">Imagen 4</option>
+                                    <option value="seedream">Seedream 4</option>
+                                </select>
+                                <div class="form-text">Pick the Replicate-hosted text-to-image model</div>
                             </div>
 
                             <!-- Art Style -->
@@ -187,6 +202,13 @@ document.getElementById('styleConfigForm').addEventListener('submit', async func
 
     const formData = new FormData(this);
     const styleConfig = Object.fromEntries(formData.entries());
+
+    try {
+        normalizeStyleProvider(styleConfig);
+    } catch (error) {
+        showAlert(error.message, 'warning');
+        return;
+    }
 
     // Convert string numbers to actual numbers
     styleConfig.max_emotional_moments = parseInt(styleConfig.max_emotional_moments);
