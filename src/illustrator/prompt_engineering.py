@@ -1581,32 +1581,25 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
 
             enhanced_description = str(raw_content).strip()
 
+            # If LLM fails, create a visual scene description from the excerpt
             if not enhanced_description or "asyncmock" in enhanced_description.lower():
+                # Use deterministic rules to rewrite the excerpt visually
                 sentences = self._split_sentences(original_text)
                 summary = self._summarize_text_excerpt(original_text, max_sentences=2)
                 setting_sentence = self._find_sentence_with_keywords(sentences, self._SETTING_KEYWORDS)
                 character_sentence = self._find_sentence_with_keywords(sentences, self._CHARACTER_KEYWORDS)
 
-                fallback_sections: List[str] = []
-                if summary:
-                    fallback_sections.append(f"Illustrate the moment: {summary}")
-
-                if setting_sentence and setting_sentence not in fallback_sections:
-                    fallback_sections.append(f"Setting and environment: {setting_sentence.rstrip(' .')}")
-
-                if character_sentence and character_sentence not in fallback_sections:
-                    fallback_sections.append(f"Character focus: {character_sentence.rstrip(' .')}")
-
-                if visual_elements:
-                    key_elements = ", ".join(elem.description for elem in visual_elements[:3])
-                    fallback_sections.append(f"Key visual details: {key_elements}")
-
-                lighting = getattr(scene_composition, 'lighting_mood', LightingMood.NATURAL).value.replace('_', ' ')
-                fallback_sections.append(
-                    f"Rendered in a {lighting} atmosphere with {scene_composition.color_palette_suggestion}, captured as a classic E.H. Shepard pencil illustration with delicate linework, crosshatching, and gentle shading."
-                )
-
-                enhanced_description = " ".join(section for section in fallback_sections if section)
+                # Compose a visual scene description
+                visual_scene = []
+                visual_scene.append("A pencil sketch in the classic style of E.H. Shepard.")
+                if setting_sentence:
+                    visual_scene.append(setting_sentence)
+                if character_sentence:
+                    visual_scene.append(character_sentence)
+                if summary and summary not in visual_scene:
+                    visual_scene.append(summary)
+                visual_scene.append("Delicate linework and light shading, nostalgic and gentle mood.")
+                enhanced_description = " ".join(visual_scene)
 
             # Ensure we have a substantive description
             if len(enhanced_description) < 50:
