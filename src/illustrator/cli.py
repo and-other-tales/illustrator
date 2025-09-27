@@ -1,6 +1,7 @@
 """Command line interface for the Manuscript Illustrator."""
 
 import asyncio
+import importlib
 import json
 import os
 import sys
@@ -26,6 +27,49 @@ from illustrator.models import (
 )
 
 console = Console()
+
+
+_WEB_DEPENDENCIES: dict[str, str] = {
+    "fastapi": "fastapi",
+    "uvicorn": "uvicorn",
+    "jinja2": "jinja2",
+    "websockets": "websockets",
+    "httpx": "httpx",
+    "multipart": "python-multipart",
+}
+
+
+def ensure_web_dependencies() -> None:
+    """Ensure required web dependencies are available."""
+    missing_packages: set[str] = set()
+
+    for module_name, package_name in _WEB_DEPENDENCIES.items():
+        try:
+            importlib.import_module(module_name)
+        except ModuleNotFoundError:
+            missing_packages.add(package_name)
+
+    if missing_packages:
+        packages_list = ", ".join(sorted(missing_packages))
+        console.print("[red]❌ Web dependencies not installed or failed to import.[/red]")
+        console.print("[yellow]Install with: pip install 'illustrator[web]'[/yellow]")
+        console.print(f"[yellow]Missing packages: {packages_list}[/yellow]")
+        raise click.ClickException("Missing required web dependencies")
+
+
+def _import_run_server():
+    """Import the web server entry point with helpful error reporting."""
+    try:
+        from illustrator.web.app import run_server
+    except ModuleNotFoundError as exc:
+        missing_module = exc.name or "unknown"
+        package_name = _WEB_DEPENDENCIES.get(missing_module, missing_module)
+        console.print("[red]❌ Web dependencies not installed or failed to import.[/red]")
+        console.print("[yellow]Install with: pip install 'illustrator[web]'[/yellow]")
+        console.print(f"[yellow]Missing module: {package_name}[/yellow]")
+        raise click.ClickException("Missing required web dependencies") from exc
+
+    return run_server
 
 
 class ManuscriptCLI:
@@ -916,10 +960,12 @@ def analyze(interactive: bool, config_file: str | None, style_config: str | None
 def start(host: str, port: int, reload: bool, open_browser: bool):
     """Start the full web interface with both UI and API."""
     try:
+        ensure_web_dependencies()
+        run_server = _import_run_server()
+
         import webbrowser
         import threading
         import time
-        from illustrator.web.app import run_server
 
         console.print(Panel.fit(
             f"[bold blue]🚀 Starting Manuscript Illustrator Web Interface[/bold blue]\n\n"
@@ -945,10 +991,13 @@ def start(host: str, port: int, reload: bool, open_browser: bool):
         # Start the server
         run_server(host=host, port=port, reload=reload)
 
-    except ImportError:
-        console.print("[red]❌ Web dependencies not installed. Please install with:[/red]")
-        console.print("[yellow]pip install 'illustrator[web]'[/yellow]")
-        sys.exit(1)
+    except click.ClickException as exc:
+        raise exc
+    except ImportError as exc:
+        console.print("[red]❌ Failed to import web server dependencies.[/red]")
+        console.print(f"[yellow]{exc}[/yellow]")
+        console.print("[yellow]Try reinstalling with: pip install 'illustrator[web]'[/yellow]")
+        raise click.ClickException("Missing required web dependencies") from exc
     except KeyboardInterrupt:
         console.print("\n[yellow]🛑 Web server stopped.[/yellow]")
     except Exception as e:
@@ -980,6 +1029,7 @@ def start(host: str, port: int, reload: bool, open_browser: bool):
 def api_server(host: str, port: int, api_key: str, reload: bool):
     """Start API server only (no web interface)."""
     try:
+        ensure_web_dependencies()
         from illustrator.web.app import create_api_only_app
         import uvicorn
 
@@ -1011,10 +1061,13 @@ def api_server(host: str, port: int, api_key: str, reload: bool):
             log_level="info"
         )
 
-    except ImportError:
-        console.print("[red]❌ Web dependencies not installed. Please install with:[/red]")
-        console.print("[yellow]pip install 'illustrator[web]'[/yellow]")
-        sys.exit(1)
+    except click.ClickException as exc:
+        raise exc
+    except ImportError as exc:
+        console.print("[red]❌ Failed to import API server dependencies.[/red]")
+        console.print(f"[yellow]{exc}[/yellow]")
+        console.print("[yellow]Try reinstalling with: pip install 'illustrator[web]'[/yellow]")
+        raise click.ClickException("Missing required web dependencies") from exc
     except KeyboardInterrupt:
         console.print("\n[yellow]🛑 API server stopped.[/yellow]")
     except Exception as e:
