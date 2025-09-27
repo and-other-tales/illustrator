@@ -114,8 +114,9 @@ class PromptIteration:
 @dataclass
 class QualityReport:
     """Comprehensive quality report for a prompt improvement session."""
-    session_id: str
-    initial_prompt: IllustrationPrompt
+    # Make session_id and initial_prompt optional for backward compatibility with tests
+    session_id: str | None = None
+    initial_prompt: Optional[IllustrationPrompt] = None
     # legacy/test-expected fields
     original_prompt: Optional[IllustrationPrompt] = None
     original_quality_score: Optional[float] = None
@@ -710,9 +711,9 @@ class FeedbackSystem:
 
     # Test-facing APIs expected by unit tests
     async def process_feedback_cycle(self, original_prompt: IllustrationPrompt, generation_result: Dict[str, Any], emotional_moment: EmotionalMoment) -> PromptIteration:
-    assessment = await self.analyzer.assess_generation_quality(original_prompt, generation_result, emotional_moment)
-    # Use the iterator.improve_prompt API which tests mock
-    improved = await self.iterator.improve_prompt(original_prompt, assessment, self.iterator.identify_iteration_reasons(assessment))
+        assessment = await self.analyzer.assess_generation_quality(original_prompt, generation_result, emotional_moment)
+        # Use the iterator.improve_prompt API which tests mock
+        improved = await self.iterator.improve_prompt(original_prompt, assessment, self.iterator.identify_iteration_reasons(assessment))
         iteration = PromptIteration(
             iteration_number=1,
             original_prompt=original_prompt,
@@ -769,35 +770,3 @@ class QualityThreshold(int, Enum):
     @classmethod
     def meets_threshold(cls, score: int, threshold: 'QualityThreshold') -> bool:
         return score >= int(threshold.value)
-
-    def get_system_insights(self) -> Dict[str, Any]:
-        """Get comprehensive system performance insights."""
-        return self.prompt_iterator.get_performance_insights()
-
-    def export_feedback_data(self) -> Dict[str, Any]:
-        """Export feedback data for analysis or backup."""
-        return {
-            "quality_history": [
-                {
-                    "prompt_id": qa.prompt_id,
-                    "generation_success": qa.generation_success,
-                    "quality_scores": {k.value: v for k, v in qa.quality_scores.items()},
-                    "feedback_notes": qa.feedback_notes,
-                    "improvement_suggestions": qa.improvement_suggestions,
-                    "provider": qa.provider.value,
-                    "timestamp": qa.timestamp
-                }
-                for qa in self.prompt_iterator.quality_history
-            ],
-            "prompt_performance": {
-                k: {
-                    "prompt_template": v.prompt_template,
-                    "provider": v.provider.value,
-                    "success_rate": v.success_rate,
-                    "avg_quality_scores": {mk.value: mv for mk, mv in v.avg_quality_scores.items()},
-                    "usage_count": v.usage_count,
-                    "last_updated": v.last_updated
-                }
-                for k, v in self.prompt_iterator.prompt_performance.items()
-            }
-        }
