@@ -1048,12 +1048,12 @@ class AdvancedVisualComposer:
                 emotional_significance=0.9,
                 interactions=[]
             )
-
+        analysis_obj = CompositionAnalysis(
             elements.append(element)
 
         # Position secondary elements
         for i, secondary in enumerate(secondary_elements[:5]):  # Limit to 5 secondary elements
-            # Place secondary elements in supporting positions
+                focal_point=composition.focal_point_position,
             if CompositionRule.ASYMMETRIC_BALANCE in composition_rules:
                 # Asymmetric positioning
                 position = (0.2 + i * 0.15, 0.7 - i * 0.1)
