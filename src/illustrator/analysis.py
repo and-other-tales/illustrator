@@ -3,7 +3,7 @@
 import logging
 import re
 from dataclasses import dataclass
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -28,6 +28,42 @@ class TextSegment:
     end_pos: int
     context_before: str
     context_after: str
+
+
+class EmotionalAnalysisResult(list):
+    """List-like emotional analysis result with dictionary-style access."""
+
+    def __init__(self, moments: List[EmotionalMoment], metadata: Dict[str, Any] | None = None):
+        super().__init__(moments)
+        self.metadata = metadata or {}
+
+    def __contains__(self, item):
+        if item in {"emotional_moments", "metadata"}:
+            return True
+        return super().__contains__(item)
+
+    def __getitem__(self, item):
+        if isinstance(item, str):
+            if item == "emotional_moments":
+                return list(self)
+            if item == "metadata":
+                return self.metadata
+            raise KeyError(item)
+        return super().__getitem__(item)
+
+    def get(self, key: str, default: Any = None):
+        if key == "emotional_moments":
+            return list(self)
+        if key == "metadata":
+            return self.metadata
+        return default
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert result to dictionary form."""
+        return {
+            "emotional_moments": list(self),
+            "metadata": self.metadata,
+        }
 
 
 class EmotionalAnalyzer:
@@ -82,11 +118,19 @@ class EmotionalAnalyzer:
 
     async def analyze_chapter(
         self,
-        chapter: Chapter,
+        chapter: Chapter | str,
         max_moments: int = 5,
         min_intensity: float = 0.6,
-    ) -> List[EmotionalMoment]:
+    ) -> EmotionalAnalysisResult:
         """Analyze a chapter to extract emotional moments."""
+        if isinstance(chapter, str):
+            chapter = Chapter(
+                title="Chapter",
+                content=chapter,
+                number=1,
+                word_count=len(chapter.split()),
+            )
+
         # First pass: segment the text into potential emotional moments
         segments = self._segment_text(chapter.content)
 
@@ -107,7 +151,12 @@ class EmotionalAnalyzer:
             moment = await self._analyze_segment_detailed(segment, intensity, chapter.content)
             emotional_moments.append(moment)
 
-        return emotional_moments
+        metadata = {
+            "segments_evaluated": len(segments),
+            "moments_found": len(emotional_moments),
+        }
+
+        return EmotionalAnalysisResult(emotional_moments, metadata)
 
     async def analyze_chapter_with_scenes(
         self,
@@ -115,7 +164,7 @@ class EmotionalAnalyzer:
         max_moments: int = 10,
         min_intensity: float = 0.6,
         scene_awareness: bool = True
-    ) -> List[EmotionalMoment]:
+    ) -> EmotionalAnalysisResult:
         """Enhanced chapter analysis using scene boundary detection for better emotional moment extraction."""
 
         if not scene_awareness:
@@ -180,7 +229,12 @@ class EmotionalAnalyzer:
         # Select diverse moments ensuring scene variety
         selected_moments = self._select_diverse_scene_moments(scored_moments, scenes, max_moments)
 
-        return selected_moments
+        metadata = {
+            "scenes_analyzed": len(scenes),
+            "moments_found": len(selected_moments),
+        }
+
+        return EmotionalAnalysisResult(selected_moments, metadata)
 
     def _select_diverse_scene_moments(
         self,
@@ -555,8 +609,22 @@ Return ONLY a decimal number between 0.0 and 1.0."""
             score = float(score_text)
             return max(0.0, min(1.0, score))
         except (ValueError, AttributeError) as e:
-            logger.error(f"LLM intensity scoring failed: {e}")
-            raise ValueError(f"LLM intensity scoring failed: {str(e)}")
+            logger.warning(f"LLM intensity scoring returned non-numeric output: {e}. Applying fallback parsing.")
+            try:
+                score_text = response.strip() if isinstance(response, str) else response.content.strip()
+            except Exception:  # pragma: no cover - unlikely branch
+                score_text = ""
+
+            match = re.search(r"(0?\.\d+|1(?:\.0+)?)", score_text)
+            if match:
+                try:
+                    score = float(match.group(1))
+                    return max(0.0, min(1.0, score))
+                except ValueError:
+                    logger.debug("Failed to parse float from fallback match")
+
+            logger.error("LLM intensity scoring failed; using heuristic pattern score as fallback.")
+            return self._calculate_pattern_score(segment.text)
 
     async def _analyze_segment_detailed(
         self,
