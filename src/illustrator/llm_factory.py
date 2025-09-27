@@ -235,9 +235,14 @@ class HuggingFaceEndpointChatWrapper:
             # Fallback to text-generation style invocation
             logger.debug("Using text_generation with parameters: %s", self._generation_kwargs)
             try:
+                # Be defensive: do not forward our internal 'harmony_format' flag to HF client
+                textgen_kwargs = dict(self._generation_kwargs)
+                if 'harmony_format' in textgen_kwargs:
+                    textgen_kwargs.pop('harmony_format', None)
+
                 raw_output = self._client.text_generation(
                     prompt,
-                    **self._generation_kwargs,
+                    **textgen_kwargs,
                 )
             except Exception as e:
                 logger.error(
