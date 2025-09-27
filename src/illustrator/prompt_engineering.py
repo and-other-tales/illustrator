@@ -592,11 +592,6 @@ class StyleTranslator:
         # Get provider-specific optimizations
         provider_opts = self._get_provider_optimizations(rich_config, provider)
 
-        if provider_opts.get("style_emphasis"):
-            style_modifiers.append(provider_opts["style_emphasis"])
-        if provider_opts.get("quality_modifiers"):
-            style_modifiers.extend(provider_opts["quality_modifiers"])
-
         # Merge technical parameters with provider overrides
         technical_params = dict(rich_config.get("technical_params", {}))
         if provider_opts.get("technical_adjustments"):
