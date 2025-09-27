@@ -1381,7 +1381,8 @@ class WebSocketIllustrationGenerator:
             if hasattr(illustration_prompt, 'style_modifiers') and illustration_prompt.style_modifiers:
                 # Ensure all style modifiers are strings before joining
                 style_modifiers_str = []
-                for modifier in illustration_prompt.style_modifiers[:3]:
+                style_modifiers = illustration_prompt.style_modifiers or []
+                for modifier in style_modifiers[:3]:
                     if isinstance(modifier, tuple):
                         # For tuples, join the tuple elements with spaces
                         style_modifiers_str.append(" ".join(str(elem) for elem in modifier))

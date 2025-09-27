@@ -515,8 +515,10 @@ async def preview_style_image(
         )
 
     try:
+        logger.debug("Starting preview generation for manuscript %s", manuscript_id)
         # Create style config from request
         style_config = StyleConfig(**request.style_config.model_dump(exclude={'replicate_model'}))
+        logger.debug("Style config created: provider=%s", style_config.image_provider)
 
         # Get the image provider
         provider = get_image_provider(
@@ -547,11 +549,20 @@ async def preview_style_image(
             emotional_weight=0.45,
         )
 
-        style_translation = _style_translator.translate_style_config(
-            style_preferences,
-            style_config.image_provider,
-            scene_composition
-        )
+        logger.debug("About to translate style config")
+        try:
+            style_translation = _style_translator.translate_style_config(
+                style_preferences,
+                style_config.image_provider,
+                scene_composition
+            )
+            logger.debug("Style translation completed successfully")
+            logger.debug("Style translation keys: %s", list(style_translation.keys()) if style_translation else "None")
+            if style_translation and 'style_modifiers' in style_translation:
+                logger.debug("Style modifiers type: %s, value: %r", type(style_translation['style_modifiers']), style_translation['style_modifiers'])
+        except Exception as e:
+            logger.error("Style translation failed: %s", str(e), exc_info=True)
+            raise
 
         style_modifiers = _normalize_style_modifiers(style_translation.get("style_modifiers", []))
         is_flux_family = style_config.image_provider in {
@@ -686,7 +697,14 @@ async def preview_style_image(
                 )
 
         # Generate the image
-        result = await provider.generate_image(illustration_prompt)
+        logger.debug("About to generate image with provider %s", style_config.image_provider)
+        logger.debug("Illustration prompt: prompt=%s, style_modifiers=%r", illustration_prompt.prompt[:100] + "..." if len(illustration_prompt.prompt) > 100 else illustration_prompt.prompt, illustration_prompt.style_modifiers)
+        try:
+            result = await provider.generate_image(illustration_prompt)
+            logger.debug("Image generation completed successfully")
+        except Exception as e:
+            logger.error("Image generation failed: %s", str(e), exc_info=True)
+            raise
 
         # Extract image URL from result
         metadata: Dict[str, Any] = {}

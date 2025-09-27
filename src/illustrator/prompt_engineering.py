@@ -500,11 +500,15 @@ class StyleTranslator:
     def _get_emotional_style_modifiers(
         self,
         style_config: Dict[str, Any],
-        emotional_tones: List[str]
+        emotional_tones: List[str] | None
     ) -> tuple[List[str], List[str]]:
         """Extract emotional style modifiers and atmosphere adjustments from rich configuration."""
         modifiers: List[str] = []
         atmosphere_notes: List[str] = []
+
+        # Handle None emotional_tones
+        if emotional_tones is None:
+            emotional_tones = []
 
         # Check if we have emotional adaptations in the config
         if "emotional_adaptations" in style_config:
@@ -628,6 +632,9 @@ class StyleTranslator:
         # Deduplicate modifiers while preserving order
         seen_modifiers: set[str] = set()
         ordered_modifiers: List[str] = []
+        # Defensive check in case style_modifiers is somehow None
+        if style_modifiers is None:
+            style_modifiers = []
         for modifier in style_modifiers:
             if not modifier:
                 continue
@@ -1080,12 +1087,16 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
 
         # Style modifiers (handle tuples properly)
         style_modifiers_formatted = []
-        for m in style_translation['style_modifiers']:
-            if isinstance(m, tuple):
-                # For tuples, join the elements with spaces
-                style_modifiers_formatted.append(" ".join(str(elem) for elem in m))
-            else:
-                style_modifiers_formatted.append(str(m))
+        style_modifiers = style_translation.get('style_modifiers') or []
+        try:
+            for m in style_modifiers:
+                if isinstance(m, tuple):
+                    # For tuples, join the elements with spaces
+                    style_modifiers_formatted.append(" ".join(str(elem) for elem in m))
+                else:
+                    style_modifiers_formatted.append(str(m))
+        except TypeError:
+            logger.warning("Invalid style_modifiers in style_translation: %r", style_modifiers)
         style_modifiers_text = ", ".join(style_modifiers_formatted)
         prompt_parts.append(style_modifiers_text)
 
