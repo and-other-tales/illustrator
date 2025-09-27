@@ -46,3 +46,22 @@ def test_parse_llm_json_no_json():
     with pytest.raises(ValueError) as excinfo:
         parse_llm_json(json_str)
     assert "No JSON found" in str(excinfo.value)
+
+
+def test_extract_json_with_none_input():
+    """Test handling of None input in extract_json_from_text."""
+    from src.illustrator.utils.validation_helpers import extract_json_from_text
+    assert extract_json_from_text(None) is None
+
+
+def test_extract_json_with_both_object_and_array():
+    """Test extraction when both object and array are present."""
+    from src.illustrator.utils.validation_helpers import extract_json_from_text
+    text = 'Here is an array [1,2,3] and an object {"a": 1}'
+    result = extract_json_from_text(text)
+    assert result == '[1,2,3]'  # Array comes first
+    
+    # Test object coming first
+    text2 = 'Here is an object {"a": 1} and an array [1,2,3]'
+    result2 = extract_json_from_text(text2)
+    assert result2 == '{"a": 1}'  # Object comes first
