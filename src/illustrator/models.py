@@ -1,9 +1,9 @@
 """Data models for manuscript analysis and illustration generation."""
 
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 class ImageProvider(str, Enum):
@@ -70,8 +70,20 @@ class IllustrationPrompt(BaseModel):
     provider: ImageProvider = Field(description="Target image generation provider")
     prompt: str = Field(description="Main generation prompt")
     style_modifiers: List[str] = Field(description="Style and artistic modifiers")
-    negative_prompt: str | None = Field(default=None, description="Negative prompt for providers that support it")
+    # Accept a single string or a list of strings for negative prompts (tests sometimes pass lists)
+    negative_prompt: Union[str, List[str], None] = Field(default=None, description="Negative prompt for providers that support it")
     technical_params: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific parameters")
+
+    @validator('negative_prompt', pre=True, always=True)
+    def _normalize_negative_prompt(cls, v):
+        # If tests or callers pass a list of negative prompts, join them into a single string.
+        if v is None:
+            return None
+        if isinstance(v, list):
+            # join with commas, preserving order
+            return ", ".join(str(item) for item in v)
+        # allow strings through
+        return v
 
 
 class StyleConfig(BaseModel):
@@ -83,6 +95,13 @@ class StyleConfig(BaseModel):
     style_config_path: str | None = Field(default=None, description="Path to custom style config file")
     huggingface_model_id: str | None = Field(default=None, description="HuggingFace text-to-image model identifier")
     huggingface_provider: str | None = Field(default=None, description="Optional HuggingFace provider override (e.g. fal-ai, replicate)")
+
+    @validator('huggingface_provider', pre=True, always=False)
+    def _empty_string_to_none(cls, v):
+        # Normalize empty strings to None for optional fields
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
 
 class ChapterAnalysis(BaseModel):

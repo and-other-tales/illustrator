@@ -116,12 +116,20 @@ class QualityReport:
     """Comprehensive quality report for a prompt improvement session."""
     session_id: str
     initial_prompt: IllustrationPrompt
+    # legacy/test-expected fields
     original_prompt: Optional[IllustrationPrompt] = None
+    original_quality_score: Optional[float] = None
     summary: Optional[str] = None
     final_prompt: Optional[IllustrationPrompt] = None
     iterations: Optional[List[PromptIteration]] = None
+    total_iterations: int = 0
     total_improvements: int = 0
+    improvement_achieved: Optional[float] = None
     final_quality_score: float = 0.0
+    target_quality_reached: bool = False
+    processing_time_seconds: float = 0.0
+    timestamp: Optional[str] = None
+    # modern fields
     processing_time: float = 0.0
     success: bool = False
 
@@ -140,7 +148,9 @@ class QualityAnalyzer:
     ) -> QualityAssessment:
         """Assess the quality of a generated image based on multiple criteria."""
 
-        if not generation_result.get('success', False):
+        # Some callers/tests omit an explicit 'success' flag. Treat missing 'success'
+        # as a successful generation attempt to allow LLM-based analysis.
+        if 'success' in generation_result and not generation_result.get('success'):
             return QualityAssessment(
                 prompt_id=f"{original_prompt.provider.value}_{hash(original_prompt.prompt)}",
                 generation_success=False,
@@ -157,7 +167,8 @@ class QualityAnalyzer:
 
         # If we have successful generation but no image analysis capability,
         # provide basic assessment based on prompt structure
-        quality_scores = await self._analyze_prompt_quality(
+        # Perform detailed analysis (may call LLM)
+        quality_scores, analysis_data = await self._analyze_prompt_quality(
             original_prompt,
             emotional_moment,
             generation_result
@@ -175,6 +186,24 @@ class QualityAnalyzer:
             emotional_moment
         )
 
+        # Extract legacy/auxiliary fields from analysis if present
+        overall_score = None
+        strengths = None
+        areas_for_improvement = None
+        recommendations = None
+
+        if isinstance(analysis_data, dict):
+            # LLM may return various keys; support both snake_case and space/upper keys
+            overall_score = analysis_data.get('overall_score') or analysis_data.get('overall') or analysis_data.get('overallScore')
+            strengths = analysis_data.get('strengths') or analysis_data.get('strengths_list')
+            areas_for_improvement = analysis_data.get('areas_for_improvement') or analysis_data.get('areas')
+            recommendations = analysis_data.get('recommendations') or analysis_data.get('improvement_suggestions')
+
+        # If LLM didn't provide an overall_score, derive from avg of quality_scores
+        if overall_score is None and quality_scores:
+            avg = sum(quality_scores.values()) / len(quality_scores)
+            overall_score = int(avg * 100)
+
         return QualityAssessment(
             prompt_id=f"{original_prompt.provider.value}_{hash(original_prompt.prompt)}",
             generation_success=True,
@@ -182,7 +211,11 @@ class QualityAnalyzer:
             feedback_notes=feedback_notes,
             improvement_suggestions=improvement_suggestions,
             provider=original_prompt.provider,
-            timestamp=generation_result.get('metadata', {}).get('timestamp', '')
+            timestamp=generation_result.get('metadata', {}).get('timestamp', ''),
+            overall_score=overall_score,
+            strengths=strengths,
+            areas_for_improvement=areas_for_improvement,
+            recommendations=recommendations
         )
 
     async def _analyze_prompt_quality(
@@ -235,16 +268,69 @@ Analyze the prompt quality and return scores for each metric.""")
             # Convert to proper enum keys and ensure valid scores
             quality_scores = {}
             for metric in QualityMetric:
-                score_key = metric.value.upper()
-                score = analysis_data.get(score_key, analysis_data.get(metric.value, 0.5))
-                quality_scores[metric] = max(0.0, min(1.0, float(score)))
+                # Support uppercase keys, enum.value keys, or metric names
+                score = None
+                for key in (metric.value, metric.value.upper(), metric.name.lower(), metric.name):
+                    if isinstance(analysis_data, dict) and key in analysis_data:
+                        score = analysis_data.get(key)
+                        break
+                if score is None:
+                    score = 0.5
+                try:
+                    quality_scores[metric] = max(0.0, min(1.0, float(score)))
+                except Exception:
+                    quality_scores[metric] = 0.5
 
-            return quality_scores
+            return quality_scores, analysis_data
 
         except Exception as e:
             logger.warning(f"Failed to analyze prompt quality: {e}")
             # Return baseline scores
-            return {metric: 0.6 for metric in QualityMetric}
+            return ({metric: 0.6 for metric in QualityMetric}, {})
+
+    # Lightweight helper methods expected by unit tests
+    def analyze_prompt_structure(self, prompt: IllustrationPrompt) -> int:
+        """Simple heuristic score (0-100) for prompt structure quality."""
+        score = 50
+        if prompt.prompt and len(prompt.prompt) > 50:
+            score += 20
+        if prompt.style_modifiers:
+            score += min(20, 5 * len(prompt.style_modifiers))
+        if prompt.technical_params:
+            score += 10
+        return max(0, min(100, score))
+
+    def check_emotional_alignment(self, prompt: IllustrationPrompt, moment: EmotionalMoment) -> int:
+        """Heuristic emotional alignment based on presence of emotional tone keywords."""
+        score = 50
+        prompt_text = (prompt.prompt or "").lower()
+        matches = 0
+        for tone in moment.emotional_tones:
+            if tone.value.lower() in prompt_text:
+                matches += 1
+        if matches:
+            score += int(25 * (matches / len(moment.emotional_tones)))
+            # stronger intensity slightly boosts the score
+            score += int(10 * moment.intensity_score)
+        else:
+            # No matching emotional indicators -> penalize based on intensity
+            score = int(35 + 5 * (1.0 - moment.intensity_score))
+        return max(0, min(100, score))
+
+    def evaluate_style_consistency(self, prompt: IllustrationPrompt) -> int:
+        """Heuristic for style consistency: penalize conflicting modifiers."""
+        modifiers = [m.lower() for m in (prompt.style_modifiers or [])]
+        score = 70
+        # crude conflict detection: presence of both 'sci-fi' and 'medieval' etc.
+        conflicts = 0
+        conflict_pairs = [('sci-fi', 'medieval'), ('modern', 'fantasy'), ('cartoon', 'realistic')]
+        for a, b in conflict_pairs:
+            if a in modifiers and b in modifiers:
+                conflicts += 1
+        score -= conflicts * 20
+        if modifiers and not conflicts:
+            score += 10
+        return max(0, min(100, score))
 
     async def _generate_feedback_notes(
         self,
@@ -383,6 +469,26 @@ class PromptIterator:
 
         return improved_prompt
 
+    # Methods expected by tests
+    def identify_iteration_reasons(self, assessment: QualityAssessment) -> List[IterationReason]:
+        reasons: List[IterationReason] = []
+        if assessment.overall_score is not None and assessment.overall_score < 70:
+            reasons.append(IterationReason.LOW_OVERALL_QUALITY)
+        if assessment.accuracy_score is not None and assessment.accuracy_score < 65:
+            reasons.append(IterationReason.POOR_ACCURACY)
+        if assessment.technical_quality is not None and assessment.technical_quality < 60:
+            reasons.append(IterationReason.WEAK_TECHNICAL_QUALITY)
+        if assessment.emotional_alignment is not None and assessment.emotional_alignment < 60:
+            reasons.append(IterationReason.WEAK_EMOTIONAL_RESONANCE)
+        if assessment.recommendations:
+            reasons.append(IterationReason.INSUFFICIENT_DETAIL)
+        return reasons
+
+    async def improve_prompt(self, original_prompt: IllustrationPrompt, assessment: QualityAssessment, iteration_reasons: List[IterationReason]) -> IllustrationPrompt:
+        # Reuse existing generator logic, but provide compatibility wrapper
+        improved = await self._generate_improved_prompt(original_prompt, assessment, EmotionalMoment(text_excerpt="", start_position=0, end_position=0, emotional_tones=[], intensity_score=0.0, context=""))
+        return improved
+
     async def _generate_improved_prompt(
         self,
         original_prompt: IllustrationPrompt,
@@ -429,9 +535,9 @@ Generate an improved version of this prompt.""")
             improved_prompt = IllustrationPrompt(
                 provider=original_prompt.provider,
                 prompt=improved_prompt_text,
-                style_modifiers=original_prompt.style_modifiers.copy(),
+                style_modifiers=(original_prompt.style_modifiers or []).copy(),
                 negative_prompt=original_prompt.negative_prompt,
-                technical_params=original_prompt.technical_params.copy()
+                technical_params=(original_prompt.technical_params or {}).copy()
             )
 
             return improved_prompt
@@ -559,7 +665,9 @@ class FeedbackSystem:
     def __init__(self, llm: BaseChatModel):
         self.llm = llm
         self.quality_analyzer = QualityAnalyzer(llm)
+        self.analyzer = self.quality_analyzer  # legacy alias used in tests
         self.prompt_iterator = PromptIterator(llm)
+        self.iterator = self.prompt_iterator  # legacy alias used in tests
 
     async def process_generation_feedback(
         self,
@@ -587,7 +695,7 @@ class FeedbackSystem:
         }
 
         # Optionally generate improved prompt
-        if enable_iteration and not quality_assessment.generation_success:
+        if enable_iteration:
             improved_prompt = await self.prompt_iterator.iterate_prompt(
                 prompt,
                 quality_assessment,
@@ -599,6 +707,68 @@ class FeedbackSystem:
                 result["feedback_applied"] = True
 
         return result
+
+    # Test-facing APIs expected by unit tests
+    async def process_feedback_cycle(self, original_prompt: IllustrationPrompt, generation_result: Dict[str, Any], emotional_moment: EmotionalMoment) -> PromptIteration:
+    assessment = await self.analyzer.assess_generation_quality(original_prompt, generation_result, emotional_moment)
+    # Use the iterator.improve_prompt API which tests mock
+    improved = await self.iterator.improve_prompt(original_prompt, assessment, self.iterator.identify_iteration_reasons(assessment))
+        iteration = PromptIteration(
+            iteration_number=1,
+            original_prompt=original_prompt,
+            improved_prompt=improved or original_prompt,
+            quality_assessment=assessment,
+            iteration_reasons=self.iterator.identify_iteration_reasons(assessment),
+            improvements_made=[s for s in (assessment.improvement_suggestions or [])],
+            timestamp=generation_result.get('metadata', {}).get('timestamp', '')
+        )
+        return iteration
+
+    async def iterative_improvement(self, original_prompt: IllustrationPrompt, generate_fn, emotional_moment: EmotionalMoment, max_iterations: int = 3, target_quality: int = 80) -> QualityReport:
+        iterations = []
+        current_prompt = original_prompt
+        final_quality = 0
+        for i in range(max_iterations):
+            generation_result = generate_fn(current_prompt)
+            assessment = await self.analyzer.assess_generation_quality(current_prompt, generation_result, emotional_moment)
+            final_quality = assessment.overall_score or final_quality
+            improved = await self.iterator.iterate_prompt(current_prompt, assessment, emotional_moment)
+            iterations.append(PromptIteration(
+                iteration_number=i+1,
+                original_prompt=current_prompt,
+                improved_prompt=improved or current_prompt,
+                quality_assessment=assessment,
+                iteration_reasons=self.iterator.identify_iteration_reasons(assessment),
+                improvements_made=assessment.improvement_suggestions or [],
+                timestamp=generation_result.get('metadata', {}).get('timestamp', '')
+            ))
+            if final_quality >= target_quality:
+                break
+            current_prompt = improved or current_prompt
+
+        report = QualityReport(
+            session_id="session-1",
+            initial_prompt=original_prompt,
+            original_prompt=original_prompt,
+            summary="Iterative improvement run",
+            final_prompt=current_prompt,
+            iterations=iterations,
+            total_improvements=len(iterations),
+            final_quality_score=final_quality,
+            processing_time=0.0,
+            success=final_quality >= target_quality
+        )
+        return report
+
+
+class QualityThreshold(int, Enum):
+    EXCELLENT = 85
+    GOOD = 75
+    ACCEPTABLE = 65
+
+    @classmethod
+    def meets_threshold(cls, score: int, threshold: 'QualityThreshold') -> bool:
+        return score >= int(threshold.value)
 
     def get_system_insights(self) -> Dict[str, Any]:
         """Get comprehensive system performance insights."""
