@@ -51,6 +51,30 @@ def test_ensure_chapter_required_fields_no_chapters():
     assert result['chapters'] == []
 
 
+def test_ensure_chapter_required_fields_with_none_values():
+    """Test handling of None values in chapter fields."""
+    data = {
+        'chapters': [
+            {
+                'title': 'Chapter 1',
+                'number': 1,
+                'content': 'Test content',
+                'id': None,
+                'summary': None
+            }
+        ]
+    }
+    
+    result = ensure_chapter_required_fields(data)
+    
+    # Check that all chapters have IDs and summaries
+    chapter = result['chapters'][0]
+    assert chapter['id'] is not None
+    assert chapter['summary'] is not None
+    assert chapter['id'].startswith('ch-')
+    assert chapter['summary'] == "Summary for Chapter 1"
+
+
 def test_validate_manuscript_before_save():
     """Test validation of entire manuscript before saving."""
     data = {
