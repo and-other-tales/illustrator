@@ -65,6 +65,7 @@ class StyleConfigSaveRequest(BaseModel):
     """Request model for saving style configuration."""
     manuscript_id: str
     style_config: StyleConfigRequest
+    manuscript_excerpt: Optional[str] = None
 
 
 class ProcessingRequest(BaseModel):

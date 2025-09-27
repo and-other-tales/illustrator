@@ -203,6 +203,11 @@
                 </h6>
             </div>
             <div class="card-body">
+                <div id="previewExcerptContainer" class="mb-3" style="display: none;">
+                    <label for="previewManuscriptExcerpt" class="form-label fw-semibold">Manuscript Excerpt (optional)</label>
+                    <textarea class="form-control" id="previewManuscriptExcerpt" rows="4" placeholder="Paste a paragraph from your manuscript to generate a true-to-story preview..."></textarea>
+                    <div class="form-text">The preview prompt will analyze this excerpt using the advanced prompt engineering pipeline before generating the image.</div>
+                </div>
                 <div id="previewContent" class="text-muted">
                     Select your style options and click "Preview Style" to see how your settings will affect the illustrations.
                 </div>
@@ -293,6 +298,8 @@ async function previewStyle() {
 
     const previewCard = document.getElementById('previewCard');
     const previewContent = document.getElementById('previewContent');
+    const excerptContainer = document.getElementById('previewExcerptContainer');
+    const excerptField = document.getElementById('previewManuscriptExcerpt');
 
     // Validate required fields
     if (!styleConfig.image_provider) {
@@ -300,16 +307,41 @@ async function previewStyle() {
         return;
     }
 
+    // Ensure preview card and excerpt input are visible
+    previewCard.style.display = 'block';
+    if (excerptContainer) {
+        excerptContainer.style.display = 'block';
+    }
+
+    // On first open, prompt for excerpt input without making a request yet
+    if (!previewCard.dataset.initialized) {
+        previewContent.innerHTML = `
+            <div class="alert alert-info mb-0">
+                Paste a paragraph from your manuscript in the field above, then click <strong>Preview Style</strong> again to generate an excerpt-aware preview image.
+            </div>
+        `;
+        previewCard.dataset.initialized = 'true';
+        if (excerptField) {
+            excerptField.focus();
+        }
+        return;
+    }
+
+    const manuscriptExcerpt = excerptField ? excerptField.value.trim() : '';
+
     // Show loading state
+    const loadingMessage = manuscriptExcerpt
+        ? 'Analyzing excerpt and generating preview image...'
+        : 'Generating style preview image...';
+
     previewContent.innerHTML = `
         <div class="text-center">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Generating preview...</span>
             </div>
-            <p class="mt-2">Generating style preview image...</p>
+            <p class="mt-2">${loadingMessage}</p>
         </div>
     `;
-    previewCard.style.display = 'block';
 
     try {
         // Prepare request data
@@ -324,6 +356,10 @@ async function previewStyle() {
             manuscript_id: "{{ manuscript_id }}",
             style_config: styleConfigOnly
         };
+
+        if (manuscriptExcerpt) {
+            requestData.manuscript_excerpt = manuscriptExcerpt;
+        }
 
         const response = await fetch('/api/manuscripts/{{ manuscript_id }}/style/preview', {
             method: 'POST',
@@ -361,6 +397,10 @@ async function previewStyle() {
                 preview += `<div class="col-md-6 mb-1"><strong>HF Provider:</strong> ${result.style_summary.huggingface_provider}</div>`;
             }
             preview += '</div>';
+
+            if (result.style_summary.excerpt_preview) {
+                preview += `<div class="mt-2 small"><strong>Excerpt analyzed:</strong> ${result.style_summary.excerpt_preview}</div>`;
+            }
 
             if (result.preview_prompt) {
                 preview += `<div class="mt-2 small text-muted"><strong>Generated with prompt:</strong> ${result.preview_prompt}</div>`;

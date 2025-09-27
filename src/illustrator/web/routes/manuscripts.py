@@ -11,7 +11,15 @@ from typing import Any, Dict, List, Optional, Iterable
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from illustrator.models import ManuscriptMetadata, SavedManuscript, Chapter, ImageProvider
+from illustrator.models import (
+    ManuscriptMetadata,
+    SavedManuscript,
+    Chapter,
+    ImageProvider,
+    EmotionalMoment,
+    EmotionalTone,
+    IllustrationPrompt,
+)
 from illustrator.web.models.web_models import (
     ManuscriptCreateRequest,
     ManuscriptResponse,
@@ -25,7 +33,11 @@ from illustrator.prompt_engineering import (
     SceneComposition,
     CompositionType,
     LightingMood,
+    PromptEngineer,
 )
+from illustrator.analysis import EmotionalAnalyzer
+from illustrator.context import get_default_context
+from illustrator.llm_factory import create_chat_model_from_context
 
 router = APIRouter()
 
@@ -558,9 +570,8 @@ async def preview_style_image(
             technical_params.setdefault('provider', style_config.huggingface_provider)
 
         negative_prompt_items = [str(item) for item in style_translation.get("negative_prompt", []) or []]
-        negative_prompt = ", ".join(negative_prompt_items) if negative_prompt_items else None
 
-        # Build a preview prompt that reflects the configured style settings
+        # Build a baseline preview prompt from style settings
         prompt_sections: List[str] = []
         base_description = f"Concept illustration in {style_config.art_style}"
         if style_config.color_palette:
@@ -587,14 +598,69 @@ async def preview_style_image(
         if not preview_prompt_text.endswith('.'):
             preview_prompt_text += '.'
 
-        from illustrator.models import IllustrationPrompt
         illustration_prompt = IllustrationPrompt(
             provider=style_config.image_provider,
             prompt=preview_prompt_text,
             style_modifiers=style_modifiers,
-            negative_prompt=negative_prompt,
+            negative_prompt=", ".join(negative_prompt_items) if negative_prompt_items else None,
             technical_params=technical_params
         )
+
+        excerpt_text = (request.manuscript_excerpt or "").strip()
+
+        if excerpt_text:
+            try:
+                context = get_default_context()
+                context.image_provider = style_config.image_provider
+                context.default_art_style = style_config.art_style or context.default_art_style
+                context.color_palette = style_config.color_palette or context.color_palette
+                context.artistic_influences = style_config.artistic_influences or context.artistic_influences
+
+                llm = create_chat_model_from_context(context)
+                emotional_analyzer = EmotionalAnalyzer(llm)
+
+                chapter_excerpt = Chapter(
+                    title="Preview Excerpt",
+                    content=excerpt_text,
+                    number=1,
+                    word_count=len(excerpt_text.split()) or 1,
+                )
+
+                analysis_result = await emotional_analyzer.analyze_chapter(
+                    chapter_excerpt,
+                    max_moments=1,
+                    min_intensity=0.3,
+                )
+
+                preview_moment = analysis_result[0] if analysis_result else None
+                if not preview_moment:
+                    preview_moment = EmotionalMoment(
+                        text_excerpt=excerpt_text[:240],
+                        start_position=0,
+                        end_position=min(len(excerpt_text), 240),
+                        emotional_tones=[EmotionalTone.NEUTRAL],
+                        intensity_score=0.5,
+                        context=excerpt_text[:240],
+                    )
+
+                prompt_engineer = PromptEngineer(llm)
+                engineered_prompt = await prompt_engineer.engineer_prompt(
+                    emotional_moment=preview_moment,
+                    provider=style_config.image_provider,
+                    style_preferences=style_preferences,
+                    chapter_context=chapter_excerpt,
+                )
+
+                illustration_prompt = engineered_prompt
+                preview_prompt_text = engineered_prompt.prompt
+                style_modifiers = _normalize_style_modifiers(engineered_prompt.style_modifiers)
+                technical_params = engineered_prompt.technical_params or technical_params
+
+            except Exception as excerpt_error:
+                logger.warning(
+                    "Excerpt-aware preview generation failed: %s", excerpt_error,
+                    exc_info=True,
+                )
 
         # Generate the image
         result = await provider.generate_image(illustration_prompt)
@@ -617,6 +683,10 @@ async def preview_style_image(
                 image_url = result.get('image_url', '')
 
             metadata = result.get('metadata', {}) or {}
+            metadata.setdefault('prompt', illustration_prompt.prompt)
+            metadata.setdefault('style_modifiers', illustration_prompt.style_modifiers)
+            metadata.setdefault('technical_params', illustration_prompt.technical_params)
+            metadata.setdefault('excerpt_used', bool(excerpt_text))
         else:
             status_code = result.get('status_code') or status.HTTP_502_BAD_GATEWAY
             error_message = result.get('error', 'Image generation failed')
@@ -634,6 +704,15 @@ async def preview_style_image(
             "style_config_path": style_config.style_config_path,
             "style_modifiers": style_modifiers,
         }
+
+        if excerpt_text:
+            excerpt_preview = " ".join(excerpt_text.split())
+            if len(excerpt_preview) > 220:
+                excerpt_preview = f"{excerpt_preview[:217]}..."
+            style_summary["excerpt_preview"] = excerpt_preview
+            style_summary["excerpt_used"] = True
+        else:
+            style_summary["excerpt_used"] = False
 
         if style_config.huggingface_model_id:
             style_summary["huggingface_model_id"] = style_config.huggingface_model_id

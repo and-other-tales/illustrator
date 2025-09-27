@@ -359,6 +359,102 @@ class TestWebAppAPI:
         assert "prompt" in captured_prompt
         assert "hand-drawn pencil sketch" in captured_prompt["prompt"].prompt
 
+    @patch('illustrator.providers.get_image_provider')
+    @patch('src.illustrator.web.routes.manuscripts.get_saved_manuscripts')
+    @patch('src.illustrator.web.routes.manuscripts.PromptEngineer')
+    @patch('src.illustrator.web.routes.manuscripts.EmotionalAnalyzer')
+    @patch('src.illustrator.web.routes.manuscripts.create_chat_model_from_context')
+    def test_style_preview_uses_excerpt_prompt(
+        self,
+        mock_create_chat_model,
+        mock_emotional_analyzer,
+        mock_prompt_engineer,
+        mock_get_manuscripts,
+        mock_get_provider,
+        client
+    ):
+        """Preview generation should run the prompt engineer when an excerpt is supplied."""
+
+        test_manuscript = SavedManuscript(
+            metadata=ManuscriptMetadata(
+                title="Preview Manuscript",
+                author="Author",
+                genre="Fiction",
+                total_chapters=1,
+                created_at="2024-01-01T00:00:00"
+            ),
+            chapters=[
+                Chapter(
+                    title="Chapter 1",
+                    content="Sample chapter content for preview testing.",
+                    number=1,
+                    word_count=6
+                )
+            ],
+            saved_at="2024-01-01T00:00:00",
+            file_path="/preview/path"
+        )
+
+        import uuid as uuid_module
+        manuscript_id = str(uuid_module.uuid5(uuid_module.NAMESPACE_DNS, test_manuscript.file_path))
+
+        mock_get_manuscripts.return_value = [test_manuscript]
+        mock_create_chat_model.return_value = Mock()
+
+        preview_moment = EmotionalMoment(
+            text_excerpt="The storm crashed against the castle walls.",
+            start_position=0,
+            end_position=45,
+            emotional_tones=[EmotionalTone.TENSION],
+            intensity_score=0.7,
+            context="Preview excerpt"
+        )
+        mock_emotional = mock_emotional_analyzer.return_value
+        mock_emotional.analyze_chapter = AsyncMock(return_value=[preview_moment])
+
+        engineered_prompt = IllustrationPrompt(
+            provider=ImageProvider.FLUX,
+            prompt="Engineered prompt from excerpt",
+            style_modifiers=["dramatic lighting"],
+            negative_prompt="blurred, low quality",
+            technical_params={"guidance_scale": 7.5}
+        )
+        mock_prompt_instance = mock_prompt_engineer.return_value
+        mock_prompt_instance.engineer_prompt = AsyncMock(return_value=engineered_prompt)
+
+        captured_prompt = {}
+
+        class DummyProvider:
+            async def generate_image(self, prompt, **kwargs):
+                captured_prompt['prompt'] = prompt
+                return {
+                    "success": True,
+                    "image_url": "https://example.com/excerpt-preview.png",
+                    "metadata": {"prompt": prompt.prompt, "style_modifiers": prompt.style_modifiers}
+                }
+
+        mock_get_provider.return_value = DummyProvider()
+
+        payload = {
+            "manuscript_id": manuscript_id,
+            "style_config": {
+                "image_provider": "flux",
+                "art_style": "digital painting"
+            },
+            "manuscript_excerpt": "The storm crashed against the castle walls, lightning splitting the sky."
+        }
+
+        response = client.post(f"/api/manuscripts/{manuscript_id}/style/preview", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["preview_prompt"] == engineered_prompt.prompt
+        assert captured_prompt['prompt'].prompt == engineered_prompt.prompt
+        mock_prompt_instance.engineer_prompt.assert_awaited_once()
+        mock_emotional.analyze_chapter.assert_awaited_once()
+        assert data["style_summary"]["excerpt_used"] is True
+        assert "storm crashed" in data["style_summary"]["excerpt_preview"]
+
     def test_processing_page(self, client):
         """Test processing page."""
         response = client.get("/manuscript/test-id/process")
