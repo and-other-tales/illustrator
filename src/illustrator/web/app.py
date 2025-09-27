@@ -2,6 +2,7 @@
 
 import os
 import json
+import inspect
 from pathlib import Path
 from typing import Any, Dict, List
 from collections.abc import MutableMapping
@@ -580,6 +581,8 @@ async def run_processing_workflow(
                         }),
                         session_id
                     )
+                    persistence_service = None
+                    checkpoint_manager = None
             persistence_enabled = bool(db_session_id_for_persistence and checkpoint_manager)
         else:
             # In resume flow, the incoming session_id is the DB session id
@@ -767,12 +770,13 @@ async def run_processing_workflow(
                 primary_tone = moment.emotional_tones[0] if moment.emotional_tones else "neutral"
 
                 # Use advanced AI-powered prompt engineering
-                prompt_text = await generator.create_advanced_prompt(
+                prompt_candidate = generator.create_advanced_prompt(
                     emotional_moment=moment,
                     provider=provider,
                     style_config=style_config,
                     chapter=chapter
                 )
+                prompt_text = await prompt_candidate if inspect.isawaitable(prompt_candidate) else prompt_candidate
                 prompts.append(prompt_text)
 
                 # Create metadata for the prompt
@@ -975,12 +979,12 @@ async def run_processing_workflow(
 
         # Create error checkpoint if we have the checkpoint manager
         try:
-            if checkpoint_manager:
+            if checkpoint_manager and db_session_id_for_persistence:
                 current_chapter = connection_manager.sessions[session_id].status.current_chapter if session_id in connection_manager.sessions else 0
                 current_progress = connection_manager.sessions[session_id].status.progress if session_id in connection_manager.sessions else 0
 
                 checkpoint_manager.create_error_checkpoint(
-                    session_id=db_session_id_for_persistence or session_id,
+                    session_id=db_session_id_for_persistence,
                     chapter_number=current_chapter or 0,
                     current_step=ProcessingStep.ANALYZING_CHAPTERS,
                     error_message=str(e),
@@ -988,7 +992,7 @@ async def run_processing_workflow(
                     progress_percent=current_progress
                 )
 
-                if persistence_service and db_session_id_for_persistence:
+                if persistence_service:
                     persistence_service.update_session_status(
                         session_id=db_session_id_for_persistence,
                         status="failed",
@@ -1001,6 +1005,15 @@ async def run_processing_workflow(
             json.dumps({
                 "type": "error",
                 "error": str(e)
+            }),
+            session_id
+        )
+
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "error",
+                "message": str(e)
             }),
             session_id
         )
