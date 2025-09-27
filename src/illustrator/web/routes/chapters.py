@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+import logging
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -130,6 +131,9 @@ def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
 @router.get("/{manuscript_id}")
 async def get_manuscript_chapters(manuscript_id: str) -> List[ChapterResponse]:
     """Get all chapters for a manuscript."""
+    logger = logging.getLogger("api")
+    logger.debug(f"API CALL: GET /{{manuscript_id}} (get_manuscript_chapters) with manuscript_id={manuscript_id}")
+
     manuscript, _ = load_manuscript_by_id(manuscript_id)
 
     chapters = []
