@@ -1,0 +1,27 @@
+{
+  "session_id": "0e320356-9461-412d-9d91-3c4680f6537f",
+  "manuscript_id": "e5c3309f-7052-5af3-ba3d-213d0a9a4eab",
+  "external_session_id": "test-session-error",
+  "status": "pending",
+  "progress_percent": 0,
+  "current_chapter": null,
+  "total_chapters": 1,
+  "current_task": null,
+  "style_config": {
+    "image_provider": "dalle",
+    "art_style": "digital painting"
+  },
+  "max_emotional_moments": 3,
+  "last_completed_step": null,
+  "last_completed_chapter": 0,
+  "processed_chapters": [],
+  "current_prompts": [],
+  "generated_images": [],
+  "emotional_moments": [],
+  "total_images_generated": 0,
+  "error_message": null,
+  "started_at": "2025-09-27T17:49:53.926042",
+  "paused_at": null,
+  "resumed_at": null,
+  "last_heartbeat": "2025-09-27T17:49:53.926057"
+}
