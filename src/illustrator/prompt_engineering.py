@@ -1293,6 +1293,10 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             visual_elements,
             scene_composition
         )
+        # Ensure explicit focal point phrase is present; if not, add a short preservation clause.
+        focal = getattr(scene_composition, 'focal_point', '') or ''
+        if focal and focal.lower() not in scene_desc.lower():
+            scene_desc = scene_desc + f". Note: the scene specifically includes '{focal}'."
         prompt_parts.append(scene_desc)
 
         # Composition guidance
@@ -1310,6 +1314,17 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             scene_composition
         )
         prompt_parts.append(atmospheric_guidance)
+
+        # Ensure the explicit atmosphere and lighting descriptors are present in the prompt
+        # (some downstream optimization passes may rephrase; be conservative and append
+        # an explicit clause if the keywords are missing).
+        combined_preview = " ".join(prompt_parts).lower()
+        atmosphere_phrase = (getattr(scene_composition, 'atmosphere', '') or '').lower()
+        lighting_phrase = (getattr(scene_composition, 'lighting_mood', None) and getattr(scene_composition.lighting_mood, 'value', '').replace('_', ' ')) or ''
+        if atmosphere_phrase and atmosphere_phrase not in combined_preview:
+            prompt_parts.append(f"Atmosphere: {scene_composition.atmosphere}.")
+        if lighting_phrase and lighting_phrase not in combined_preview:
+            prompt_parts.append(f"Lighting: {lighting_phrase}.")
 
         # Style modifiers (handle tuples properly)
         style_modifiers_formatted = []
@@ -1376,6 +1391,13 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         try:
             from illustrator.utils import enforce_prompt_length
             optimized_prompt = enforce_prompt_length(provider.value, optimized_prompt)
+        except Exception:
+            pass
+
+        # Debug: log the final optimized prompt (truncated)
+        try:
+            _logger = logging.getLogger("prompt_engineer")
+            _logger.debug("Final optimized prompt (truncated): %s", optimized_prompt[:800].replace('\n', ' '))
         except Exception:
             pass
 
@@ -1732,19 +1754,50 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             orig = (original_text or "").lower()
             out = enhanced_description
 
-            # Identify quoted or multi-word explicit phrases to preserve (e.g. 'top step', 'Victorian terrace house')
+            # Identify explicit phrases to preserve. Start with some well-known phrase patterns,
+            # then extract multi-word source fragments from the preservation source to ensure
+            # the LLM does not drop them.
             explicit_phrases = set()
-            # Look for common scene tokens and phrases in the original
+            # Known phrase patterns to prefer preserving
             phrase_patterns = [r"top step", r"step of his", r"terrace house", r"victorian", r"chipped mug", r"mug", r"steam"]
             for pat in phrase_patterns:
                 if re.search(pat, orig):
                     explicit_phrases.add(pat)
 
+            # Heuristic: split the preservation source on punctuation and gather 2-4 word fragments
+            fragments = [frag.strip() for frag in re.split(r'[\.;:,\n]+', orig) if frag.strip()]
+            for frag in fragments:
+                words = frag.split()
+                if 1 < len(words) <= 4:
+                    # Keep fragments that look like descriptive phrases
+                    explicit_phrases.add(frag)
+
+            # Additionally, extract simple n-grams (2-4 words) from the preservation source to capture
+            # short descriptive phrases the LLM might have dropped (e.g., 'rippling shadow').
+            tokens = re.findall(r"\b\w+\b", orig)
+            max_ngrams = 10
+            ngrams_added = 0
+            for n in (2, 3, 4):
+                if ngrams_added >= max_ngrams:
+                    break
+                for i in range(len(tokens) - n + 1):
+                    gram = " ".join(tokens[i:i+n])
+                    # skip trivial grams that are just stopwords
+                    if len(gram) > 2 and gram not in explicit_phrases:
+                        explicit_phrases.add(gram)
+                        ngrams_added += 1
+                        if ngrams_added >= max_ngrams:
+                            break
+
             # Ensure each explicit phrase is present in the output (case-insensitive). If absent, append a short clause preserving it.
+            notes_added = 0
             for phrase in explicit_phrases:
-                if phrase not in out.lower():
-                    # Add a short, non-inventive clause preserving the original detail
-                    out += f". Note: the scene includes the original detail '{phrase}'."
+                if notes_added >= 5:
+                    break
+                phrase_norm = phrase.lower()
+                if phrase_norm and phrase_norm not in out.lower():
+                    out += f". Note: the scene includes the original detail '{phrase.strip()}'."
+                    notes_added += 1
 
             # Conservative removal of invented objects: find simple furniture/object nouns the LLM may invent
             invented_candidates = ["bench", "chair", "table", "lamp", "streetlamp", "carriage"]
