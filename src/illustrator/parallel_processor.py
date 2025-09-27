@@ -10,6 +10,7 @@ from functools import wraps
 import time
 import threading
 from collections import defaultdict, deque
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ class CircuitBreakerController:
 @dataclass
 class ProcessingResult(Generic[R]):
     """Result of a processing task."""
-    item_id: str = ""
+    item_id: str
     success: bool
     result: Optional[R] = None
     error: Optional[str] = None
@@ -387,38 +388,211 @@ class ParallelProcessor:
             'circuit_breaker_opens': 0
         }
 
+    # ------------------------------------------------------------------
+    # Configuration helpers expected by tests
+    # ------------------------------------------------------------------
+    def add_rate_limit(self, provider: str, config: RateLimitConfig):
+        """Register a rate limit configuration for a provider."""
+        self.rate_limits[provider] = config
+        self.rate_limit_history[provider]  # ensure deque exists
+
+    def _check_rate_limit(self, provider: str) -> bool:
+        """Check and record a rate-limited call."""
+        config = self.rate_limits.get(provider)
+        if not config:
+            return True
+
+        history = self.rate_limit_history[provider]
+        now = time.time()
+
+        # Clean up history (older than 1 hour)
+        while history and now - history[0] > 3600:
+            history.popleft()
+
+        minute_calls = [t for t in history if now - t < 60]
+        if len(minute_calls) >= config.requests_per_minute:
+            return False
+
+        if len(history) >= config.requests_per_hour:
+            return False
+
+        if config.burst_limit and len(minute_calls) >= config.burst_limit:
+            return False
+
+        history.append(now)
+        return True
+
+    def get_rate_limit_status(self, provider: str) -> Dict[str, Any]:
+        """Return snapshot of rate limit usage for a provider."""
+        history = self.rate_limit_history.get(provider, deque())
+        config = self.rate_limits.get(provider)
+        now = time.time()
+        minute_count = sum(1 for t in history if now - t < 60)
+
+        return {
+            "requests_per_minute": getattr(config, 'requests_per_minute', None),
+            "requests_per_hour": getattr(config, 'requests_per_hour', None),
+            "burst_limit": getattr(config, 'burst_limit', None),
+            "current_minute_count": minute_count,
+            "current_hour_count": len(history),
+        }
+
+    def add_circuit_breaker(self, provider: str, config: CircuitBreakerConfig):
+        """Register a circuit breaker configuration for a provider."""
+        self.circuit_breakers[provider] = CircuitBreakerController(config)
+
+    def _check_circuit_breaker(self, provider: str) -> bool:
+        breaker = self.circuit_breakers.get(provider)
+        if not breaker:
+            return True
+        return breaker.allow_request()
+
+    def _record_circuit_breaker_result(self, provider: str, success: bool):
+        breaker = self.circuit_breakers.get(provider)
+        if breaker:
+            breaker.record_result(success)
+
+    def get_circuit_breaker_status(self, provider: str) -> Dict[str, Any]:
+        breaker = self.circuit_breakers.get(provider)
+        if not breaker:
+            return {}
+
+        return {
+            "state": breaker.state,
+            "failure_count": breaker.failure_count,
+            "failure_threshold": breaker.config.failure_threshold,
+            "recovery_timeout": breaker.config.recovery_timeout,
+        }
+
+    def update_batch_config(self, config: BatchConfig):
+        self.batch_config = config
+
+    def reset_stats(self):
+        self.stats = ProcessingStats()
+
+    def get_processing_stats(self) -> ProcessingStats:
+        return self.stats
+
+    # ------------------------------------------------------------------
+    # Lightweight batch processing helpers used by tests
+    # ------------------------------------------------------------------
+    async def _process_single_item(
+        self,
+        item: T,
+        processor_func: Callable[[T], Coroutine[Any, Any, R]],
+        provider_name: str,
+    ) -> ProcessingResult[R]:
+        item_id = str(item)
+        start_time = time.time()
+
+        self.stats.total_items += 1
+
+        if not self._check_rate_limit(provider_name):
+            self.stats.failed_items += 1
+            return ProcessingResult(
+                item_id=item_id,
+                success=False,
+                error="Rate limit exceeded",
+                processing_time=time.time() - start_time,
+            )
+
+        if not self._check_circuit_breaker(provider_name):
+            self.stats.failed_items += 1
+            return ProcessingResult(
+                item_id=item_id,
+                success=False,
+                error="Circuit breaker open",
+                processing_time=time.time() - start_time,
+            )
+
+        try:
+            result = await asyncio.wait_for(
+                processor_func(item),
+                timeout=self.batch_config.timeout_per_item,
+            )
+
+            elapsed = time.time() - start_time
+            self.stats.successful_items += 1
+            self.stats.total_processing_time += elapsed
+            self._record_circuit_breaker_result(provider_name, True)
+
+            return ProcessingResult(
+                item_id=item_id,
+                success=True,
+                result=result,
+                processing_time=elapsed,
+            )
+
+        except asyncio.TimeoutError:
+            elapsed = time.time() - start_time
+            self.stats.failed_items += 1
+            self.stats.total_processing_time += elapsed
+            self._record_circuit_breaker_result(provider_name, False)
+
+            return ProcessingResult(
+                item_id=item_id,
+                success=False,
+                error="Processing timeout",
+                processing_time=elapsed,
+            )
+
+        except Exception as exc:  # noqa: BLE001
+            elapsed = time.time() - start_time
+            self.stats.failed_items += 1
+            self.stats.total_processing_time += elapsed
+            self._record_circuit_breaker_result(provider_name, False)
+
+            return ProcessingResult(
+                item_id=item_id,
+                success=False,
+                error=str(exc),
+                processing_time=elapsed,
+            )
+
+    async def _process_batch(
+        self,
+        items: List[T],
+        processor_func: Callable[[T], Coroutine[Any, Any, R]],
+        provider_name: str,
+    ) -> List[ProcessingResult[R]]:
+        if not items:
+            return []
+
+        semaphore = asyncio.Semaphore(max(1, self.batch_config.max_concurrent))
+        results: List[ProcessingResult[R]] = []
+
+        async def run_single(item: T) -> ProcessingResult[R]:
+            async with semaphore:
+                return await self._process_single_item(item, processor_func, provider_name)
+
+        tasks = [asyncio.create_task(run_single(item)) for item in items]
+        for outcome in await asyncio.gather(*tasks):
+            results.append(outcome)
+
+        return results
+
     async def process_in_parallel(
         self,
         items: List[T],
         processor_func: Callable[[T], Coroutine[Any, Any, R]],
         *,
-        priority: int = 0,
-        timeout: float = 60.0,
-        max_retries: int = 1,
+        provider_name: str = "default",
     ) -> List[ProcessingResult[R]]:
-        """Convenience helper to process a flat list of items concurrently.
+        if not items:
+            return []
 
-        Creates lightweight ProcessingTask objects and delegates to the
-        dependency-aware engine so tests and simple callers can submit
-        work without constructing full task graphs.
-        """
+        batch_size = max(1, self.batch_config.batch_size)
+        results: List[ProcessingResult[R]] = []
 
-        tasks: List[ProcessingTask[T, R]] = []
-        for idx, item in enumerate(items):
-            tasks.append(
-                ProcessingTask[T, R](
-                    task_id=f"task_{idx}",
-                    input_data=item,
-                    processor_func=processor_func,
-                    priority=priority,
-                    estimated_duration=1.0,
-                    dependencies=[],
-                    max_retries=max_retries,
-                    timeout=timeout,
-                )
-            )
+        for idx in range(0, len(items), batch_size):
+            batch = items[idx:idx + batch_size]
+            batch_results = await self._process_batch(batch, processor_func, provider_name)
+            results.extend(batch_results)
 
-        return await self.process_with_dependencies(tasks)
+            if idx + batch_size < len(items):
+                await asyncio.sleep(self.batch_config.delay_between_batches)
+
+        return results
 
     async def process_chapters_parallel(
         self,
@@ -701,14 +875,14 @@ class ParallelProcessor:
                 end_time = time.time()
 
                 return ProcessingResult(
-                    task_id=task.task_id,
+                    item_id=task.task_id,
                     success=True,
                     result=result,
-                    error=None,
-                    duration=end_time - start_time,
+                    processing_time=end_time - start_time,
                     retry_count=attempt,
+                    task_id=task.task_id,
                     start_time=start_time,
-                    end_time=end_time
+                    end_time=end_time,
                 )
 
             except asyncio.TimeoutError:
@@ -717,14 +891,14 @@ class ParallelProcessor:
 
                 if attempt == task.max_retries:
                     return ProcessingResult(
-                        task_id=task.task_id,
+                        item_id=task.task_id,
                         success=False,
-                        result=None,
                         error=error_msg,
-                        duration=time.time() - start_time,
+                        processing_time=time.time() - start_time,
                         retry_count=attempt,
+                        task_id=task.task_id,
                         start_time=start_time,
-                        end_time=time.time()
+                        end_time=time.time(),
                     )
 
             except Exception as e:
@@ -733,14 +907,14 @@ class ParallelProcessor:
 
                 if attempt == task.max_retries:
                     return ProcessingResult(
-                        task_id=task.task_id,
+                        item_id=task.task_id,
                         success=False,
-                        result=None,
                         error=error_msg,
-                        duration=time.time() - start_time,
+                        processing_time=time.time() - start_time,
                         retry_count=attempt,
+                        task_id=task.task_id,
                         start_time=start_time,
-                        end_time=time.time()
+                        end_time=time.time(),
                     )
 
                 # Exponential backoff for retries
@@ -749,14 +923,14 @@ class ParallelProcessor:
 
         # Should never reach here
         return ProcessingResult(
-            task_id=task.task_id,
+            item_id=task.task_id,
             success=False,
-            result=None,
             error="Unexpected end of retry loop",
-            duration=time.time() - start_time,
+            processing_time=time.time() - start_time,
             retry_count=task.max_retries,
+            task_id=task.task_id,
             start_time=start_time,
-            end_time=time.time()
+            end_time=time.time(),
         )
 
     def get_performance_stats(self) -> Dict[str, Any]:
