@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "title": "Test Novel",
+    "author": "Test Author",
+    "genre": "Fantasy",
+    "total_chapters": 2,
+    "created_at": "2025-09-27T19:07:18.347197"
+  },
+  "chapters": [
+    {
+      "title": "Chapter 1",
+      "content": "This is test content for chapter one.",
+      "number": 1,
+      "word_count": 8
+    },
+    {
+      "title": "Chapter 2",
+      "content": "This is test content for chapter two with more words.",
+      "number": 2,
+      "word_count": 10
+    }
+  ],
+  "saved_at": "2025-09-27T19:07:18.347232",
+  "file_path": "saved_manuscripts\\Test Novel_20250927_190718.json"
+}
