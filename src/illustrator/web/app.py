@@ -1325,14 +1325,29 @@ class WebSocketIllustrationGenerator:
 
         IllustrationGenerator = _scene_tools.IllustrationGenerator
         from illustrator.prompt_engineering import PromptEngineer
-        from langchain.chat_models import init_chat_model
+        from illustrator.context import get_default_context, ManuscriptContext
+        from illustrator.models import LLMProvider
+        from illustrator.llm_factory import create_chat_model_from_context
 
-        self.generator = IllustrationGenerator(provider, output_dir)
+        context: ManuscriptContext = get_default_context()
+        context.image_provider = provider
+
+        if not context.model:
+            context.model = "gpt-oss-120b"
+
+        if context.llm_provider == LLMProvider.HUGGINGFACE and not context.huggingface_endpoint_url:
+            context.huggingface_endpoint_url = f"https://api-inference.huggingface.co/models/{context.model}"
+
+        self.generator = IllustrationGenerator(provider, output_dir, context)
         self.connection_manager = connection_manager
         self.session_id = session_id
 
         # Initialize the advanced prompt engineering system
-        self.llm = init_chat_model(model="claude-sonnet-4-20250514", model_provider="anthropic")
+        try:
+            self.llm = create_chat_model_from_context(context)
+        except Exception as exc:  # pragma: no cover - surfaced in UI logs
+            raise RuntimeError(f"Failed to initialize prompt engineering model: {exc}") from exc
+
         self.prompt_engineer = PromptEngineer(self.llm)
 
     async def create_advanced_prompt(self, emotional_moment, provider, style_config, chapter):
