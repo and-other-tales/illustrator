@@ -676,11 +676,15 @@ async def preview_style_image(
                 logger.debug("LLM created successfully: %s", type(llm))
                 emotional_analyzer = EmotionalAnalyzer(llm)
 
+                import uuid
+                excerpt_id = f"preview-{uuid.uuid4()}"
                 chapter_excerpt = Chapter(
+                    id=excerpt_id,
                     title="Preview Excerpt",
                     content=excerpt_text,
                     number=1,
                     word_count=len(excerpt_text.split()) or 1,
+                    summary=f"Preview excerpt for style testing: {excerpt_text[:50]}{'...' if len(excerpt_text) > 50 else ''}",
                 )
 
                 logger.debug("Running emotional analysis on excerpt")
