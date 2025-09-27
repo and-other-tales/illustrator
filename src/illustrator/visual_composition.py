@@ -23,8 +23,36 @@ import builtins
 # Some tests reference VisualElement without importing it directly. Expose
 # the symbol on builtins so those tests can access it as a global name.
 builtins.VisualElement = VisualElement
+# Also expose common names expected by tests
+builtins.CompositionGuide = globals().get('CompositionGuide')
+builtins.CompositionAnalysis = globals().get('CompositionAnalysis')
+builtins.LightingType = LightingType
+builtins.ColorScheme = globals().get('ColorScheme')
 
 logger = logging.getLogger(__name__)
+
+
+# Helper: normalize incoming composition rule representations to CompositionRuleEnum
+def _normalize_rules(rule_list: List[Any]) -> List[CompositionRuleEnum]:
+    normalized: List[CompositionRuleEnum] = []
+    if not rule_list:
+        return normalized
+    for r in rule_list:
+        try:
+            if isinstance(r, CompositionRuleEnum):
+                normalized.append(r)
+            elif hasattr(r, 'rule_type'):
+                # dataclass CompositionRule
+                normalized.append(CompositionRuleEnum(r.rule_type))
+            elif isinstance(r, str):
+                normalized.append(CompositionRuleEnum(r))
+            elif hasattr(r, 'value'):
+                # enum-like with .value
+                normalized.append(CompositionRuleEnum(r.value))
+        except Exception:
+            # ignore unknown rule formats
+            continue
+    return normalized
 
 
 class CompositionRuleEnum(str, Enum):
@@ -61,6 +89,29 @@ class CompositionRule:
 # Expose enum members as class attributes on the dataclass for backward compatibility
 for _member in CompositionRuleEnum:
     setattr(CompositionRule, _member.name, _member)
+
+
+# Helper: normalize incoming composition rule representations to CompositionRuleEnum
+def _normalize_rules(rule_list: List[Any]) -> List[CompositionRuleEnum]:
+    normalized: List[CompositionRuleEnum] = []
+    if not rule_list:
+        return normalized
+    for r in rule_list:
+        try:
+            if isinstance(r, CompositionRuleEnum):
+                normalized.append(r)
+            elif hasattr(r, 'rule_type'):
+                # dataclass CompositionRule
+                normalized.append(CompositionRuleEnum(r.rule_type))
+            elif isinstance(r, str):
+                normalized.append(CompositionRuleEnum(r))
+            elif hasattr(r, 'value'):
+                # enum-like with .value
+                normalized.append(CompositionRuleEnum(r.value))
+        except Exception:
+            # ignore unknown rule formats
+            continue
+    return normalized
 
 
 class CameraAngle(str, Enum):
