@@ -6,7 +6,17 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
-from enum import Enum
+from enum import Enum, auto
+
+
+class ElementType(Enum):
+    """Types of visual elements that can be extracted from text."""
+    CHARACTER = auto()
+    SETTING = auto()
+    OBJECT = auto()
+    ACTION = auto()
+    ATMOSPHERE = auto()
+    LIGHTING = auto()
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -48,6 +58,10 @@ class LightingMood(str, Enum):
 @dataclass
 class VisualElement:
     """Represents a visual element extracted from text."""
+    element_type: ElementType
+    description: str
+    modifier: str
+    importance: float  # 0.0 to 1.0
     element_type: str  # "character", "object", "environment", "atmosphere"
     description: str
     importance: float  # 0.0 to 1.0
@@ -703,6 +717,10 @@ class StyleTranslator:
         style_modifiers = self._coerce_to_list(rich_config.get("base_prompt_modifiers"))
         if not style_modifiers:
             style_modifiers = [style_config.get('style_name', 'illustration')]
+        
+        # Check if this is E.H. Shepard style
+        style_name = style_config.get('style_name', '').lower()
+        is_shepard = 'shepard' in style_name or 'shepard' in style_config.get('art_style', '').lower()
         atmosphere_guidance: List[str] = []
 
         # Add emotional adaptations if available
@@ -1015,6 +1033,31 @@ class StyleTranslator:
             }
         }
 
+    def _format_shepard_scene(self, text: str, visual_elements: List[VisualElement]) -> str:
+        """Format a scene description in E.H. Shepard style."""
+        # Extract setting and character elements
+        setting_elements = [elem for elem in visual_elements if elem.element_type == ElementType.SETTING]
+        character_elements = [elem for elem in visual_elements if elem.element_type == ElementType.CHARACTER]
+        
+        # Build scene description
+        scene_parts = []
+        
+        # Add setting first
+        if setting_elements:
+            setting_desc = setting_elements[0].description
+            scene_parts.append(setting_desc if setting_desc.endswith('.') else setting_desc + '.')
+            
+        # Add character descriptions
+        if character_elements:
+            for char_elem in character_elements:
+                scene_parts.append(char_elem.description if char_elem.description.endswith('.') else char_elem.description + '.')
+                
+        # If no structured elements, use the raw text
+        if not scene_parts:
+            scene_parts.append(text)
+            
+        return " ".join(scene_parts)
+
     def _generic_translation(self, style_config: Dict[str, Any]) -> Dict[str, Any]:
         """Generic fallback translation."""
         base_modifiers = self._coerce_to_list(style_config.get('base_prompt_modifiers'))
@@ -1188,6 +1231,9 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         """Build the final comprehensive prompt."""
 
         prompt_parts = []
+        
+        # Check if we're using E.H. Shepard style
+        is_shepard = any('shepard' in str(modifier).lower() for modifier in style_translation.get('style_modifiers', []))
 
         # Scene description with visual focus
         scene_desc = await self._enhance_scene_description(
