@@ -186,8 +186,23 @@
 
                         <div class="mb-3">
                             <label for="llmModel" class="form-label">Preferred LLM Model</label>
-                            <input type="text" class="form-control" id="llmModel" placeholder="claude-3-5-sonnet-20241022 or gpt-oss-120b">
-                            <div class="form-text">Optional override for the default model used by the selected provider.</div>
+                            <input type="text" class="form-control" id="llmModel" list="llmModelOptions" placeholder="claude-3-5-sonnet-20241022 or meta-llama/Meta-Llama-3.3-70B-Instruct">
+                            <div class="form-text">Select a suggested model or enter any compatible identifier supported by your provider.</div>
+                            <datalist id="llmModelOptions">
+                                <option value="anthropic/claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                                <option value="anthropic/claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
+                                <option value="meta-llama/Meta-Llama-3.3-70B-Instruct">Llama 3.3 70B Instruct</option>
+                                <option value="meta-llama/Meta-Llama-3.1-405B-Instruct">Llama 3.1 405B Instruct</option>
+                                <option value="meta-llama/Meta-Llama-3.1-70B-Instruct">Llama 3.1 70B Instruct</option>
+                                <option value="meta-llama/Meta-Llama-3.1-8B-Instruct">Llama 3.1 8B Instruct</option>
+                                <option value="mistralai/Mistral-Large-Instruct">Mistral Large</option>
+                                <option value="mistralai/Mistral-Small-Instruct-2409">Mistral Small 24.09</option>
+                                <option value="nousresearch/Hermes-3-Llama-3.1-70B">Hermes 3 (Llama 3.1 70B)</option>
+                                <option value="perplexity/llama-3.1-sonar-large-128k-online">Perplexity Sonar Large</option>
+                                <option value="gpt-oss-120b">gpt-oss-120b (HuggingFace)</option>
+                                <option value="openrouter/anthropic/claude-3.5-sonnet">OpenRouter Claude 3.5 Sonnet</option>
+                                <option value="openrouter/meta-llama/llama-3.1-405b-instruct">OpenRouter Llama 3.1 405B</option>
+                            </datalist>
                         </div>
 
                         <div class="mb-3">

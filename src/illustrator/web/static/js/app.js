@@ -199,8 +199,28 @@ function handleKeyboardShortcuts(event) {
 function saveApiKeys() {
     const llmProviderSelect = document.getElementById('llmProviderSelect');
     const llmModelInput = document.getElementById('llmModel');
-    const selectedProvider = llmProviderSelect ? llmProviderSelect.value.trim().toLowerCase() : '';
+    let selectedProvider = llmProviderSelect ? llmProviderSelect.value.trim().toLowerCase() : '';
     const preferredModel = llmModelInput ? llmModelInput.value.trim() : '';
+
+    if (!selectedProvider && preferredModel) {
+        const normalizedModel = preferredModel.toLowerCase();
+        if (normalizedModel.includes('claude')) {
+            selectedProvider = 'anthropic';
+        } else if (
+            normalizedModel.includes('meta-llama') ||
+            normalizedModel.includes('llama') ||
+            normalizedModel.includes('mistral') ||
+            normalizedModel.includes('gpt-oss') ||
+            normalizedModel.includes('openrouter') ||
+            normalizedModel.includes('sonar')
+        ) {
+            selectedProvider = 'huggingface';
+        }
+
+        if (selectedProvider && llmProviderSelect) {
+            llmProviderSelect.value = selectedProvider;
+        }
+    }
 
     const credentials = {
         ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
