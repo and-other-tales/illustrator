@@ -1836,11 +1836,19 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         - References to pencil sketch qualities (fine linework, gentle shading, crosshatching opportunities)
         - E.H. Shepard-style elements (expressive faces, detailed environmental textures, whimsical yet realistic approach)
         - Classic book illustration aesthetics (intimate scenes, character-focused compositions)
-
-        EXAMPLE QUALITY LEVEL:
-        "Inside a cozy coffee shop interior, a young female barista stands behind the wooden counter, her body language betraying startled fear as she gazes at the customer she just served. Her smile is frozen and artificial, eyes wide with unmistakable alarm, shoulders tensed as she leans slightly back from the counter. The customer, a casual figure positioned to the side, remains unaware of her frightened expression, creating a moment of psychological tension within the intimate café setting. The scene captures everyday café details - espresso machine humming softly, ceramic cups arranged on shelves, pastries displayed in glass cases, small wooden tables with simple chairs - all rendered with the gentle, detailed approach characteristic of classic book illustrations. The atmosphere balances warmth and comfort with subtle underlying unease, perfect for expressive pencil work with fine crosshatching and delicate shading."
-
-        Generate a description of this caliber with equivalent detail density and emotional specificity.
+        
+        CRITICAL REQUIREMENTS:
+        1. Your description MUST directly describe the scene from the original text, not invent a new scene
+        2. Include ALL key elements mentioned in the original text (characters, objects, settings, actions)
+        3. Maintain the same emotional tone and atmosphere as the original text
+        4. Never contradict any details present in the original text
+        
+        In this example text: "The sun rose high above the city, casting long shadows upon the pavement of Kennington Park Road. Lukas sat perched on the top step of his Victorian terrace house, a chipped mug warming his hands, the steam a fragile wisp..."
+        
+        A good description would be:
+        "In the bright morning light, Lukas sits perched on the top step of his Victorian terrace house on Kennington Park Road. The sun has risen high, casting long dramatic shadows across the pavement before him. He holds a chipped mug between his hands, drawing warmth from it as delicate wisps of steam rise into the air. The scene captures the quiet contemplative moment with precise architectural details of the Victorian terrace, the textured stone steps, and the character's thoughtful posture as he observes the city street before him. The composition balances intimate character focus with the broader urban setting, showing the contrast between the personal moment and the city awakening around him. The morning light creates ideal conditions for detailed pencil rendering with subtle crosshatching defining the shadows on the pavement and the steam's ephemeral quality."
+        
+        Now apply this same approach to the original text I provided. Your description must clearly reflect the ACTUAL CONTENT of the original text passage, not generic scene elements.
         """
 
         # prepare logger early so it's always available in except blocks

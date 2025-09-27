@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 def ensure_chapter_required_fields(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Ensures that all required fields for chapters are present in the data.
-    If fields are missing, it will add them with default values.
+    If fields are missing or None, it will add them with default values.
     
     Args:
         data: Manuscript data dictionary
@@ -22,13 +22,15 @@ def ensure_chapter_required_fields(data: Dict[str, Any]) -> Dict[str, Any]:
         return data
     
     for chapter in data['chapters']:
-        if 'id' not in chapter:
+        # Handle missing or None ID
+        if 'id' not in chapter or chapter.get('id') is None:
             # Generate a deterministic ID based on title and number
             title = chapter.get('title', '')
             number = chapter.get('number', 0)
             chapter['id'] = f"ch-{uuid.uuid5(uuid.NAMESPACE_DNS, f'{title}-{number}')}"
         
-        if 'summary' not in chapter:
+        # Handle missing or None summary
+        if 'summary' not in chapter or chapter.get('summary') is None:
             chapter['summary'] = f"Summary for {chapter.get('title', 'Untitled Chapter')}"
     
     return data
