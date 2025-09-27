@@ -437,6 +437,23 @@ function populateForm(styleConfig) {
             input.value = styleConfig[key];
         }
     });
+
+    const providerSelect = document.getElementById('imageProvider');
+    const replicateSelect = document.getElementById('replicateModel');
+
+    if (providerSelect && replicateSelect) {
+        const providerValue = styleConfig.image_provider || '';
+
+        if (providerValue === 'seedream') {
+            providerSelect.value = 'replicate';
+            replicateSelect.value = 'seedream';
+        } else {
+            providerSelect.value = providerValue;
+            replicateSelect.value = providerValue;
+        }
+
+        toggleReplicateModel();
+    }
 }
 
 // Show alert function
@@ -462,7 +479,51 @@ function showAlert(message, type = 'info') {
 
 // Load saved configuration when page loads
 document.addEventListener('DOMContentLoaded', function() {
+    const providerSelect = document.getElementById('imageProvider');
+    if (providerSelect) {
+        providerSelect.addEventListener('change', toggleReplicateModel);
+        toggleReplicateModel();
+    }
+
     loadSavedStyleConfig();
 });
+
+function toggleReplicateModel() {
+    const providerSelect = document.getElementById('imageProvider');
+    const replicateGroup = document.getElementById('replicateModelGroup');
+    const replicateSelect = document.getElementById('replicateModel');
+
+    if (!providerSelect || !replicateGroup || !replicateSelect) {
+        return;
+    }
+
+    const isReplicate = providerSelect.value === 'replicate';
+    replicateGroup.style.display = isReplicate ? 'block' : 'none';
+    replicateSelect.disabled = !isReplicate;
+
+    if (!isReplicate) {
+        replicateSelect.value = '';
+    } else if (!replicateSelect.value) {
+        replicateSelect.value = 'flux';
+    }
+}
+
+function normalizeStyleProvider(styleConfig) {
+    if (!styleConfig) {
+        return;
+    }
+
+    const provider = styleConfig.image_provider;
+    const replicateModel = styleConfig.replicate_model;
+
+    if (provider === 'replicate') {
+        if (!replicateModel) {
+            throw new Error('Please choose a Replicate model before continuing.');
+        }
+        styleConfig.image_provider = replicateModel;
+    }
+
+    delete styleConfig.replicate_model;
+}
 </script>
 {% endblock %}
