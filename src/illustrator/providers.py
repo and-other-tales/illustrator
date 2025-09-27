@@ -8,13 +8,15 @@ import aiohttp
 from langchain.chat_models import init_chat_model
 
 from illustrator.models import (
+    Chapter,
     EmotionalMoment,
     IllustrationPrompt,
     ImageProvider,
-    Chapter,
+    LLMProvider,
 )
 from illustrator.prompt_engineering import PromptEngineer
 from illustrator.error_handling import resilient_async, ErrorRecoveryHandler, safe_execute
+from illustrator.llm_factory import HuggingFaceConfig, create_chat_model
 
 
 def _format_style_modifiers(style_modifiers: List[Any]) -> str:
@@ -32,22 +34,49 @@ def _format_style_modifiers(style_modifiers: List[Any]) -> str:
 class ImageGenerationProvider(ABC):
     """Abstract base class for image generation providers."""
 
-    def __init__(self, anthropic_api_key: str):
-        """Initialize provider with mandatory LLM for advanced prompt engineering."""
-        if not anthropic_api_key:
-            raise ValueError("Anthropic API key is required for prompt engineering")
+    def __init__(
+        self,
+        *,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+    ) -> None:
+        """Initialize provider, preparing prompt engineering resources as needed."""
 
         self.error_handler = ErrorRecoveryHandler(max_attempts=3)
 
-        try:
-            llm = init_chat_model(
-                model="claude-3-5-sonnet-20241022",
-                model_provider="anthropic",
-                api_key=anthropic_api_key,
+        resolved_provider: LLMProvider | None
+        if llm_provider is None:
+            resolved_provider = (
+                LLMProvider.ANTHROPIC if anthropic_api_key else LLMProvider.HUGGINGFACE
             )
-            self.prompt_engineer = PromptEngineer(llm)
-        except Exception as e:
-            raise ValueError(f"Failed to initialize PromptEngineer: {str(e)}")
+        elif isinstance(llm_provider, LLMProvider):
+            resolved_provider = llm_provider
+        else:
+            resolved_provider = LLMProvider(llm_provider)
+
+        if prompt_engineer is not None:
+            self.prompt_engineer = prompt_engineer
+            self.llm_provider = resolved_provider
+            return
+
+        if llm_model is None:
+            raise ValueError("llm_model must be provided when prompt_engineer is not supplied")
+
+        try:
+            llm = create_chat_model(
+                provider=resolved_provider,
+                model=llm_model,
+                anthropic_api_key=anthropic_api_key,
+                huggingface_config=huggingface_config,
+            )
+        except Exception as exc:
+            raise ValueError(f"Failed to initialize prompt engineering LLM: {exc}") from exc
+
+        self.prompt_engineer = PromptEngineer(llm)
+        self.llm_provider = resolved_provider
 
     async def generate_prompt(
         self,
@@ -88,9 +117,24 @@ class ImageGenerationProvider(ABC):
 class DalleProvider(ImageGenerationProvider):
     """OpenAI DALL-E image generation provider."""
 
-    def __init__(self, api_key: str, anthropic_api_key: str):
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+    ) -> None:
         """Initialize DALL-E provider."""
-        super().__init__(anthropic_api_key)
+        super().__init__(
+            prompt_engineer=prompt_engineer,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            anthropic_api_key=anthropic_api_key,
+            huggingface_config=huggingface_config,
+        )
         self.api_key = api_key
         self.base_url = "https://api.openai.com/v1/images/generations"
 
@@ -169,9 +213,25 @@ class Imagen4Provider(ImageGenerationProvider):
     Vertex AI model currently used is from the Imagen 3 line.
     """
 
-    def __init__(self, credentials_path: str, project_id: str, anthropic_api_key: str):
+    def __init__(
+        self,
+        credentials_path: str,
+        project_id: str,
+        *,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+    ) -> None:
         """Initialize Imagen4 provider."""
-        super().__init__(anthropic_api_key)
+        super().__init__(
+            prompt_engineer=prompt_engineer,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            anthropic_api_key=anthropic_api_key,
+            huggingface_config=huggingface_config,
+        )
         self.credentials_path = credentials_path
         self.project_id = project_id
         # Note: In production, you'd use the Google Cloud AI Platform client library
@@ -283,9 +343,24 @@ class Imagen4Provider(ImageGenerationProvider):
 class FluxProvider(ImageGenerationProvider):
     """HuggingFace Flux 1.1 Pro image generation provider."""
 
-    def __init__(self, api_key: str, anthropic_api_key: str):
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+    ) -> None:
         """Initialize Flux provider."""
-        super().__init__(anthropic_api_key)
+        super().__init__(
+            prompt_engineer=prompt_engineer,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            anthropic_api_key=anthropic_api_key,
+            huggingface_config=huggingface_config,
+        )
         self.api_key = api_key
         self.base_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro"
 
@@ -365,27 +440,65 @@ class ProviderFactory:
     ) -> ImageGenerationProvider:
         """Create a provider instance based on type."""
         anthropic_key = credentials.get('anthropic_api_key')
-        if not anthropic_key:
-            raise ValueError("Anthropic API key is required for all providers (needed for prompt engineering)")
+        llm_provider_value = credentials.get('llm_provider')
+        llm_provider: LLMProvider
+        if llm_provider_value is None:
+            llm_provider = LLMProvider.ANTHROPIC if anthropic_key else LLMProvider.HUGGINGFACE
+        elif isinstance(llm_provider_value, LLMProvider):
+            llm_provider = llm_provider_value
+        else:
+            llm_provider = LLMProvider(llm_provider_value)
+
+        if llm_provider == LLMProvider.ANTHROPIC and not anthropic_key:
+            raise ValueError("Anthropic API key is required when using the Anthropic provider for prompt engineering")
+
+        llm_model = (
+            credentials.get('model')
+            or credentials.get('llm_model')
+            or (
+                "claude-3-5-sonnet-20241022"
+                if llm_provider == LLMProvider.ANTHROPIC
+                else "microsoft/phi-2"
+            )
+        )
+
+        huggingface_config = HuggingFaceConfig(
+            task=credentials.get('huggingface_task', 'text-generation'),
+            device=credentials.get('huggingface_device'),
+            max_new_tokens=credentials.get('huggingface_max_new_tokens', 512),
+            temperature=credentials.get('huggingface_temperature', 0.7),
+            model_kwargs=credentials.get('huggingface_model_kwargs'),
+        )
+
+        common_llm_kwargs = {
+            'llm_provider': llm_provider,
+            'llm_model': llm_model,
+            'anthropic_api_key': anthropic_key,
+            'huggingface_config': huggingface_config,
+        }
 
         if provider_type == ImageProvider.DALLE:
             api_key = credentials.get('openai_api_key')
             if not api_key:
                 raise ValueError("OpenAI API key required for DALL-E provider")
-            return DalleProvider(api_key, anthropic_key)
+            return DalleProvider(api_key, **common_llm_kwargs)
 
         elif provider_type == ImageProvider.IMAGEN4:
             credentials_path = credentials.get('google_credentials')
             project_id = credentials.get('google_project_id')
             if not credentials_path or not project_id:
                 raise ValueError("Google credentials and project ID required for Imagen4")
-            return Imagen4Provider(credentials_path, project_id, anthropic_key)
+            return Imagen4Provider(
+                credentials_path,
+                project_id,
+                **common_llm_kwargs,
+            )
 
         elif provider_type == ImageProvider.FLUX:
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
                 raise ValueError("HuggingFace API key required for Flux provider")
-            return FluxProvider(api_key, anthropic_key)
+            return FluxProvider(api_key, **common_llm_kwargs)
 
         else:
             raise ValueError(f"Unsupported provider type: {provider_type}")
@@ -393,10 +506,22 @@ class ProviderFactory:
     @staticmethod
     def get_available_providers(**credentials) -> List[ImageProvider]:
         """Get list of available providers based on provided credentials."""
-        if not credentials.get('anthropic_api_key'):
-            return []  # No providers available without Anthropic key for prompt engineering
-
         available = []
+
+        anthropic_key = credentials.get('anthropic_api_key')
+        llm_provider_value = credentials.get('llm_provider')
+        if llm_provider_value is None and not anthropic_key:
+            # Local pipeline can support prompt engineering without Anthropic key
+            llm_provider = LLMProvider.HUGGINGFACE
+        elif isinstance(llm_provider_value, LLMProvider):
+            llm_provider = llm_provider_value
+        elif llm_provider_value is not None:
+            llm_provider = LLMProvider(llm_provider_value)
+        else:
+            llm_provider = LLMProvider.ANTHROPIC
+
+        if llm_provider == LLMProvider.ANTHROPIC and not anthropic_key:
+            return []
 
         if credentials.get('openai_api_key'):
             available.append(ImageProvider.DALLE)
@@ -429,6 +554,13 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
             'google_credentials': context.google_credentials,
             'google_project_id': getattr(context, 'google_project_id', None),
             'anthropic_api_key': context.anthropic_api_key,
+            'llm_provider': getattr(context, 'llm_provider', None),
+            'model': getattr(context, 'model', None),
+            'huggingface_task': getattr(context, 'huggingface_task', None),
+            'huggingface_device': getattr(context, 'huggingface_device', None),
+            'huggingface_max_new_tokens': getattr(context, 'huggingface_max_new_tokens', None),
+            'huggingface_temperature': getattr(context, 'huggingface_temperature', None),
+            'huggingface_model_kwargs': getattr(context, 'huggingface_model_kwargs', None),
             **credentials
         }.items() if value is not None
     }

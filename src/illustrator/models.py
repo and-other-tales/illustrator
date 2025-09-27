@@ -13,6 +13,13 @@ class ImageProvider(str, Enum):
     FLUX = "flux"
 
 
+class LLMProvider(str, Enum):
+    """Supported language model providers for analysis."""
+
+    ANTHROPIC = "anthropic"
+    HUGGINGFACE = "huggingface"
+
+
 class EmotionalTone(str, Enum):
     """Emotional tones detected in text."""
     JOY = "joy"

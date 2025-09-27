@@ -4,8 +4,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, cast
 
-from langchain.chat_models import init_chat_model
-from illustrator.utils import split_model_and_provider
+from illustrator.llm_factory import create_chat_model_from_context
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from langgraph.runtime import Runtime
@@ -16,6 +15,7 @@ from illustrator.context import ManuscriptContext
 from illustrator.models import (
     ChapterAnalysis,
     EmotionalMoment,
+    LLMProvider,
 )
 from illustrator.providers import ProviderFactory
 from illustrator.quality_feedback import FeedbackSystem
@@ -64,12 +64,8 @@ async def analyze_chapter(state: ManuscriptState, runtime: Runtime[ManuscriptCon
         }
 
     try:
-        # Initialize the LLM and analyzer with provider inference support
-        model_info = split_model_and_provider(runtime.context.model)
-        if 'provider' in model_info:
-            llm = init_chat_model(model=model_info['model'], model_provider=model_info['provider'])
-        else:
-            llm = init_chat_model(model=model_info['model'])
+        # Initialize the LLM and analyzer based on configured provider
+        llm = create_chat_model_from_context(runtime.context)
         analyzer = EmotionalAnalyzer(llm)
 
         chapter = state["current_chapter"]
@@ -157,7 +153,10 @@ Return your analysis in JSON format with these fields:
 
         if emotional_moments:
             # Verify we have the required Anthropic API key for advanced prompt engineering
-            if not context.anthropic_api_key:
+            if (
+                getattr(context, 'llm_provider', None) == LLMProvider.ANTHROPIC
+                and not context.anthropic_api_key
+            ):
                 return {
                     "error_message": "Anthropic API key is required for advanced prompt engineering",
                     "retry_count": state.get("retry_count", 0) + 1,
@@ -172,6 +171,13 @@ Return your analysis in JSON format with these fields:
                     google_project_id=context.google_project_id or runtime.context.user_id,
                     huggingface_api_key=context.huggingface_api_key,
                     anthropic_api_key=context.anthropic_api_key,
+                    llm_provider=getattr(context, 'llm_provider', None),
+                    model=context.model,
+                    huggingface_task=getattr(context, 'huggingface_task', None),
+                    huggingface_device=getattr(context, 'huggingface_device', None),
+                    huggingface_max_new_tokens=getattr(context, 'huggingface_max_new_tokens', None),
+                    huggingface_temperature=getattr(context, 'huggingface_temperature', None),
+                    huggingface_model_kwargs=getattr(context, 'huggingface_model_kwargs', None),
                 )
             except ValueError as e:
                 return {
