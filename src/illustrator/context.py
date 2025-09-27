@@ -69,7 +69,7 @@ Chapter context: {chapter_context}""",
     )
 
     illustration_prompt: str = Field(
-        default="""You are a master prompt engineer for AI image generation. Your expertise spans DALL-E, Imagen4, and Flux models.
+        default="""You are a master prompt engineer for AI image generation. Your expertise spans DALL-E, Imagen4, Flux, and Seedream models.
 
 For the given emotional moment and provider, create an optimal generation prompt that:
 1. Captures the emotional essence and atmosphere

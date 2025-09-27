@@ -113,16 +113,24 @@ class ManuscriptCLI:
         # Validate required API keys based on selected provider
         image_provider = os.getenv('DEFAULT_IMAGE_PROVIDER', 'dalle')
 
+        replicate_token = os.getenv('REPLICATE_API_TOKEN')
+
         if image_provider == 'dalle' and not os.getenv('OPENAI_API_KEY'):
             console.print("[red]Error: OPENAI_API_KEY required for DALL-E[/red]")
             sys.exit(1)
         elif image_provider == 'imagen4':
-            if not os.getenv('GOOGLE_APPLICATION_CREDENTIALS') or not os.getenv('GOOGLE_PROJECT_ID'):
-                console.print("[red]Error: Google Cloud credentials required for Imagen4[/red]")
+            has_google = os.getenv('GOOGLE_APPLICATION_CREDENTIALS') and os.getenv('GOOGLE_PROJECT_ID')
+            if not (replicate_token or has_google):
+                console.print("[red]Error: Provide REPLICATE_API_TOKEN or Google Cloud credentials for Imagen4[/red]")
                 sys.exit(1)
-        elif image_provider == 'flux' and not os.getenv('HUGGINGFACE_API_KEY'):
-            console.print("[red]Error: HUGGINGFACE_API_KEY required for Flux[/red]")
-            sys.exit(1)
+        elif image_provider == 'flux':
+            if not (replicate_token or os.getenv('HUGGINGFACE_API_KEY')):
+                console.print("[red]Error: Provide REPLICATE_API_TOKEN or HUGGINGFACE_API_KEY for Flux[/red]")
+                sys.exit(1)
+        elif image_provider in {'seedream', 'seedream4'}:
+            if not replicate_token:
+                console.print("[red]Error: REPLICATE_API_TOKEN required for Seedream[/red]")
+                sys.exit(1)
 
         self._determine_llm_providers()
 
@@ -212,7 +220,7 @@ class ManuscriptCLI:
             Text.assemble(
                 "\nAnalyze your manuscript chapters and generate AI illustrations\n\n",
                 ("• Enter chapter content with CTRL+D when finished\n", "green"),
-                ("• Choose from DALL-E, Imagen4, or Flux for image generation\n", "green"),
+                ("• Choose from DALL-E, Imagen4, Flux, or Seedream for image generation\n", "green"),
                 ("• Get emotional analysis and optimal illustration prompts\n", "green"),
             ),
             title=welcome_text,
@@ -296,8 +304,9 @@ class ManuscriptCLI:
         # Image provider selection
         providers = [
             ("dalle", "DALL-E 3 (OpenAI)"),
-            ("imagen4", "Imagen4 (Google)"),
-            ("flux", "Flux 1.1 Pro (HuggingFace)")
+            ("imagen4", "Imagen4 (Google or Replicate)"),
+            ("flux", "Flux 1.1 Pro (Replicate or HuggingFace)"),
+            ("seedream", "Seedream 4 (Replicate)")
         ]
 
         console.print("\n[green]Available image providers:[/green]")
@@ -311,7 +320,7 @@ class ManuscriptCLI:
                     selected_provider = providers[choice - 1][0]
                     break
                 else:
-                    console.print("[red]Invalid choice. Please select 1-3.[/red]")
+                    console.print(f"[red]Invalid choice. Please select 1-{len(providers)}.[/red]")
             except ValueError:
                 console.print("[red]Please enter a number.[/red]")
 
