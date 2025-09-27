@@ -700,6 +700,13 @@ class IllustrationGenerator:
                 "guidance_scale": 7.5,
                 "num_inference_steps": 50
             }
+        elif self.provider == ImageProvider.SEEDREAM:
+            return {
+                "width": 1024,
+                "height": 1024,
+                "cfg_scale": 6.5,
+                "steps": 30
+            }
         return {}
 
     async def generate_images(
@@ -831,6 +838,9 @@ This script will:
     elif provider_name == 'flux':
         provider = ImageProvider.FLUX
         console.print("[blue]🎨 Using Flux 1.1 Pro for image generation[/blue]")
+    elif provider_name in {'seedream', 'seedream4'}:
+        provider = ImageProvider.SEEDREAM
+        console.print("[blue]🎨 Using Seedream 4 for image generation[/blue]")
     else:
         console.print(f"[red]Unknown provider: {provider_name}. Using DALL-E.[/red]")
         provider = ImageProvider.DALLE

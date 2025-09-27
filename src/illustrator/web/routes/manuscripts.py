@@ -524,15 +524,17 @@ async def preview_style_image(
         )
 
         style_modifiers = _normalize_style_modifiers(style_translation.get("style_modifiers", []))
-        if style_config.image_provider == ImageProvider.FLUX and len(style_modifiers) > 6:
+        is_flux_family = style_config.image_provider in {
+            ImageProvider.FLUX,
+            ImageProvider.SEEDREAM,
+        }
+
+        if is_flux_family and len(style_modifiers) > 6:
             style_modifiers = style_modifiers[:6]
         provider_opts = style_translation.get("provider_optimizations", {}) or {}
 
         # Flux prompts are sensitive to length; trim verbose quality modifiers
-        if (
-            style_config.image_provider == ImageProvider.FLUX
-            and provider_opts.get("quality_modifiers")
-        ):
+        if is_flux_family and provider_opts.get("quality_modifiers"):
             provider_opts = {
                 **provider_opts,
                 "quality_modifiers": provider_opts["quality_modifiers"][:2],
@@ -559,7 +561,7 @@ async def preview_style_image(
             prompt_sections.append(provider_opts["style_emphasis"])
         if (
             provider_opts.get("quality_modifiers")
-            and style_config.image_provider != ImageProvider.FLUX
+            and not is_flux_family
         ):
             prompt_sections.append(
                 "quality focus: " + ", ".join(provider_opts["quality_modifiers"])
@@ -622,9 +624,9 @@ async def preview_style_image(
             style_summary["style_name"] = rich_config["style_name"]
         if provider_opts.get("style_emphasis"):
             style_summary["style_emphasis"] = provider_opts["style_emphasis"]
-        if provider_opts.get("quality_modifiers") and style_config.image_provider != ImageProvider.FLUX:
+        if provider_opts.get("quality_modifiers") and not is_flux_family:
             style_summary["quality_modifiers"] = provider_opts["quality_modifiers"]
-        if style_config.image_provider == ImageProvider.FLUX:
+        if is_flux_family:
             effective_prompt = metadata.get('prompt') or preview_prompt_text
             style_summary["effective_prompt"] = effective_prompt
             if metadata.get('prompt_truncated'):
