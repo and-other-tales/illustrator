@@ -130,12 +130,12 @@
                 <h3 class="card-title mb-0 fw-bold">
                     <i class="bi bi-clock-history me-2"></i>Recent Manuscripts
                 </h3>
-                <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-secondary" onclick="setManuscriptView('grid')" id="gridViewBtn">
-                        <i class="bi bi-grid"></i>
+                <div class="btn-group btn-group-sm view-toggle" role="group">
+                    <button type="button" class="btn btn-light border" onclick="setManuscriptView('grid')" id="gridViewBtn" aria-label="Grid view">
+                        <i class="bi bi-grid text-primary"></i>
                     </button>
-                    <button type="button" class="btn btn-outline-secondary active" onclick="setManuscriptView('list')" id="listViewBtn">
-                        <i class="bi bi-list"></i>
+                    <button type="button" class="btn btn-light border active" onclick="setManuscriptView('list')" id="listViewBtn" aria-label="List view">
+                        <i class="bi bi-list text-primary"></i>
                     </button>
                 </div>
             </div>

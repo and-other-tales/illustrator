@@ -19,6 +19,8 @@ from illustrator.web.models.web_models import (
     ErrorResponse
 )
 from illustrator.services.illustration_service import IllustrationService
+from langchain.chat_models import init_chat_model  # expose for test patching
+from generate_scene_illustrations import ComprehensiveSceneAnalyzer  # expose for test patching
 
 # Lazy-import friendly placeholders for patchability in tests
 EmotionalAnalyzer = None  # type: ignore
@@ -31,51 +33,6 @@ router = APIRouter()
 SAVED_MANUSCRIPTS_DIR = Path("saved_manuscripts")
 SCENE_ILLUSTRATIONS_DIR = Path("scene_illustrations")
 ILLUSTRATOR_OUTPUT_DIR = Path("illustrator_output")
-
-def load_chapter_analysis(manuscript_id: str, chapter_number: int) -> Optional[dict]:
-    """Load analysis data for a specific chapter if it exists."""
-    try:
-        # Look for analysis files in scene_illustrations directory
-        for manuscripts_dir in SCENE_ILLUSTRATIONS_DIR.iterdir():
-            if manuscripts_dir.is_dir():
-                analysis_file = manuscripts_dir / f"chapter_{chapter_number:02d}_analysis.json"
-                if analysis_file.exists():
-                    with open(analysis_file, 'r', encoding='utf-8') as f:
-                        return json.load(f)
-        return None
-    except Exception as e:
-        print(f"Error loading analysis for chapter {chapter_number}: {e}")
-        return None
-
-def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
-    """Count the number of generated images for a specific chapter."""
-    try:
-        count = 0
-
-        # Check scene_illustrations directory for images
-        for manuscripts_dir in SCENE_ILLUSTRATIONS_DIR.iterdir():
-            if manuscripts_dir.is_dir():
-                # Look for images with chapter pattern
-                for img_file in manuscripts_dir.glob(f"chapter_{chapter_number:02d}_scene_*.*"):
-                    if img_file.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}:
-                        count += 1
-
-                # Also check for chapter_XX_analysis images
-                for img_file in manuscripts_dir.glob(f"chapter_{chapter_number:02d}*.*"):
-                    if img_file.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}:
-                        count += 1
-
-        # Check illustrator_output directory for images
-        for output_dir in ILLUSTRATOR_OUTPUT_DIR.iterdir():
-            if output_dir.is_dir():
-                for img_file in output_dir.glob(f"chapter_{chapter_number:02d}*.*"):
-                    if img_file.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}:
-                        count += 1
-
-        return count
-    except Exception as e:
-        print(f"Error counting images for chapter {chapter_number}: {e}")
-        return 0
 
 
 def load_manuscript_by_id(manuscript_id: str) -> tuple[SavedManuscript, Path]:
@@ -207,7 +164,7 @@ async def get_chapter(chapter_id: str) -> ChapterResponse:
                 generated_chapter_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{manuscript_id}_{chapter.number}"))
                 if generated_chapter_id == chapter_id:
                     # Load analysis and count images for this chapter
-                    analysis = load_chapter_analysis(manuscript_id, chapter.number)
+                    analysis = load_chapter_analysis(generated_chapter_id)
                     images_count = count_chapter_images(manuscript_id, chapter.number)
 
                     return ChapterResponse(
@@ -546,8 +503,6 @@ async def analyze_chapter(chapter_id: str) -> dict:
     try:
         # Initialize the analysis systems
         import os
-        from langchain.chat_models import init_chat_model
-        from generate_scene_illustrations import ComprehensiveSceneAnalyzer
 
         # Check for required API key
         anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
@@ -612,9 +567,19 @@ async def analyze_chapter(chapter_id: str) -> dict:
                 {
                     "scene_type": scene.scene_type,
                     "primary_characters": scene.primary_characters,
-                    "location": scene.location,
-                    "time_context": scene.time_context,
-                    "emotional_tone": scene.emotional_tone,
+                    "location": (
+                        ", ".join(getattr(scene, 'location_indicators', []) or getattr(scene, 'setting_indicators', []))
+                        or getattr(scene, 'location', None) or ""
+                    ),
+                    "time_context": (
+                        ", ".join(getattr(scene, 'time_indicators', []))
+                        or getattr(scene, 'time_context', None) or ""
+                    ),
+                    "emotional_tone": (
+                        "high" if getattr(scene, 'emotional_intensity', 0.0) >= 0.7
+                        else "medium" if getattr(scene, 'emotional_intensity', 0.0) >= 0.4
+                        else "low"
+                    ),
                     "text_preview": scene.text[:200] + "..." if len(scene.text) > 200 else scene.text,
                     "word_count": len(scene.text.split()),
                     "start_position": scene.start_position,

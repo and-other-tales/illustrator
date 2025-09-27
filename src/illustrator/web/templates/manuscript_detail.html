@@ -10,7 +10,6 @@
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
-        <li class="breadcrumb-item active" id="breadcrumbTitle">Manuscript</li>
     </ol>
 </nav>
 {% endblock %}
@@ -384,9 +383,6 @@ function updateManuscriptHeader() {
 
     // Update page title
     document.title = `${title} - Manuscript Illustrator`;
-
-    // Update breadcrumb
-    document.getElementById('breadcrumbTitle').textContent = title;
 
     // Update header content
     document.getElementById('manuscriptTitle').textContent = title;

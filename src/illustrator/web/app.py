@@ -477,6 +477,62 @@ async def run_processing_workflow(
         if not chapters:
             raise Exception(f"No chapters found for manuscript {manuscript_id}")
 
+        # Ensure the manuscript and chapters exist in the database before creating a session
+        # This prevents FK violations when inserting into processing_sessions.
+        try:
+            from illustrator.db_config import get_db
+            from illustrator.db_models import Manuscript as DBManuscript, Chapter as DBChapter
+
+            db = get_db()
+
+            # Ensure Manuscript row exists
+            db_manuscript = db.query(DBManuscript).filter(DBManuscript.id == uuid.UUID(manuscript_id)).first()
+            if not db_manuscript:
+                db_manuscript = DBManuscript(
+                    id=uuid.UUID(manuscript_id),
+                    title=manuscript.title if hasattr(manuscript, 'title') else manuscript.metadata.title,
+                    author=(getattr(manuscript, 'author', None) or getattr(getattr(manuscript, 'metadata', None), 'author', None)),
+                    genre=(getattr(manuscript, 'genre', None) or getattr(getattr(manuscript, 'metadata', None), 'genre', None)),
+                    total_chapters=len(chapters)
+                )
+                db.add(db_manuscript)
+                db.commit()
+
+            # Ensure Chapter rows exist (IDs derived deterministically from manuscript_id, number, title)
+            for ch in chapters:
+                try:
+                    chapter_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, f"{manuscript_id}_{ch.number}_{ch.title}")
+                    existing_ch = db.query(DBChapter).filter(DBChapter.id == chapter_uuid).first()
+                    if not existing_ch:
+                        db_chapter = DBChapter(
+                            id=chapter_uuid,
+                            manuscript_id=db_manuscript.id,
+                            title=ch.title,
+                            content=ch.content,
+                            number=ch.number,
+                            word_count=getattr(ch, 'word_count', 0) or 0
+                        )
+                        db.add(db_chapter)
+                except Exception:
+                    # Don't let a single chapter creation failure block the run; continue
+                    pass
+
+            db.commit()
+            db.close()
+        except Exception as ensure_db_err:
+            # Log but continue; create_session below will still raise if manuscript truly missing
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "warning",
+                    "message": f"Database ensure step encountered an issue (continuing): {str(ensure_db_err)}"
+                }),
+                session_id
+            )
+
+        # Track the DB session id for persistence/checkpoints
+        db_session_id_for_persistence = None
+
         # Create or update processing session in database
         if not resume_info:
             db_session = persistence_service.create_session(
@@ -486,16 +542,19 @@ async def run_processing_workflow(
                 max_emotional_moments=max_emotional_moments,
                 total_chapters=len(chapters)
             )
-
+            db_session_id_for_persistence = str(db_session.id)
             # Create session start checkpoint
             checkpoint_manager.create_session_start_checkpoint(
-                session_id=str(db_session.id),
+                session_id=db_session_id_for_persistence,
                 manuscript_id=manuscript_id,
                 manuscript_title=manuscript.title,
                 total_chapters=len(chapters),
                 style_config=style_config,
                 max_emotional_moments=max_emotional_moments
             )
+        else:
+            # In resume flow, the incoming session_id is the DB session id
+            db_session_id_for_persistence = session_id
 
         # Update total chapters in session status
         connection_manager.sessions[session_id].status.total_chapters = len(chapters)
@@ -793,7 +852,7 @@ async def run_processing_workflow(
 
             # Create chapter completed checkpoint
             checkpoint_manager.create_chapter_completed_checkpoint(
-                session_id=session_id,
+                session_id=db_session_id_for_persistence,
                 chapter_number=chapter.number,
                 images_generated=chapter_images_generated,
                 total_images_so_far=total_images,
@@ -847,14 +906,14 @@ async def run_processing_workflow(
 
         # Create session completion checkpoint
         checkpoint_manager.create_session_completed_checkpoint(
-            session_id=session_id,
+            session_id=db_session_id_for_persistence,
             total_images_generated=total_images,
             total_chapters_processed=len(chapters)
         )
 
         # Update session status in database
         persistence_service.update_session_status(
-            session_id=session_id,
+            session_id=db_session_id_for_persistence,
             status="completed",
             progress_percent=100,
             current_task="Session completed successfully"
@@ -885,7 +944,7 @@ async def run_processing_workflow(
                 current_progress = connection_manager.sessions[session_id].status.progress if session_id in connection_manager.sessions else 0
 
                 checkpoint_manager.create_error_checkpoint(
-                    session_id=session_id,
+                    session_id=db_session_id_for_persistence or session_id,
                     chapter_number=current_chapter or 0,
                     current_step=ProcessingStep.ANALYZING_CHAPTERS,
                     error_message=str(e),
@@ -895,7 +954,7 @@ async def run_processing_workflow(
 
                 # Update session status in database
                 persistence_service.update_session_status(
-                    session_id=session_id,
+                    session_id=db_session_id_for_persistence or session_id,
                     status="failed",
                     error_message=str(e)
                 )

@@ -273,6 +273,39 @@ class ParallelProcessor:
             'circuit_breaker_opens': 0
         }
 
+    async def process_in_parallel(
+        self,
+        items: List[T],
+        processor_func: Callable[[T], Coroutine[Any, Any, R]],
+        *,
+        priority: int = 0,
+        timeout: float = 60.0,
+        max_retries: int = 1,
+    ) -> List[ProcessingResult[R]]:
+        """Convenience helper to process a flat list of items concurrently.
+
+        Creates lightweight ProcessingTask objects and delegates to the
+        dependency-aware engine so tests and simple callers can submit
+        work without constructing full task graphs.
+        """
+
+        tasks: List[ProcessingTask[T, R]] = []
+        for idx, item in enumerate(items):
+            tasks.append(
+                ProcessingTask[T, R](
+                    task_id=f"task_{idx}",
+                    input_data=item,
+                    processor_func=processor_func,
+                    priority=priority,
+                    estimated_duration=1.0,
+                    dependencies=[],
+                    max_retries=max_retries,
+                    timeout=timeout,
+                )
+            )
+
+        return await self.process_with_dependencies(tasks)
+
     async def process_chapters_parallel(
         self,
         chapters: List[Any],

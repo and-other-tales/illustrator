@@ -124,7 +124,8 @@ h5, h6 { font: var(--md-type-scale-label); }
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px);
     transition: all 0.4s cubic-bezier(0.4, 0.0, 0.2, 1);
-    overflow: hidden;
+    /* Allow dropdowns to escape the card bounds when needed */
+    overflow: visible;
     border: 1px solid rgba(255, 255, 255, 0.3);
     position: relative;
 }
@@ -171,7 +172,8 @@ h5, h6 { font: var(--md-type-scale-label); }
     color: white !important;
     padding: 2rem;
     position: relative;
-    overflow: hidden;
+    /* Ensure dropdowns in headers are not clipped */
+    overflow: visible;
 }
 
 /* Ensure manuscript header text visibility */
@@ -268,6 +270,8 @@ h5, h6 { font: var(--md-type-scale-label); }
     backdrop-filter: blur(10px);
     background: rgba(255, 255, 255, 0.95);
     animation: dropdownSlideIn 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    /* Keep dropdown above content */
+    z-index: 2000;
 }
 
 [data-bs-theme="dark"] .dropdown-menu {
@@ -295,6 +299,22 @@ h5, h6 { font: var(--md-type-scale-label); }
     background: rgba(99, 102, 241, 0.1);
     color: #6366f1 !important;
     transform: translateX(5px);
+}
+
+/* View toggle buttons (grid/list) - clearer visibility */
+.view-toggle .btn {
+    background: #ffffff !important;
+    border-color: rgba(0,0,0,0.1) !important;
+}
+.view-toggle .btn i {
+    color: var(--primary-color) !important;
+}
+.view-toggle .btn.active {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 0.1rem rgba(99, 102, 241, 0.25);
+}
+[data-bs-theme="dark"] .view-toggle .btn {
+    background: #ffffff !important; /* keep white as requested */
 }
 
 /* Modern Material Design Buttons */
@@ -1396,6 +1416,15 @@ h5, h6 { font: var(--md-type-scale-label); }
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+}
+
+/* Brand title styling: Readex Pro Bold, white, uppercase */
+.brand-title {
+    font-family: 'Readex Pro', 'Inter', 'Space Grotesk', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-weight: 700;
+    color: #ffffff !important;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
 }
 
 .border-gradient {
