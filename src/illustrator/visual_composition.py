@@ -506,8 +506,8 @@ class AdvancedVisualComposer:
             composition_guide=CompositionGuide(
                 shot_type=composition.shot_type,
                 camera_angle=composition.camera_angle,
-                focal_point=focal_point,
-                depth_layers=[l.layer_type for l in visual_layers]
+                focal_point=composition.focal_point_position,
+                depth_layers=[l.layer_type for l in composition.visual_layers]
             ),
             lighting_setup=composition.lighting_setup,
             color_harmony=composition.color_harmony,
