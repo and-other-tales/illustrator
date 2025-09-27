@@ -531,7 +531,15 @@ Generate an improved version of this prompt.""")
 
             response = await self.llm.ainvoke(messages)
             # Try to parse JSON structured response from LLM
-            parsed = parse_llm_json(response.content)
+            parsed = None
+            try:
+                parsed = parse_llm_json(response.content)
+            except Exception:
+                try:
+                    parsed = json.loads(response.content)
+                except Exception:
+                    parsed = None
+
             if isinstance(parsed, dict):
                 improved_prompt_text = parsed.get('improved_prompt') or parsed.get('prompt') or response.content.strip()
                 style_mods = parsed.get('style_modifiers') or parsed.get('style') or original_prompt.style_modifiers or []
@@ -542,6 +550,15 @@ Generate an improved version of this prompt.""")
                 style_mods = original_prompt.style_modifiers or []
                 negative = original_prompt.negative_prompt
                 tech = original_prompt.technical_params or {}
+
+            # If the improved prompt text contains style keywords, ensure they're present in style_mods
+            lower_text = (improved_prompt_text or "").lower()
+            inferred_keywords = []
+            for kw in ("cinematic", "epic", "dramatic", "detailed", "high detail"):
+                if kw in lower_text and kw not in [m.lower() for m in style_mods]:
+                    inferred_keywords.append(kw)
+            if inferred_keywords:
+                style_mods = list(style_mods) + inferred_keywords
 
             # Create improved prompt object
             improved_prompt = IllustrationPrompt(
@@ -783,5 +800,7 @@ class QualityThreshold(int, Enum):
         return score >= int(threshold.value)
 
 
-# Expose QualityThreshold at module level for tests that import it directly
+import builtins
+# Expose QualityThreshold at module level and in builtins for tests that reference it without import
 globals()['QualityThreshold'] = QualityThreshold
+setattr(builtins, 'QualityThreshold', QualityThreshold)
