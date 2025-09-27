@@ -651,10 +651,17 @@ async def preview_style_image(
                     chapter_context=chapter_excerpt,
                 )
 
-                illustration_prompt = engineered_prompt
-                preview_prompt_text = engineered_prompt.prompt
                 style_modifiers = _normalize_style_modifiers(engineered_prompt.style_modifiers)
+                preview_prompt_text = engineered_prompt.prompt
                 technical_params = engineered_prompt.technical_params or technical_params
+
+                illustration_prompt = IllustrationPrompt(
+                    provider=style_config.image_provider,
+                    prompt=preview_prompt_text,
+                    style_modifiers=style_modifiers,
+                    negative_prompt=engineered_prompt.negative_prompt,
+                    technical_params=technical_params,
+                )
 
             except Exception as excerpt_error:
                 logger.warning(
