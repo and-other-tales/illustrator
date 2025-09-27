@@ -286,6 +286,7 @@ async def get_dashboard_stats() -> DashboardStats:
 @router.get("/")
 async def list_manuscripts() -> List[ManuscriptResponse]:
     """List all manuscripts."""
+    logger.debug("API CALL: GET / (list_manuscripts)")
     manuscripts = get_saved_manuscripts()
 
     response = []
@@ -307,6 +308,7 @@ async def list_manuscripts() -> List[ManuscriptResponse]:
 @router.get("/{manuscript_id}")
 async def get_manuscript(manuscript_id: str) -> ManuscriptResponse:
     """Get a specific manuscript by ID."""
+    logger.debug(f"API CALL: GET /{{manuscript_id}} (get_manuscript) with manuscript_id={manuscript_id}")
     manuscripts = get_saved_manuscripts()
 
     # Find manuscript by generated ID
@@ -332,6 +334,7 @@ async def get_manuscript(manuscript_id: str) -> ManuscriptResponse:
 @router.post("/")
 async def create_manuscript(request: ManuscriptCreateRequest) -> ManuscriptResponse:
     """Create a new manuscript."""
+    logger.debug(f"API CALL: POST / (create_manuscript) with title={request.title}")
     # Create manuscript metadata
     metadata = ManuscriptMetadata(
         title=request.title,
@@ -373,6 +376,7 @@ async def update_manuscript(
     request: ManuscriptCreateRequest
 ) -> ManuscriptResponse:
     """Update an existing manuscript."""
+    logger.debug(f"API CALL: PUT /{{manuscript_id}} (update_manuscript) with manuscript_id={manuscript_id}")
     manuscripts = get_saved_manuscripts()
 
     # Find and update manuscript
@@ -413,6 +417,7 @@ async def save_style_config(
     request: StyleConfigSaveRequest
 ) -> SuccessResponse:
     """Save style configuration for a manuscript."""
+    logger.debug(f"API CALL: POST /{{manuscript_id}}/style (save_style_config) with manuscript_id={manuscript_id}")
     # Verify the manuscript exists first
     manuscripts = get_saved_manuscripts()
 
@@ -460,6 +465,7 @@ async def save_style_config(
 @router.get("/{manuscript_id}/style")
 async def get_style_config(manuscript_id: str) -> Dict[str, Any]:
     """Get saved style configuration for a manuscript."""
+    logger.debug(f"API CALL: GET /{{manuscript_id}}/style (get_style_config) with manuscript_id={manuscript_id}")
     # Verify the manuscript exists first
     manuscripts = get_saved_manuscripts()
 
@@ -500,6 +506,7 @@ async def preview_style_image(
     background_tasks: BackgroundTasks
 ) -> Dict[str, Any]:
     """Generate a preview image using the style configuration."""
+    logger.debug(f"API CALL: POST /{{manuscript_id}}/style/preview (preview_style_image) with manuscript_id={manuscript_id}")
     from illustrator.providers import get_image_provider
     from illustrator.models import StyleConfig
 
@@ -819,6 +826,7 @@ async def preview_style_image(
 @router.get("/{manuscript_id}/images")
 async def list_manuscript_images(manuscript_id: str) -> Dict[str, Any]:
     """List all generated images for a manuscript from the database."""
+    logger.debug(f"API CALL: GET /{{manuscript_id}}/images (list_manuscript_images) with manuscript_id={manuscript_id}")
     try:
         from illustrator.services.illustration_service import IllustrationService
 
@@ -968,6 +976,7 @@ async def list_manuscript_images(manuscript_id: str) -> Dict[str, Any]:
 @router.delete("/{manuscript_id}/images/{image_id}")
 async def delete_manuscript_image(manuscript_id: str, image_id: str) -> SuccessResponse:
     """Delete a specific image for a manuscript."""
+    logger.debug(f"API CALL: DELETE /{{manuscript_id}}/images/{{image_id}} (delete_manuscript_image) with manuscript_id={manuscript_id}, image_id={image_id}")
     try:
         from illustrator.services.illustration_service import IllustrationService
 
@@ -1040,6 +1049,7 @@ async def delete_manuscript_image(manuscript_id: str, image_id: str) -> SuccessR
 @router.delete("/{manuscript_id}")
 async def delete_manuscript(manuscript_id: str) -> SuccessResponse:
     """Delete a manuscript."""
+    logger.debug(f"API CALL: DELETE /{{manuscript_id}} (delete_manuscript) with manuscript_id={manuscript_id}")
     manuscripts = get_saved_manuscripts()
 
     # Find and delete manuscript
@@ -1081,7 +1091,7 @@ async def export_manuscript(
     export_format: str = "pdf"
 ) -> Dict[str, Any]:
     """Export manuscript in various formats (PDF, DOCX, HTML, JSON)."""
-
+    logger.debug(f"API CALL: POST /{{manuscript_id}}/export (export_manuscript) with manuscript_id={manuscript_id}")
     # Find the manuscript
     manuscripts = get_saved_manuscripts()
     manuscript = None
