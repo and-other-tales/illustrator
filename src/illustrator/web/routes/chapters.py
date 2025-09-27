@@ -57,6 +57,16 @@ def load_manuscript_by_id(manuscript_id: str) -> tuple[SavedManuscript, Path]:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+            
+            # Fix for missing required fields in chapters
+            if 'chapters' in data:
+                for chapter in data['chapters']:
+                    # Add missing required fields
+                    if 'id' not in chapter:
+                        chapter['id'] = f"ch-{chapter.get('number', 0)}" if 'number' in chapter else str(uuid.uuid4())
+                    if 'summary' not in chapter:
+                        chapter['summary'] = f"Summary for {chapter.get('title', 'untitled chapter')}"
+            
             manuscript = SavedManuscript(**data)
 
             # Check if this matches the requested ID
