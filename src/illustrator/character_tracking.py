@@ -45,9 +45,30 @@ class PhysicalDescription:
     posture_style: Optional[str] = None
     facial_structure: Optional[str] = None
 
+    def __init__(self, **kwargs):
+        """
+        Initialize with support for both 'distinguishing_features' and 'distinctive_features'
+        for backward compatibility.
+        """
+        # Handle the distinctive_features -> distinguishing_features aliasing
+        if 'distinctive_features' in kwargs and 'distinguishing_features' not in kwargs:
+            kwargs['distinguishing_features'] = kwargs.pop('distinctive_features')
+            
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+            
     def __post_init__(self):
         if self.distinguishing_features is None:
             self.distinguishing_features = []
+            
+    @property
+    def distinctive_features(self):
+        """Alias for distinguishing_features to maintain compatibility."""
+        return self.distinguishing_features
+        
+    @distinctive_features.setter
+    def distinctive_features(self, value):
+        self.distinguishing_features = value
         if self.typical_clothing is None:
             self.typical_clothing = []
         if self.accessories is None:
@@ -564,7 +585,7 @@ class CharacterTracker:
             eye_color=character_info.get('physical', {}).get('eye_color'),
             skin_tone=character_info.get('physical', {}).get('skin_tone'),
             age_range=character_info.get('physical', {}).get('age_range'),
-            distinctive_features=character_info.get('physical', {}).get('distinctive_features', []),
+            distinguishing_features=character_info.get('physical', {}).get('distinctive_features', []),
             typical_clothing=character_info.get('physical', {}).get('clothing', []),
             accessories=character_info.get('physical', {}).get('accessories', []),
         )
