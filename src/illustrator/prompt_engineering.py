@@ -1659,10 +1659,53 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         else:
             enhanced_parts = [prompt]
 
-        # Combine all parts
-        enhanced_prompt = " ".join(enhanced_parts)
+        def _normalize_parts(parts: List[str]) -> List[str]:
+            return [str(part).strip() for part in parts if part and str(part).strip()]
 
-        # Ensure optimal length while preserving detail
+        def _trim_prompt(parts: List[str], limit: int) -> str:
+            normalized_parts = _normalize_parts(parts)
+            if not normalized_parts:
+                return ""
+
+            combined = " ".join(normalized_parts)
+            if len(combined) <= limit:
+                return combined
+
+            trimmed_parts: List[str] = []
+
+            for part in normalized_parts:
+                part_text = part.strip()
+                if not part_text:
+                    continue
+
+                if not trimmed_parts:
+                    if len(part_text) > limit:
+                        return part_text[: max(0, limit - 3)].rstrip() + "..."
+                    trimmed_parts.append(part_text)
+                    continue
+
+                candidate = " ".join(trimmed_parts + [part_text])
+                if len(candidate) <= limit:
+                    trimmed_parts.append(part_text)
+                    continue
+
+                remaining = limit - len(" ".join(trimmed_parts)) - 1
+                if remaining <= 3:
+                    last = trimmed_parts[-1]
+                    trimmed_parts[-1] = last[: max(0, limit - 3)].rstrip() + "..."
+                    break
+
+                truncated = part_text[: remaining - 3].rstrip()
+                if truncated:
+                    trimmed_parts.append(truncated + "...")
+                else:
+                    last = trimmed_parts[-1]
+                    trimmed_parts[-1] = last[: max(0, limit - 3)].rstrip() + "..."
+                break
+
+            return " ".join(trimmed_parts)
+
+        # Combine all parts while respecting provider limits
         max_length = {
             ImageProvider.DALLE: 400,
             ImageProvider.IMAGEN4: 500,
@@ -1671,12 +1714,4 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             ImageProvider.HUGGINGFACE: 600,
         }.get(provider, 400)
 
-        if len(enhanced_prompt) > max_length:
-            # Truncate while preserving essential artistic elements
-            essential_parts = enhanced_parts[0]  # Keep the style prefix and main description
-            if len(essential_parts) <= max_length:
-                enhanced_prompt = essential_parts
-            else:
-                enhanced_prompt = essential_parts[:max_length-3] + "..."
-
-        return enhanced_prompt
+        return _trim_prompt(enhanced_parts, max_length)
