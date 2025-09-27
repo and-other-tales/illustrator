@@ -151,11 +151,12 @@ def get_default_context() -> IllustratorContext:
             provider = None
 
     anthropic_key = os.getenv('ANTHROPIC_API_KEY')
-    if provider is None:
-        if anthropic_key:
-            provider = LLMProvider.ANTHROPIC
-        else:
-            provider = LLMProvider.HUGGINGFACE
+    hf_endpoint_env = (os.getenv('HUGGINGFACE_ENDPOINT_URL') or '').strip()
+
+    if hf_endpoint_env:
+        provider = LLMProvider.HUGGINGFACE
+    elif provider is None:
+        provider = LLMProvider.ANTHROPIC if anthropic_key else LLMProvider.HUGGINGFACE
 
     default_model = os.getenv('DEFAULT_LLM_MODEL')
     if not default_model:
@@ -188,7 +189,7 @@ def get_default_context() -> IllustratorContext:
     except ValueError:
         huggingface_temperature = 0.7
 
-    hf_endpoint = os.getenv('HUGGINGFACE_ENDPOINT_URL')
+    hf_endpoint = hf_endpoint_env or None
     if not hf_endpoint and provider == LLMProvider.HUGGINGFACE:
         hf_endpoint = f"https://api-inference.huggingface.co/models/{default_model}"
 
@@ -213,7 +214,7 @@ def get_default_context() -> IllustratorContext:
         llm_provider=provider,
         model=default_model,
         openai_api_key=os.getenv('OPENAI_API_KEY'),
-        anthropic_api_key=anthropic_key,
+        anthropic_api_key=anthropic_key if provider == LLMProvider.ANTHROPIC else None,
         google_credentials=os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
         google_project_id=os.getenv('GOOGLE_PROJECT_ID'),
         huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),
