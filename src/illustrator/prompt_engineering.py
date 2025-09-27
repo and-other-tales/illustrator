@@ -1783,10 +1783,23 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         """Enhance scene description with comprehensive visual and artistic details."""
         # Instruction additions: explicitly prevent inventing objects/locations
         # and preserve exact, explicitly mentioned spatial relationships (e.g. "top step").
+        
+        # Clean up the original text and extract key elements
+        clean_text = original_text.strip()
+        
+        # Extract key phrases and elements from the text to ensure they're incorporated
+        key_phrases = []
+        sentences = clean_text.split('.')
+        if len(sentences) > 0:
+            key_phrases.append(sentences[0].strip())  # Always include the first sentence
+        
         enhancement_prompt = f"""
         Transform this literary text into a richly detailed visual scene description for E.H. Shepard-style classic book illustration generation.
-
-        Original text: "{original_text}"
+        
+        IMPORTANT: Your illustration description MUST directly incorporate the key elements from the original text.
+        
+        Original text: "{clean_text}"
+        Key phrases to include: "{key_phrases[0]}" 
         Visual elements: {[f"{elem.element_type}: {elem.description}" for elem in visual_elements]}
         Scene focus: {scene_composition.focal_point}
         Composition: {scene_composition.composition_type.value}
