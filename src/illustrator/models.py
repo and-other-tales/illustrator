@@ -51,8 +51,9 @@ class EmotionalTone(str, Enum):
 
 class Chapter(BaseModel):
     """Represents a manuscript chapter."""
-    id: str | None = Field(default=None, description="Optional chapter id")
-    title: str = Field(default="", description="Chapter title")
+    id: str = Field(description="Chapter id")
+    title: str = Field(description="Chapter title")
+    summary: str = Field(description="Chapter summary")
     content: str = Field(default="", description="Full chapter text")
     number: int = Field(default=0, description="Chapter number")
     word_count: int = Field(default=0, description="Number of words in chapter")
@@ -81,10 +82,11 @@ class IllustrationPrompt(BaseModel):
     @model_validator(mode='after')
     def _coerce_negative_prompt(self):
         np = self.negative_prompt
-        if isinstance(np, list):
-            self.negative_prompt = ", ".join(str(x) for x in np)
-        elif np is None:
-            self.negative_prompt = ""
+        if np is None or (isinstance(np, str) and np.strip() == ""):
+            self.negative_prompt = None
+        elif isinstance(np, list):
+            joined = ", ".join(str(x) for x in np if str(x).strip())
+            self.negative_prompt = joined if joined else None
         else:
             self.negative_prompt = str(np)
         return self
