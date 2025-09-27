@@ -16,7 +16,64 @@ from illustrator.models import EmotionalMoment, EmotionalTone, Chapter
 class CharacterRelationshipType(str, Enum):
     """Types of character relationships."""
     FAMILY = "family"
-    ROMANTIC = "romantic"
+    ROMANTIC = "rom    def _update_character_profile(self, name: str, character_data: dict, chapter_id: str, scene_context: str):
+        """Update an existing character profile with new information."""
+
+        # Handle existing character update
+        if name in self.characters:
+            profile = self.characters[name]
+            
+            # Add a new appearance
+            physical_desc = self._merge_physical_descriptions(
+                profile.physical_description, character_data.get('physical_traits', [])
+            )
+            
+            appearance = CharacterAppearance(
+                chapter_id=chapter_id,
+                scene_context=scene_context,
+                physical_description=physical_desc,
+                emotional_state=character_data.get('emotional_state'),
+                actions=character_data.get('actions', []),
+                dialogue_tone=character_data.get('dialogue_tone')
+            )
+            
+            profile.appearances.append(appearance)
+            return
+            
+        # Create new character profile
+        physical_desc = PhysicalDescription()
+        for trait in character_data.get('physical_traits', []):
+            if 'hair' in trait.lower():
+                physical_desc.hair_color = trait
+            elif 'eye' in trait.lower():
+                physical_desc.eye_color = trait
+            elif any(word in trait.lower() for word in ['tall', 'short', 'average']):
+                physical_desc.height = trait
+            elif any(word in trait.lower() for word in ['slim', 'thin', 'muscular', 'heavy']):
+                physical_desc.build = trait
+            else:
+                if not physical_desc.distinguishing_features:
+                    physical_desc.distinguishing_features = []
+                physical_desc.distinguishing_features.append(trait)
+                
+        profile = CharacterProfile(
+            name=name,
+            primary_role=character_data.get('role'),
+            physical_description=physical_desc,
+            personality_traits=character_data.get('personality_traits', []),
+            background=''
+        )
+        
+        # Add appearance
+        appearance = CharacterAppearance(
+            chapter_id=chapter_id,
+            scene_context=scene_context,
+            physical_description=physical_desc,
+            emotional_state=character_data.get('emotional_state')
+        )
+        
+        profile.appearances.append(appearance)
+        self.characters[name] = profile
     FRIENDSHIP = "friendship"
     PROFESSIONAL = "professional"
     ANTAGONISTIC = "antagonistic"
@@ -99,11 +156,35 @@ class CharacterProfile:
     background: str = None
     appearances: list = None
     relationships: list = None
+    aliases: list = None
+    name_variations: list = None
+    total_appearances: int = 0
+    physical_inconsistencies: list = None
+    illustration_notes: list = None
+    consistency_score: float = 1.0
+    narrative_importance: float = 0.5
+    character_role: str = None
+    emotional_profile: EmotionalProfile = None
+    first_appearance_chapter: int = None
+    last_appearance_chapter: int = None
+    appearance_history: list = None
+    character_arc_stage: str = None
 
     def __post_init__(self):
         if self.appearances is None:
             self.appearances = []
         if self.relationships is None:
+            self.relationships = []
+        if self.aliases is None:
+            self.aliases = []
+        if self.name_variations is None:
+            self.name_variations = []
+        if self.physical_inconsistencies is None:
+            self.physical_inconsistencies = []
+        if self.illustration_notes is None:
+            self.illustration_notes = []
+        if self.appearance_history is None:
+            self.appearance_history = []
             self.relationships = []
 @dataclass
 class CharacterAppearance:
