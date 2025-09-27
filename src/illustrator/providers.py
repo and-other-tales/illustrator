@@ -522,7 +522,7 @@ class FluxProvider(ImageGenerationProvider):
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "Accept": "image/png, application/json"
+            "Accept": "image/png"
         }
 
         sanitized_params = self._sanitize_parameters(prompt.technical_params)

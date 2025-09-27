@@ -338,6 +338,7 @@ class TestFluxProvider:
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.read = AsyncMock(return_value=fake_image_bytes)
+            mock_response.headers = {"Content-Type": "image/png"}
 
             mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session.return_value)
             mock_session.return_value.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
@@ -366,6 +367,7 @@ class TestFluxProvider:
             mock_response.json = AsyncMock(return_value={
                 "error": "Internal server error"
             })
+            mock_response.headers = {"Content-Type": "application/json"}
 
             mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session.return_value)
             mock_session.return_value.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
@@ -410,6 +412,34 @@ class TestFluxProvider:
         assert provider.base_url == "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-pro"
 
     @pytest.mark.asyncio
+    async def test_flux_generate_handles_json_response(self, flux_provider):
+        """Flux provider should decode JSON base64 payloads."""
+        prompt = IllustrationPrompt(
+            provider=ImageProvider.FLUX,
+            prompt="Sketch style",
+            style_modifiers=["sketch"],
+            negative_prompt="blurry",
+            technical_params={},
+        )
+
+        base64_stub = base64.b64encode(b"json_image").decode()
+
+        with patch('aiohttp.ClientSession') as mock_session:
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.headers = {"Content-Type": "application/json"}
+            mock_response.json = AsyncMock(return_value={"generated_image_base64": base64_stub})
+
+            mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session.return_value)
+            mock_session.return_value.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_session.return_value.post.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await flux_provider.generate_image(prompt)
+
+            assert result['success'] is True
+            assert result['image_data'] == base64_stub
+
+    @pytest.mark.asyncio
     async def test_flux_sanitises_unsupported_parameters(self, flux_provider):
         """Verify that unsupported technical params are stripped before the request."""
         prompt = IllustrationPrompt(
@@ -430,6 +460,7 @@ class TestFluxProvider:
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.read = AsyncMock(return_value=fake_image_bytes)
+            mock_response.headers = {"Content-Type": "image/png"}
 
             mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session.return_value)
             mock_session.return_value.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
@@ -440,6 +471,7 @@ class TestFluxProvider:
             assert result['success'] is True
             post_kwargs = mock_session.return_value.post.call_args.kwargs
             assert post_kwargs['json']['parameters'] == {"guidance_scale": 7.5}
+            assert post_kwargs['headers']['Accept'] == 'image/png'
 
     @pytest.mark.asyncio
     async def test_flux_truncates_long_prompts(self, flux_provider):
@@ -460,6 +492,7 @@ class TestFluxProvider:
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.read = AsyncMock(return_value=fake_image_bytes)
+            mock_response.headers = {"Content-Type": "image/png"}
 
             mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_session.return_value)
             mock_session.return_value.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
