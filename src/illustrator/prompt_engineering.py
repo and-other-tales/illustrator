@@ -237,48 +237,73 @@ Extract the most important visual elements for illustration.""")
 
     def _create_fallback_visual_elements(self, text: str, context: str, chapter: Chapter) -> List[VisualElement]:
         """Create fallback visual elements using pattern matching when LLM parsing fails."""
-        visual_elements = []
+        visual_elements: List[VisualElement] = []
 
-        # Basic pattern matching for characters
-        character_indicators = ['he ', 'she ', 'they ', 'character', 'protagonist', 'person', 'man', 'woman']
-        for indicator in character_indicators:
-            if indicator.lower() in text.lower():
-                visual_elements.append(VisualElement(
-                    element_type="character",
-                    description=f"Character from scene: {context}",
-                    importance=0.8,
-                    attributes={"context": context, "fallback": True}
-                ))
-                break
+        sentences = self._split_sentences(text or context or "")
+        excerpt_summary = self._summarize_text_excerpt(text or context or "", max_sentences=2)
 
-        # Basic pattern matching for objects/props
-        object_patterns = ['sword', 'book', 'door', 'window', 'table', 'chair', 'lamp', 'fire', 'candle', 'mirror']
-        found_objects = [obj for obj in object_patterns if obj.lower() in text.lower()]
-        for obj in found_objects[:3]:  # Limit to 3 objects
+        character_sentence = self._find_sentence_with_keywords(sentences, self._CHARACTER_KEYWORDS)
+        character_name = self._extract_primary_name(text)
+
+        if character_sentence:
+            description = character_sentence.rstrip(' .')
+            if character_name and character_name.lower() not in description.lower():
+                description = f"{character_name} — {description}".strip()
+
             visual_elements.append(VisualElement(
-                element_type="object",
-                description=f"{obj} mentioned in scene",
-                importance=0.6,
-                attributes={"object_type": obj, "fallback": True}
+                element_type="character",
+                description=description,
+                importance=0.82,
+                attributes={
+                    "context": context,
+                    "fallback": True,
+                    "character_name": character_name,
+                }
             ))
 
-        # Basic environment detection
-        environment_keywords = ['room', 'house', 'forest', 'street', 'garden', 'castle', 'shop', 'inn', 'tavern']
-        for env in environment_keywords:
-            if env.lower() in text.lower():
-                visual_elements.append(VisualElement(
-                    element_type="environment",
-                    description=f"Scene set in {env}",
-                    importance=0.7,
-                    attributes={"setting": env, "fallback": True}
-                ))
-                break
+        setting_sentence = self._find_sentence_with_keywords(sentences, self._SETTING_KEYWORDS)
+        if setting_sentence:
+            visual_elements.append(VisualElement(
+                element_type="environment",
+                description=setting_sentence.rstrip(' .'),
+                importance=0.75,
+                attributes={"fallback": True}
+            ))
 
-        # If no elements found, create a generic scene element
+        object_map = {
+            'mug': 'a chipped mug warming their hands',
+            'steam': 'a fragile plume of steam rising in the cold air',
+            'book': 'an open book lying nearby',
+            'lantern': 'a softly glowing lantern providing light',
+            'candle': 'a flickering candle casting gentle light',
+            'window': 'sash windows framing the view',
+            'letter': 'a folded letter hinting at recent news',
+            'satchel': 'a well-travelled satchel resting by their side',
+        }
+
+        lowered_text = (text or "").lower()
+        for keyword, phrase in object_map.items():
+            if keyword in lowered_text:
+                visual_elements.append(VisualElement(
+                    element_type="object",
+                    description=phrase,
+                    importance=0.65,
+                    attributes={"fallback": True}
+                ))
+
+        atmosphere_phrase = self._infer_atmosphere(lowered_text, emotional_context=context or text)
+        if atmosphere_phrase:
+            visual_elements.append(VisualElement(
+                element_type="atmosphere",
+                description=atmosphere_phrase,
+                importance=0.6,
+                attributes={"fallback": True}
+            ))
+
         if not visual_elements:
             visual_elements.append(VisualElement(
                 element_type="atmosphere",
-                description=f"Scene from chapter {chapter.number}: {chapter.title}",
+                description=excerpt_summary,
                 importance=0.5,
                 attributes={"context": context, "chapter": chapter.number, "fallback": True}
             ))
@@ -294,7 +319,7 @@ Extract the most important visual elements for illustration.""")
         """Provide a resilient fallback scene composition when LLM analysis fails."""
 
         focal_point_description = (
-            visual_elements[0].description if visual_elements else emotional_moment.text_excerpt[:120]
+            visual_elements[0].description if visual_elements else self._summarize_text_excerpt(emotional_moment.text_excerpt)
         )
 
         background_elements = [
@@ -309,7 +334,22 @@ Extract the most important visual elements for illustration.""")
             if element.element_type == "character"
         ][:3]
 
-        emotional_weight = 0.5 + 0.1 * len(foreground_elements)
+        dominant_emotion = (
+            emotional_moment.emotional_tones[0].value.replace('_', ' ')
+            if emotional_moment.emotional_tones else "emotional"
+        )
+
+        atmosphere = emotional_moment.context or (background_elements[0] if background_elements else "Emotionally resonant moment")
+        atmosphere = atmosphere.rstrip('.') if atmosphere else "Emotionally resonant moment"
+
+        color_palette = "balanced natural tones"
+        lowered_excerpt = emotional_moment.text_excerpt.lower()
+        if 'sun' in lowered_excerpt or 'morning' in lowered_excerpt:
+            color_palette = "soft morning golds and cool blue shadows"
+        elif 'night' in lowered_excerpt or 'moon' in lowered_excerpt:
+            color_palette = "deep indigo night tones with gentle highlights"
+
+        emotional_weight = 0.55 + 0.12 * len(foreground_elements)
 
         return SceneComposition(
             composition_type=CompositionType.MEDIUM_SHOT,
@@ -317,11 +357,65 @@ Extract the most important visual elements for illustration.""")
             background_elements=background_elements,
             foreground_elements=foreground_elements,
             lighting_mood=LightingMood.NATURAL,
-            atmosphere="Fallback composition emphasizing core scene elements.",
-            color_palette_suggestion="balanced natural tones",
+            atmosphere=f"{atmosphere} — {dominant_emotion} mood",
+            color_palette_suggestion=color_palette,
             emotional_weight=min(1.0, emotional_weight),
             emotional_tones=list(emotional_moment.emotional_tones),
         )
+
+    @staticmethod
+    def _split_sentences(text: str) -> List[str]:
+        """Split raw text into sentences for heuristic fallback generation."""
+        if not text:
+            return []
+        sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+        return [sentence.strip() for sentence in sentences if sentence.strip()]
+
+    def _find_sentence_with_keywords(self, sentences: List[str], keywords: Set[str]) -> str:
+        """Return the first sentence containing any of the provided keywords."""
+        for sentence in sentences:
+            lowered = sentence.lower()
+            if any(keyword in lowered for keyword in keywords):
+                return sentence
+        return sentences[0] if sentences else ""
+
+    @staticmethod
+    def _summarize_text_excerpt(text: str, max_sentences: int = 2) -> str:
+        """Generate a concise summary from the leading sentences of the text."""
+        sentences = PromptEngineer._split_sentences(text)
+        if not sentences:
+            return text.strip()
+        return " ".join(sentences[:max_sentences])
+
+    @staticmethod
+    def _extract_primary_name(text: str | None) -> str | None:
+        """Extract a likely primary proper name from the text, if present."""
+        if not text:
+            return None
+
+        candidates = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b", text)
+        stopwords = {
+            'The', 'A', 'An', 'And', 'But', 'His', 'Her', 'Their', 'He', 'She', 'They', 'It',
+            'When', 'While', 'As', 'In', 'On', 'With', 'At', 'For', 'From', 'By'
+        }
+        for candidate in candidates:
+            if candidate not in stopwords:
+                return candidate
+        return None
+
+    def _infer_atmosphere(self, lowered_text: str, emotional_context: str | None) -> str:
+        """Heuristically infer atmospheric guidance when LLM output is unavailable."""
+        for keyword, phrase in self._ATMOSPHERE_KEYWORDS.items():
+            if keyword in lowered_text:
+                return phrase
+
+        if emotional_context:
+            context_lower = emotional_context.lower()
+            for keyword, phrase in self._ATMOSPHERE_KEYWORDS.items():
+                if keyword in context_lower:
+                    return phrase
+
+        return "gentle, contemplative atmosphere enhancing the emotional tone"
 
     async def _analyze_composition(
         self,
@@ -937,6 +1031,30 @@ class StyleTranslator:
 
 class PromptEngineer:
     """Master prompt engineering system orchestrating all components."""
+
+    _CHARACTER_KEYWORDS = {
+        'he', 'she', 'they', 'him', 'her', 'them', 'man', 'woman', 'boy', 'girl',
+        'person', 'figure', 'character', 'protagonist', 'hero', 'heroine', 'child', 'adult'
+    }
+
+    _SETTING_KEYWORDS = {
+        'street', 'road', 'lane', 'avenue', 'terrace', 'house', 'home', 'room', 'hall',
+        'forest', 'woods', 'field', 'garden', 'café', 'shop', 'market', 'city', 'village',
+        'shore', 'beach', 'mountain', 'castle', 'library', 'kitchen', 'study', 'park', 'platform'
+    }
+
+    _ATMOSPHERE_KEYWORDS = {
+        'morning': 'crisp morning light with long shadows',
+        'evening': 'warm evening glow settling over the scene',
+        'sunrise': 'soft sunrise hues tinting the sky',
+        'sunset': 'golden sunset tones bathing the setting',
+        'night': 'quiet nocturnal stillness under dim light',
+        'storm': 'brooding stormy atmosphere gathering overhead',
+        'rain': 'fine rainfall lending a contemplative mood',
+        'winter': 'wintry chill lingering in the air',
+        'autumn': 'russet autumn colours whispering through the scene',
+        'spring': 'fresh spring energy softening the moment'
+    }
 
     def __init__(self, llm: BaseChatModel, character_tracker: Optional[CharacterTracker] = None):
         self.llm = llm
