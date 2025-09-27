@@ -279,6 +279,7 @@ Extract the most important visual elements for illustration.""")
             'window': 'sash windows framing the view',
             'letter': 'a folded letter hinting at recent news',
             'satchel': 'a well-travelled satchel resting by their side',
+            'bag': 'a worn bag set down within reach',
         }
 
         lowered_text = (text or "").lower()
