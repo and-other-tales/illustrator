@@ -610,7 +610,18 @@ class StyleTranslator:
         provider_opts = self._get_provider_optimizations(rich_config, provider)
 
         # Merge technical parameters with provider overrides
-        technical_params = dict(rich_config.get("technical_params", {}))
+        technical_raw = rich_config.get("technical_params", {}) or {}
+        if isinstance(technical_raw, dict):
+            technical_params = dict(technical_raw)
+        else:
+            try:
+                technical_params = dict(technical_raw)
+            except TypeError:
+                logger.debug(
+                    "Ignoring non-mapping technical params in rich style config: %r",
+                    technical_raw,
+                )
+                technical_params = {}
         if provider_opts.get("technical_adjustments"):
             technical_params.update(provider_opts["technical_adjustments"])
 
