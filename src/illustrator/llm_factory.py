@@ -218,8 +218,16 @@ def _messages_to_prompt(messages: Sequence[BaseMessage]) -> str:
 def _messages_to_chat_messages(messages: Sequence[BaseMessage]) -> list[dict[str, str]]:
     """Convert LangChain messages into HuggingFace chat-completion payload."""
 
-    role_map = {
-        "SystemMessage": "system",
+    # HuggingFace chat-completion format
+    chat_messages = []
+    for msg in messages:
+        if isinstance(msg, SystemMessage):
+            chat_messages.append({"role": "system", "content": msg.content})
+        elif isinstance(msg, HumanMessage):
+            chat_messages.append({"role": "user", "content": msg.content})
+        elif isinstance(msg, AIMessage):
+            chat_messages.append({"role": "assistant", "content": msg.content})
+    return chat_messages
         "HumanMessage": "user",
         "AIMessage": "assistant",
     }
