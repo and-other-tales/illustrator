@@ -7,11 +7,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from typing import Any
+
 from illustrator.models import (
     EmotionalMoment,
     EmotionalTone,
     IllustrationPrompt,
     ImageProvider,
+    LLMProvider,
     Chapter,
 )
 from illustrator.providers import (
@@ -54,6 +57,7 @@ class TestProviderFactory:
             ImageProvider.DALLE,
             openai_api_key="test-key",
             anthropic_api_key="test-anthropic-key",
+            huggingface_api_key="test-hf-key",
         )
         assert isinstance(provider, DalleProvider)
         assert provider.api_key == "test-key"
@@ -81,9 +85,16 @@ class TestProviderFactory:
 
     def test_create_provider_missing_credentials(self):
         """Test error handling for missing credentials."""
-        # Now requires Anthropic key first (for prompt engineering)
-        with pytest.raises(ValueError, match="Anthropic API key is required"):
+        # Requires HuggingFace key when no Anthropic configuration provided
+        with pytest.raises(ValueError, match="HuggingFace API key is required"):
             ProviderFactory.create_provider(ImageProvider.DALLE)
+
+        # Explicit Anthropic provider selection still requires Anthropic key
+        with pytest.raises(ValueError, match="Anthropic API key is required"):
+            ProviderFactory.create_provider(
+                ImageProvider.DALLE,
+                llm_provider=LLMProvider.ANTHROPIC,
+            )
 
         with pytest.raises(ValueError, match="Google credentials"):
             ProviderFactory.create_provider(ImageProvider.IMAGEN4, anthropic_api_key="test-anthropic-key")
@@ -129,7 +140,15 @@ class TestDalleProvider:
     @pytest.fixture
     def dalle_provider(self):
         """Create a DALL-E provider for testing."""
-        return DalleProvider("test-api-key", "test-anthropic-key")
+        prompt_engineer = _stub_prompt_engineer(
+            ImageProvider.DALLE,
+            technical_params={"model": "dall-e-3", "size": "1024x1024"},
+        )
+
+        return DalleProvider(
+            "test-api-key",
+            prompt_engineer=prompt_engineer,
+        )
 
     @pytest.fixture
     def sample_emotional_moment(self):
@@ -246,7 +265,16 @@ class TestFluxProvider:
     @pytest.fixture
     def flux_provider(self):
         """Create a Flux provider for testing."""
-        return FluxProvider("test-hf-key", "test-anthropic-key")
+        prompt_engineer = _stub_prompt_engineer(
+            ImageProvider.FLUX,
+            negative_prompt="blurry, low quality",
+            technical_params={"guidance_scale": 7.5},
+        )
+
+        return FluxProvider(
+            "test-hf-key",
+            prompt_engineer=prompt_engineer,
+        )
 
     @pytest.fixture
     def sample_emotional_moment(self):
@@ -466,3 +494,48 @@ class TestImagen4Provider:
         assert result['success'] is False
         assert "returned no images" in result['error']
         assert result['status_code'] == 500
+def _stub_prompt_engineer(
+    provider: ImageProvider,
+    *,
+    negative_prompt: str | None = None,
+    technical_params: dict[str, Any] | None = None,
+):
+    """Create a lightweight async prompt engineer stub for tests."""
+
+    class _StubPromptEngineer:
+        async def engineer_prompt(
+            self,
+            emotional_moment: EmotionalMoment,
+            target_provider: ImageProvider,
+            style_preferences: dict,
+            chapter_context: Chapter,
+            previous_scenes=None,
+            context: str | None = None,
+        ) -> IllustrationPrompt:
+            prompt_parts = [
+                emotional_moment.text_excerpt,
+                style_preferences.get('art_style'),
+                style_preferences.get('color_palette'),
+                style_preferences.get('artistic_influences'),
+                context,
+            ]
+            prompt_text = " ".join(filter(None, prompt_parts))
+
+            modifiers = [
+                value
+                for value in (
+                    style_preferences.get('art_style'),
+                    style_preferences.get('artistic_influences'),
+                )
+                if value
+            ]
+
+            return IllustrationPrompt(
+                provider=target_provider,
+                prompt=prompt_text,
+                style_modifiers=modifiers or ["default"],
+                negative_prompt=negative_prompt,
+                technical_params=dict(technical_params or {}),
+            )
+
+    return _StubPromptEngineer()

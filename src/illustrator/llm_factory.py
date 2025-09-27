@@ -169,4 +169,3 @@ def create_chat_model_from_context(context: ManuscriptContext) -> Any:
         huggingface_api_key=getattr(context, "huggingface_api_key", None),
         huggingface_config=huggingface_config_from_context(context),
     )
-*** End of File
