@@ -507,10 +507,10 @@ Improve the provided prompt based on the quality assessment and suggestions. Foc
 4. Optimizing for the target provider ({original_prompt.provider.value})
 
 Quality issues to address:
-{json.dumps({k.value: v for k, v in quality_assessment.quality_scores.items()}, indent=2)}
+{json.dumps({k.value: v for k, v in (quality_assessment.quality_scores or {}).items()}, indent=2)}
 
 Improvement suggestions:
-{chr(10).join(f"- {suggestion}" for suggestion in quality_assessment.improvement_suggestions)}
+{chr(10).join(f"- {suggestion}" for suggestion in (quality_assessment.improvement_suggestions or []))}
 
 Return an improved prompt that maintains the original intent while addressing the identified issues."""
 
@@ -530,15 +530,26 @@ Generate an improved version of this prompt.""")
             ]
 
             response = await self.llm.ainvoke(messages)
-            improved_prompt_text = response.content.strip()
+            # Try to parse JSON structured response from LLM
+            parsed = parse_llm_json(response.content)
+            if isinstance(parsed, dict):
+                improved_prompt_text = parsed.get('improved_prompt') or parsed.get('prompt') or response.content.strip()
+                style_mods = parsed.get('style_modifiers') or parsed.get('style') or original_prompt.style_modifiers or []
+                negative = parsed.get('negative_prompt') or parsed.get('negative') or original_prompt.negative_prompt
+                tech = parsed.get('technical_params') or parsed.get('technical') or (original_prompt.technical_params or {})
+            else:
+                improved_prompt_text = response.content.strip()
+                style_mods = original_prompt.style_modifiers or []
+                negative = original_prompt.negative_prompt
+                tech = original_prompt.technical_params or {}
 
             # Create improved prompt object
             improved_prompt = IllustrationPrompt(
                 provider=original_prompt.provider,
                 prompt=improved_prompt_text,
-                style_modifiers=(original_prompt.style_modifiers or []).copy(),
-                negative_prompt=original_prompt.negative_prompt,
-                technical_params=(original_prompt.technical_params or {}).copy()
+                style_modifiers=list(style_mods),
+                negative_prompt=negative,
+                technical_params=dict(tech)
             )
 
             return improved_prompt
@@ -770,3 +781,7 @@ class QualityThreshold(int, Enum):
     @classmethod
     def meets_threshold(cls, score: int, threshold: 'QualityThreshold') -> bool:
         return score >= int(threshold.value)
+
+
+# Expose QualityThreshold at module level for tests that import it directly
+globals()['QualityThreshold'] = QualityThreshold
