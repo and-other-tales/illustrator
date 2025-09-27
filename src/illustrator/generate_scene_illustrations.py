@@ -555,8 +555,10 @@ class IllustrationGenerator:
         chapter: Chapter,
         style_preferences: Dict[str, str]
     ) -> List[IllustrationPrompt]:
-        """Generate optimized illustration prompts for each moment."""
+        """Generate optimized illustration prompts for each moment with robust logging and timeout."""
 
+        import logging, asyncio
+        logger = logging.getLogger(__name__)
         prompts = []
 
         with Progress(
@@ -564,24 +566,30 @@ class IllustrationGenerator:
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
-
             task = progress.add_task("Generating illustration prompts...", total=len(moments))
 
             for i, moment in enumerate(moments):
-                # Generate detailed prompt using the provider's prompt generation
+                logger.info(f"[PromptGen] Starting prompt for moment {i+1}/{len(moments)} in Chapter {chapter.number}: {chapter.title}")
                 try:
-                    prompt = await self.image_provider.generate_prompt(
-                        emotional_moment=moment,
-                        style_preferences=style_preferences,
-                        context=f"Chapter {chapter.number}: {chapter.title}"
+                    # Timeout for LLM calls (30s)
+                    prompt = await asyncio.wait_for(
+                        self.image_provider.generate_prompt(
+                            emotional_moment=moment,
+                            style_preferences=style_preferences,
+                            context=f"Chapter {chapter.number}: {chapter.title}"
+                        ),
+                        timeout=30.0
                     )
                     prompts.append(prompt)
-
+                    logger.info(f"[PromptGen] Success for moment {i+1}: {getattr(prompt, 'prompt', str(prompt))[:120]}")
+                except asyncio.TimeoutError:
+                    logger.error(f"[PromptGen] Timeout for moment {i+1} in Chapter {chapter.number}")
+                    console.print(f"[red]Timeout: Could not generate prompt for moment {i+1} in Chapter {chapter.number}[/red]")
                 except Exception as e:
+                    logger.error(f"[PromptGen] Error for moment {i+1}: {e}")
                     console.print(f"[yellow]Warning: Could not generate prompt for moment {i+1}: {e}[/yellow]")
                     # Fallback prompt (instructive, style-aware)
                     art_style = (style_preferences.get('art_style') or 'digital painting').lower()
-
                     if any(k in art_style for k in ["pencil", "shepard"]):
                         lead = "A natural pencil sketch illustration in the classic E.H. Shepard style."
                         technique = (
@@ -675,6 +683,7 @@ class IllustrationGenerator:
                     prompts.append(fallback_prompt)
 
                 progress.update(task, advance=1)
+                logger.info(f"[PromptGen] Finished moment {i+1}/{len(moments)}")
 
         return prompts
 
