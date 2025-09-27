@@ -6,7 +6,8 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Iterable, Sequence
+import inspect
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Iterable, Sequence
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -36,28 +37,100 @@ class HuggingFaceEndpointChatWrapper:
         self,
         client: InferenceClient,
         generation_kwargs: dict[str, Any],
+        *,
+        stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
     ) -> None:
         self._client = client
         self._generation_kwargs = generation_kwargs
+        self._stream_callback = stream_callback
 
     async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
         """Generate a response asynchronously using the configured endpoint."""
 
         prompt = _messages_to_prompt(messages)
+        use_stream = bool(self._generation_kwargs.get("stream"))
+        loop = asyncio.get_running_loop()
+        stream_callback = self._stream_callback
+
+        def _schedule_stream_callback(token_text: str) -> None:
+            if not stream_callback or not token_text:
+                return
+
+            try:
+                result = stream_callback(token_text)
+            except Exception:  # pragma: no cover - defensive
+                logger.exception("Stream callback raised an exception")
+                return
+
+            if inspect.isawaitable(result):  # pragma: no branch - small helper
+                asyncio.run_coroutine_threadsafe(result, loop)
+
+        def _extract_token(chunk: Any) -> str:
+            if chunk is None:
+                return ""
+
+            token = getattr(chunk, "token", None)
+            if token is not None:
+                text = getattr(token, "text", None)
+                if text:
+                    return str(text)
+
+            if isinstance(chunk, dict):
+                token_dict = chunk.get("token")
+                if isinstance(token_dict, dict):
+                    text = token_dict.get("text")
+                    if text:
+                        return str(text)
+
+            return ""
+
+        def _extract_full_text(chunk: Any) -> str:
+            if chunk is None:
+                return ""
+
+            generated_text = getattr(chunk, "generated_text", None)
+            if generated_text:
+                return str(generated_text)
+
+            if isinstance(chunk, dict):
+                text = chunk.get("generated_text")
+                if text:
+                    return str(text)
+
+            return ""
 
         def _run_endpoint() -> AIMessage:
+            kwargs = dict(self._generation_kwargs)
             raw_output = self._client.text_generation(
                 prompt,
-                **self._generation_kwargs,
+                **kwargs,
             )
 
-            if isinstance(raw_output, str):
-                generated_text = raw_output
-            elif isinstance(raw_output, Iterable):
-                first_item = next(iter(raw_output), "")
-                generated_text = str(first_item)
+            if use_stream:
+                aggregated_tokens: list[str] = []
+                final_text: str | None = None
+
+                for chunk in raw_output:
+                    token_text = _extract_token(chunk)
+                    if token_text:
+                        aggregated_tokens.append(token_text)
+                        _schedule_stream_callback(token_text)
+
+                    chunk_full_text = _extract_full_text(chunk)
+                    if chunk_full_text:
+                        final_text = chunk_full_text
+
+                generated_text = final_text or "".join(aggregated_tokens)
             else:
-                generated_text = str(raw_output)
+                if isinstance(raw_output, str):
+                    generated_text = raw_output
+                elif isinstance(raw_output, Iterable):
+                    first_item = next(iter(raw_output), "")
+                    generated_text = str(first_item)
+                else:
+                    generated_text = str(raw_output)
+
+            generated_text = generated_text or ""
 
             if generated_text.startswith(prompt):
                 generated_text = generated_text[len(prompt):]
@@ -104,6 +177,7 @@ def create_chat_model(
     anthropic_api_key: str | None,
     huggingface_api_key: str | None,
     huggingface_config: HuggingFaceConfig | None = None,
+    stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
 ) -> Any:
     """Instantiate a chat-capable model for the requested provider."""
 
@@ -169,7 +243,11 @@ def create_chat_model(
     else:
         generation_kwargs.setdefault("model", model)
 
-    return HuggingFaceEndpointChatWrapper(client, generation_kwargs)
+    return HuggingFaceEndpointChatWrapper(
+        client,
+        generation_kwargs,
+        stream_callback=stream_callback,
+    )
 
 
 def huggingface_config_from_context(context: ManuscriptContext) -> HuggingFaceConfig:
@@ -193,6 +271,7 @@ def create_chat_model_from_context(context: ManuscriptContext) -> Any:
         anthropic_api_key=getattr(context, "anthropic_api_key", None),
         huggingface_api_key=getattr(context, "huggingface_api_key", None),
         huggingface_config=huggingface_config_from_context(context),
+        stream_callback=getattr(context, "huggingface_stream_callback", None),
     )
 logger = logging.getLogger(__name__)
 

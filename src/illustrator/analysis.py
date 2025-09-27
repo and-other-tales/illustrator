@@ -654,8 +654,25 @@ Respond in JSON format:
             # Parse JSON response robustly
             analysis = parse_llm_json(response.content)
 
-            emotional_tones = [EmotionalTone(tone) for tone in analysis.get('emotional_tones', [])]
-            context = analysis.get('context', 'Emotionally significant moment')
+            raw_tones = analysis.get('emotional_tones') or []
+            if not isinstance(raw_tones, (list, tuple)):
+                raw_tones = [raw_tones]
+
+            emotional_tones: list[EmotionalTone] = []
+            for tone in raw_tones:
+                if not tone:
+                    continue
+                try:
+                    emotional_tones.append(EmotionalTone(tone))
+                except ValueError:
+                    logger.debug("Ignoring unrecognised emotional tone from LLM output: %r", tone)
+
+            if not emotional_tones:
+                emotional_tones = [self._identify_primary_emotion(segment.text)]
+
+            context = analysis.get('context') or "Emotionally significant moment"
+            if not isinstance(context, str):
+                context = str(context)
 
         except Exception:
             # Fallback analysis
