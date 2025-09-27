@@ -198,8 +198,14 @@ class CharacterTracker:
                 
             # Extract physical traits
             physical_traits = []
-            traits = re.findall(r'(tall|short|slim|thin|muscular|blonde|brown|black|hair|eyes|young|old|beard|glasses)', description.lower())
-            physical_traits.extend(traits)
+            
+            # Extract compound traits like "blonde hair", "blue eyes"
+            compound_traits = re.findall(r'(blonde hair|brown hair|black hair|blue eyes|green eyes|brown eyes)', description.lower())
+            physical_traits.extend(compound_traits)
+            
+            # Also extract individual traits
+            individual_traits = re.findall(r'(tall|short|slim|thin|muscular|young|old|beard|glasses)', description.lower())
+            physical_traits.extend(individual_traits)
             
             # Assemble personality traits
             personality_traits = []
