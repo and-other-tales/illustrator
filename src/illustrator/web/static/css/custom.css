@@ -130,6 +130,10 @@ h5, h6 { font: var(--md-type-scale-label); }
     position: relative;
 }
 
+.style-action-btn {
+    min-height: 3.25rem;
+}
+
 .card::before {
     content: '';
     position: absolute;

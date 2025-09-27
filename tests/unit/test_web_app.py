@@ -295,6 +295,7 @@ class TestWebAppAPI:
         """Test style configuration page."""
         response = client.get("/manuscript/test-id/style")
         assert response.status_code == 200
+        assert 'style-action-btn' in response.text
 
     def test_processing_page(self, client):
         """Test processing page."""
