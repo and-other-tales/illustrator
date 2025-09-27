@@ -2,9 +2,10 @@
 
 import json
 import uuid
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Iterable
 
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -18,8 +19,16 @@ from illustrator.web.models.web_models import (
     SuccessResponse,
     StyleConfigSaveRequest
 )
+from illustrator.prompt_engineering import (
+    StyleTranslator,
+    SceneComposition,
+    CompositionType,
+    LightingMood,
+)
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 # Storage paths
 SAVED_MANUSCRIPTS_DIR = Path("saved_manuscripts")
@@ -53,6 +62,64 @@ def get_manuscript_processing_status(manuscript_id: str) -> str:
 # Cache for manuscripts to avoid repeated file system scans
 _manuscripts_cache = {}
 _cache_timestamp = None
+
+# Shared style translator instance for preview generation
+_style_translator = StyleTranslator()
+
+_ROUTES_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _ROUTES_DIR.parents[4]
+
+
+def _normalize_style_modifiers(modifiers: Iterable[Any]) -> List[str]:
+    """Convert style modifiers into a list of readable strings."""
+    normalized: List[str] = []
+    for modifier in modifiers or []:
+        if isinstance(modifier, (list, tuple)):
+            normalized.append(" ".join(str(part) for part in modifier if part))
+        else:
+            normalized.append(str(modifier))
+    return [m for m in normalized if m]
+
+
+def _resolve_style_config_path(style_config_path: str) -> Optional[Path]:
+    """Resolve possible locations for a rich style configuration file."""
+    candidate_paths = []
+    raw_path = Path(style_config_path)
+
+    if raw_path.is_absolute():
+        candidate_paths.append(raw_path)
+    else:
+        candidate_paths.extend([
+            raw_path,
+            _PROJECT_ROOT / raw_path,
+            SAVED_MANUSCRIPTS_DIR / raw_path,
+            SAVED_MANUSCRIPTS_DIR / "style_configs" / raw_path,
+        ])
+
+    seen = set()
+    for candidate in candidate_paths:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def _load_rich_style_config(style_config_path: str) -> Optional[Dict[str, Any]]:
+    """Load a detailed style configuration file if available."""
+    resolved_path = _resolve_style_config_path(style_config_path)
+    if not resolved_path:
+        logger.debug("Rich style config not found for path %s", style_config_path)
+        return None
+
+    try:
+        with open(resolved_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as exc:  # noqa: BLE001 - we want to log and continue
+        logger.warning("Failed to load rich style config %s: %s", resolved_path, exc)
+        return None
 
 def invalidate_manuscripts_cache():
     """Invalidate the manuscripts cache to force a refresh."""
@@ -423,21 +490,72 @@ async def preview_style_image(
         # Get the image provider
         provider = get_image_provider(style_config.image_provider)
 
-        # Generate a simple preview prompt
-        preview_prompt_text = f"A sample illustration in {style_config.art_style} style"
-        if style_config.color_palette:
-            preview_prompt_text += f" with {style_config.color_palette} colors"
-        if style_config.artistic_influences:
-            preview_prompt_text += f" inspired by {style_config.artistic_influences}"
-        preview_prompt_text += ", high quality, detailed"
+        # Merge base config with any linked rich configuration for accurate previews
+        rich_config = None
+        if style_config.style_config_path:
+            rich_config = _load_rich_style_config(style_config.style_config_path)
 
-        # Create IllustrationPrompt object
+        style_preferences = style_config.model_dump()
+        style_preferences["image_provider"] = style_config.image_provider.value
+        if rich_config:
+            style_preferences = {**rich_config, **style_preferences}
+
+        # Create a representative scene composition to translate style preferences
+        scene_composition = SceneComposition(
+            composition_type=CompositionType.MEDIUM_SHOT,
+            focal_point="primary narrative subjects",
+            background_elements=["supporting environment"],
+            foreground_elements=["key characters"],
+            lighting_mood=LightingMood.NATURAL,
+            atmosphere="balanced preview for configured illustration style",
+            color_palette_suggestion=style_config.color_palette or "cohesive tones",
+            emotional_weight=0.45,
+        )
+
+        style_translation = _style_translator.translate_style_config(
+            style_preferences,
+            style_config.image_provider,
+            scene_composition
+        )
+
+        style_modifiers = _normalize_style_modifiers(style_translation.get("style_modifiers", []))
+        provider_opts = style_translation.get("provider_optimizations", {}) or {}
+
+        technical_params = dict(style_translation.get("technical_params", {}) or {})
+        technical_params.update(provider_opts.get("technical_adjustments", {}) or {})
+
+        negative_prompt_items = [str(item) for item in style_translation.get("negative_prompt", []) or []]
+        negative_prompt = ", ".join(negative_prompt_items) if negative_prompt_items else None
+
+        # Build a preview prompt that reflects the configured style settings
+        prompt_sections: List[str] = []
+        base_description = f"Preview illustration in {style_config.art_style}"
+        if style_config.color_palette:
+            base_description += f" using the {style_config.color_palette} palette"
+        if style_config.artistic_influences:
+            base_description += f" inspired by {style_config.artistic_influences}"
+        prompt_sections.append(base_description)
+
+        if style_modifiers:
+            prompt_sections.append("featuring " + ", ".join(style_modifiers))
+        if provider_opts.get("style_emphasis"):
+            prompt_sections.append(provider_opts["style_emphasis"])
+        if provider_opts.get("quality_modifiers"):
+            prompt_sections.append(
+                "quality focus: " + ", ".join(provider_opts["quality_modifiers"])
+            )
+
+        preview_prompt_text = ". ".join(section for section in prompt_sections if section)
+        if not preview_prompt_text:
+            preview_prompt_text = "Preview illustration showcasing the configured style settings"
+
         from illustrator.models import IllustrationPrompt
         illustration_prompt = IllustrationPrompt(
             provider=style_config.image_provider,
             prompt=preview_prompt_text,
-            style_modifiers=[],
-            technical_params={}
+            style_modifiers=style_modifiers,
+            negative_prompt=negative_prompt,
+            technical_params=technical_params
         )
 
         # Generate the image
@@ -454,15 +572,26 @@ async def preview_style_image(
         else:
             raise Exception(result.get('error', 'Image generation failed'))
 
+        style_summary: Dict[str, Any] = {
+            "provider": style_config.image_provider.value,
+            "art_style": style_config.art_style,
+            "color_palette": style_config.color_palette,
+            "artistic_influences": style_config.artistic_influences,
+            "style_config_path": style_config.style_config_path,
+            "style_modifiers": style_modifiers,
+        }
+
+        if rich_config and rich_config.get("style_name"):
+            style_summary["style_name"] = rich_config["style_name"]
+        if provider_opts.get("style_emphasis"):
+            style_summary["style_emphasis"] = provider_opts["style_emphasis"]
+        if provider_opts.get("quality_modifiers"):
+            style_summary["quality_modifiers"] = provider_opts["quality_modifiers"]
+
         return {
             "image_url": image_url,
             "preview_prompt": preview_prompt_text,
-            "style_summary": {
-                "provider": style_config.image_provider,
-                "art_style": style_config.art_style,
-                "color_palette": style_config.color_palette,
-                "artistic_influences": style_config.artistic_influences
-            }
+            "style_summary": style_summary
         }
 
     except Exception as e:
