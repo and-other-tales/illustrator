@@ -398,13 +398,25 @@ async def run_processing_workflow(
         from illustrator.services.session_persistence import SessionPersistenceService
         import uuid
 
-        # Initialize persistence services
-        persistence_service = SessionPersistenceService()
-        checkpoint_manager = CheckpointManager(persistence_service)
+        # Initialize persistence services (resilient to missing database)
+        persistence_service: SessionPersistenceService | None = None
+        checkpoint_manager: CheckpointManager | None = None
+        try:
+            persistence_service = SessionPersistenceService()
+            checkpoint_manager = CheckpointManager(persistence_service)
+        except Exception as persistence_error:  # noqa: BLE001
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "warning",
+                    "message": f"Persistence service unavailable, continuing without DB logging: {persistence_error}"
+                }),
+                session_id
+            )
 
         # Check if we're resuming from a checkpoint
         resume_info = None
-        if resume_from_checkpoint:
+        if resume_from_checkpoint and checkpoint_manager:
             resume_info = checkpoint_manager.get_resume_info(session_id)
             if resume_info:
                 await connection_manager.send_personal_message(
@@ -541,26 +553,38 @@ async def run_processing_workflow(
 
         # Create or update processing session in database
         if not resume_info:
-            db_session = persistence_service.create_session(
-                manuscript_id=manuscript_id,
-                external_session_id=session_id,
-                style_config=style_config,
-                max_emotional_moments=max_emotional_moments,
-                total_chapters=len(chapters)
-            )
-            db_session_id_for_persistence = str(db_session.id)
-            # Create session start checkpoint
-            checkpoint_manager.create_session_start_checkpoint(
-                session_id=db_session_id_for_persistence,
-                manuscript_id=manuscript_id,
-                manuscript_title=manuscript.title,
-                total_chapters=len(chapters),
-                style_config=style_config,
-                max_emotional_moments=max_emotional_moments
-            )
+            if persistence_service and checkpoint_manager:
+                try:
+                    db_session = persistence_service.create_session(
+                        manuscript_id=manuscript_id,
+                        external_session_id=session_id,
+                        style_config=style_config,
+                        max_emotional_moments=max_emotional_moments,
+                        total_chapters=len(chapters)
+                    )
+                    db_session_id_for_persistence = str(db_session.id)
+                    checkpoint_manager.create_session_start_checkpoint(
+                        session_id=db_session_id_for_persistence,
+                        manuscript_id=manuscript_id,
+                        manuscript_title=manuscript.title,
+                        total_chapters=len(chapters),
+                        style_config=style_config,
+                        max_emotional_moments=max_emotional_moments
+                    )
+                except Exception as create_session_error:  # noqa: BLE001
+                    await connection_manager.send_personal_message(
+                        json.dumps({
+                            "type": "log",
+                            "level": "warning",
+                            "message": f"Unable to persist session metadata (continuing): {create_session_error}"
+                        }),
+                        session_id
+                    )
+            persistence_enabled = bool(db_session_id_for_persistence and checkpoint_manager)
         else:
             # In resume flow, the incoming session_id is the DB session id
             db_session_id_for_persistence = session_id
+            persistence_enabled = bool(checkpoint_manager)
 
         # Update total chapters in session status
         connection_manager.sessions[session_id].status.total_chapters = len(chapters)
@@ -597,7 +621,7 @@ async def run_processing_workflow(
         )
 
         # Create manuscript loaded checkpoint if not resuming
-        if not resume_info:
+        if persistence_enabled:
             chapters_info = [
                 {
                     "number": chapter.number,
@@ -608,7 +632,7 @@ async def run_processing_workflow(
             ]
 
             checkpoint_manager.create_manuscript_loaded_checkpoint(
-                session_id=str(db_session.id),
+                session_id=db_session_id_for_persistence,
                 chapters_info=chapters_info
             )
 
@@ -640,13 +664,14 @@ async def run_processing_workflow(
             if connection_manager.sessions[session_id].pause_requested:
                 # Create pause checkpoint
                 current_progress = connection_manager.sessions[session_id].status.progress
-                checkpoint_manager.create_pause_checkpoint(
-                    session_id=session_id,
-                    chapter_number=chapter.number,
-                    current_step=ProcessingStep.ANALYZING_CHAPTERS,
-                    progress_percent=current_progress,
-                    pause_reason="user_requested"
-                )
+                if checkpoint_manager:
+                    checkpoint_manager.create_pause_checkpoint(
+                        session_id=session_id,
+                        chapter_number=chapter.number,
+                        current_step=ProcessingStep.ANALYZING_CHAPTERS,
+                        progress_percent=current_progress,
+                        pause_reason="user_requested"
+                    )
 
                 connection_manager.sessions[session_id].status.status = "paused"
                 connection_manager.sessions[session_id].status.message = f"Processing paused at Chapter {chapter.number}"
@@ -671,13 +696,14 @@ async def run_processing_workflow(
             current_progress = 20 + (i * progress_per_chapter)
 
             # Create chapter start checkpoint
-            checkpoint_manager.create_chapter_start_checkpoint(
-                session_id=session_id,
-                chapter_number=chapter.number,
-                chapter_title=chapter.title,
-                chapter_word_count=len(chapter.content.split()),
-                progress_percent=current_progress
-            )
+            if checkpoint_manager:
+                checkpoint_manager.create_chapter_start_checkpoint(
+                    session_id=session_id,
+                    chapter_number=chapter.number,
+                    chapter_title=chapter.title,
+                    chapter_word_count=len(chapter.content.split()),
+                    progress_percent=current_progress
+                )
 
             await connection_manager.send_personal_message(
                 json.dumps({
@@ -707,13 +733,14 @@ async def run_processing_workflow(
                 "analysis_quality": "comprehensive"
             }
 
-            checkpoint_manager.create_chapter_analyzed_checkpoint(
-                session_id=session_id,
-                chapter_number=chapter.number,
-                emotional_moments=emotional_moments,
-                analysis_results=analysis_results,
-                progress_percent=current_progress + (progress_per_chapter // 3)
-            )
+            if checkpoint_manager:
+                checkpoint_manager.create_chapter_analyzed_checkpoint(
+                    session_id=session_id,
+                    chapter_number=chapter.number,
+                    emotional_moments=emotional_moments,
+                    analysis_results=analysis_results,
+                    progress_percent=current_progress + (progress_per_chapter // 3)
+                )
 
             await connection_manager.send_personal_message(
                 json.dumps({
@@ -778,13 +805,14 @@ async def run_processing_workflow(
                 )
 
             # Create prompts generated checkpoint
-            checkpoint_manager.create_prompts_generated_checkpoint(
-                session_id=session_id,
-                chapter_number=chapter.number,
-                generated_prompts=prompts,
-                prompts_metadata=prompts_metadata,
-                progress_percent=current_progress + (2 * progress_per_chapter // 3)
-            )
+            if checkpoint_manager:
+                checkpoint_manager.create_prompts_generated_checkpoint(
+                    session_id=session_id,
+                    chapter_number=chapter.number,
+                    generated_prompts=prompts,
+                    prompts_metadata=prompts_metadata,
+                    progress_percent=current_progress + (2 * progress_per_chapter // 3)
+                )
 
             if i == 0:
                 await connection_manager.send_personal_message(
@@ -820,13 +848,14 @@ async def run_processing_workflow(
             )
 
             # Create checkpoint before starting image generation
-            checkpoint_manager.create_images_generating_checkpoint(
-                session_id=session_id,
-                chapter_number=chapter.number,
-                images_to_generate=len(prompts),
-                current_image_index=0,
-                progress_percent=current_progress + (2 * progress_per_chapter // 3)
-            )
+            if checkpoint_manager:
+                checkpoint_manager.create_images_generating_checkpoint(
+                    session_id=session_id,
+                    chapter_number=chapter.number,
+                    images_to_generate=len(prompts),
+                    current_image_index=0,
+                    progress_percent=current_progress + (2 * progress_per_chapter // 3)
+                )
 
             results = await generator.generate_images(prompts, chapter)
             chapter_images_generated = len([r for r in results if r.get("success")])
@@ -857,13 +886,14 @@ async def run_processing_workflow(
                     )
 
             # Create chapter completed checkpoint
-            checkpoint_manager.create_chapter_completed_checkpoint(
-                session_id=db_session_id_for_persistence,
-                chapter_number=chapter.number,
-                images_generated=chapter_images_generated,
-                total_images_so_far=total_images,
-                progress_percent=20 + ((i + 1) * progress_per_chapter)
-            )
+            if checkpoint_manager and db_session_id_for_persistence:
+                checkpoint_manager.create_chapter_completed_checkpoint(
+                    session_id=db_session_id_for_persistence,
+                    chapter_number=chapter.number,
+                    images_generated=chapter_images_generated,
+                    total_images_so_far=total_images,
+                    progress_percent=20 + ((i + 1) * progress_per_chapter)
+                )
 
         await connection_manager.send_personal_message(
             json.dumps({
@@ -945,7 +975,7 @@ async def run_processing_workflow(
 
         # Create error checkpoint if we have the checkpoint manager
         try:
-            if 'checkpoint_manager' in locals():
+            if checkpoint_manager:
                 current_chapter = connection_manager.sessions[session_id].status.current_chapter if session_id in connection_manager.sessions else 0
                 current_progress = connection_manager.sessions[session_id].status.progress if session_id in connection_manager.sessions else 0
 
@@ -958,12 +988,12 @@ async def run_processing_workflow(
                     progress_percent=current_progress
                 )
 
-                # Update session status in database
-                persistence_service.update_session_status(
-                    session_id=db_session_id_for_persistence or session_id,
-                    status="failed",
-                    error_message=str(e)
-                )
+                if persistence_service and db_session_id_for_persistence:
+                    persistence_service.update_session_status(
+                        session_id=db_session_id_for_persistence,
+                        status="failed",
+                        error_message=str(e)
+                    )
         except Exception as checkpoint_error:
             console.print(f"[yellow]Warning: Could not create error checkpoint: {checkpoint_error}[/yellow]")
 
@@ -983,9 +1013,9 @@ async def run_processing_workflow(
     finally:
         # Clean up resources
         try:
-            if 'persistence_service' in locals():
+            if persistence_service:
                 persistence_service.close()
-            if 'checkpoint_manager' in locals():
+            if checkpoint_manager:
                 checkpoint_manager.close()
         except Exception as cleanup_error:
             console.print(f"[yellow]Warning: Error during cleanup: {cleanup_error}[/yellow]")
