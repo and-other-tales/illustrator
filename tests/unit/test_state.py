@@ -280,7 +280,7 @@ class TestManuscriptState:
 
     def test_manuscript_state_image_provider_variants(self):
         """Test ManuscriptState with different image providers."""
-        providers = [ImageProvider.DALLE, ImageProvider.IMAGEN4, ImageProvider.FLUX]
+        providers = [ImageProvider.DALLE, ImageProvider.IMAGEN4, ImageProvider.FLUX, ImageProvider.SEEDREAM]
 
         for provider in providers:
             state: ManuscriptState = {

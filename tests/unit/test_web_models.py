@@ -354,7 +354,7 @@ class TestModelFieldValidation:
     def test_image_provider_validation(self):
         """Test image provider enum validation."""
         # Valid providers
-        for provider in [ImageProvider.DALLE, ImageProvider.IMAGEN4, ImageProvider.FLUX]:
+        for provider in [ImageProvider.DALLE, ImageProvider.IMAGEN4, ImageProvider.FLUX, ImageProvider.SEEDREAM]:
             prompt = IllustrationPrompt(
                 provider=provider,
                 prompt="test",

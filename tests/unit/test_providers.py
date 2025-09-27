@@ -22,6 +22,9 @@ from illustrator.providers import (
     FluxProvider,
     Imagen4Provider,
     ProviderFactory,
+    ReplicateFluxProvider,
+    ReplicateImagenProvider,
+    SeedreamProvider,
 )
 
 
@@ -46,6 +49,25 @@ def _setup_vertexai_stubs(monkeypatch: pytest.MonkeyPatch, model_instance: Magic
     monkeypatch.setitem(sys.modules, "vertexai.preview.vision_models", vision_models_module)
 
     return vertexai_module, image_model_cls
+
+
+def _setup_replicate_stub(monkeypatch: pytest.MonkeyPatch, run_return: Any = None):
+    """Register a minimal Replicate client stub for testing."""
+
+    replicate_module = types.ModuleType("replicate")
+
+    class _FakeClient:
+        def __init__(self, api_token: str):  # pragma: no cover - trivial
+            self.api_token = api_token
+
+        def run(self, model_reference: str, input: dict):  # pragma: no cover - simple stub
+            return run_return or []
+
+    replicate_module.Client = _FakeClient
+
+    monkeypatch.setitem(sys.modules, "replicate", replicate_module)
+
+    return replicate_module
 
 
 class TestProviderFactory:
@@ -73,6 +95,18 @@ class TestProviderFactory:
         assert isinstance(provider, Imagen4Provider)
         assert provider.project_id == "test-project"
 
+    def test_create_imagen4_provider_via_replicate(self, monkeypatch: pytest.MonkeyPatch):
+        """Test creating Imagen4 provider using Replicate token."""
+        _setup_replicate_stub(monkeypatch)
+
+        provider = ProviderFactory.create_provider(
+            ImageProvider.IMAGEN4,
+            replicate_api_token="replicate-token",
+            anthropic_api_key="test-anthropic-key",
+        )
+
+        assert isinstance(provider, ReplicateImagenProvider)
+
     def test_create_flux_provider(self):
         """Test creating Flux provider."""
         provider = ProviderFactory.create_provider(
@@ -84,6 +118,30 @@ class TestProviderFactory:
         assert isinstance(provider, FluxProvider)
         assert provider.api_key == "test-hf-key"
         assert provider.base_url == "https://custom.endpoint/flux"
+
+    def test_create_flux_provider_via_replicate(self, monkeypatch: pytest.MonkeyPatch):
+        """Test creating Flux provider using Replicate token."""
+        _setup_replicate_stub(monkeypatch)
+
+        provider = ProviderFactory.create_provider(
+            ImageProvider.FLUX,
+            replicate_api_token="replicate-token",
+            anthropic_api_key="test-anthropic-key",
+        )
+
+        assert isinstance(provider, ReplicateFluxProvider)
+
+    def test_create_seedream_provider(self, monkeypatch: pytest.MonkeyPatch):
+        """Test creating Seedream provider via Replicate."""
+        _setup_replicate_stub(monkeypatch)
+
+        provider = ProviderFactory.create_provider(
+            ImageProvider.SEEDREAM,
+            replicate_api_token="replicate-token",
+            anthropic_api_key="test-anthropic-key",
+        )
+
+        assert isinstance(provider, SeedreamProvider)
 
     def test_create_provider_missing_credentials(self):
         """Test error handling for missing credentials."""
@@ -103,6 +161,9 @@ class TestProviderFactory:
 
         with pytest.raises(ValueError, match="HuggingFace API key required"):
             ProviderFactory.create_provider(ImageProvider.FLUX, anthropic_api_key="test-anthropic-key")
+
+        with pytest.raises(ValueError, match="Replicate API token required"):
+            ProviderFactory.create_provider(ImageProvider.SEEDREAM, anthropic_api_key="test-anthropic-key")
 
     def test_unsupported_provider(self):
         """Test error handling for unsupported provider."""
@@ -132,7 +193,22 @@ class TestProviderFactory:
             huggingface_api_key="test-hf-key",
             anthropic_api_key="test-anthropic-key",
         )
-        assert len(available) == 3
+        assert set(available) == {
+            ImageProvider.DALLE,
+            ImageProvider.IMAGEN4,
+            ImageProvider.FLUX,
+        }
+
+        # Replicate token unlocks additional providers
+        available = ProviderFactory.get_available_providers(
+            openai_api_key="test-key",
+            google_credentials="path/to/creds",
+            google_project_id="test-project",
+            huggingface_api_key="test-hf-key",
+            replicate_api_token="replicate-token",
+            anthropic_api_key="test-anthropic-key",
+        )
+        assert ImageProvider.SEEDREAM in available
         assert all(provider in available for provider in ImageProvider)
 
 

@@ -25,12 +25,14 @@ class TestImageProvider:
         assert ImageProvider.DALLE == "dalle"
         assert ImageProvider.IMAGEN4 == "imagen4"
         assert ImageProvider.FLUX == "flux"
+        assert ImageProvider.SEEDREAM == "seedream"
 
     def test_image_provider_string_conversion(self):
         """Test string conversion of providers."""
-        assert str(ImageProvider.DALLE) == "dalle"
-        assert str(ImageProvider.IMAGEN4) == "imagen4"
-        assert str(ImageProvider.FLUX) == "flux"
+        assert ImageProvider.DALLE.value == "dalle"
+        assert ImageProvider.IMAGEN4.value == "imagen4"
+        assert ImageProvider.FLUX.value == "flux"
+        assert ImageProvider.SEEDREAM.value == "seedream"
 
 
 class TestEmotionalTone:

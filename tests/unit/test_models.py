@@ -113,7 +113,7 @@ class TestIllustrationPrompt:
 
     def test_all_providers_supported(self):
         """Test that all image providers are supported."""
-        providers = [ImageProvider.DALLE, ImageProvider.IMAGEN4, ImageProvider.FLUX]
+        providers = [ImageProvider.DALLE, ImageProvider.IMAGEN4, ImageProvider.FLUX, ImageProvider.SEEDREAM]
 
         for provider in providers:
             prompt = IllustrationPrompt(

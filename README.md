@@ -1,6 +1,6 @@
 # Illustrator 📚✨
 
-A powerful LangGraph application that analyzes manuscript chapters using advanced NLP and emotional resonance detection, then generates optimized illustration prompts for DALL-E, Google Vertex AI Imagen (Imagen 3), and Flux 1.1 Pro.
+A powerful LangGraph application that analyzes manuscript chapters using advanced NLP and emotional resonance detection, then generates optimized illustration prompts for DALL-E, Google Imagen, and Replicate-hosted models including Flux 1.1 Pro and Seedream 4.
 
 [![LangGraph](https://img.shields.io/badge/Built%20with-LangGraph-00324d.svg)](https://langchain-ai.github.io/langgraph/)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
@@ -10,7 +10,7 @@ A powerful LangGraph application that analyzes manuscript chapters using advance
 
 - **📖 Chapter-by-Chapter Analysis**: Process manuscripts one chapter at a time with detailed emotional and thematic analysis
 - **🧠 Emotional Resonance Engine**: Advanced NLP to identify the most emotionally impactful moments (defaults to 10 per chapter)
-- **🎨 Multi-Provider Support**: Generate illustrations using DALL-E 3, Vertex AI Imagen (Imagen 3), or Flux 1.1 Pro
+- **🎨 Multi-Provider Support**: Generate illustrations using DALL-E 3, Vertex AI Imagen (Imagen 3), Flux 1.1 Pro, or Seedream 4 via Replicate
 - **🔄 Interactive CLI**: User-friendly command-line interface with CTRL+D input handling
 - **💾 Persistent Storage**: Save analysis results and generated images for future reference
 - **⚙️ Configurable Styles**: Customize artistic styles, color palettes, and creative influences
@@ -22,8 +22,9 @@ A powerful LangGraph application that analyzes manuscript chapters using advance
 - Python 3.11 or higher
 - API keys for your chosen image generation provider(s):
   - **DALL-E**: OpenAI API key
-  - **Imagen (Vertex AI)**: Google Cloud credentials and project ID
-  - **Flux**: HuggingFace API key
+  - **Imagen (Vertex AI)**: Google Cloud credentials and project ID, _or_ a Replicate API token
+  - **Flux 1.1 Pro**: HuggingFace API key, _or_ a Replicate API token
+  - **Seedream 4**: Replicate API token
 - **Claude API key** (Anthropic) for text analysis
 
 ### Installation
@@ -65,8 +66,11 @@ GOOGLE_PROJECT_ID=your-project-id
 HUGGINGFACE_API_KEY=your-huggingface-key
 HUGGINGFACE_FLUX_ENDPOINT_URL=https://api.endpoints.huggingface.cloud/your-org/flux
 
+# For Replicate-hosted models (Flux, Imagen 4, Seedream 4)
+REPLICATE_API_TOKEN=your-replicate-token
+
 # Optional: Customize defaults
-DEFAULT_IMAGE_PROVIDER=dalle  # dalle, imagen4 (Vertex Imagen), or flux
+DEFAULT_IMAGE_PROVIDER=dalle  # dalle, imagen4, flux, or seedream
 DEFAULT_ILLUSTRATION_STYLE=digital_painting
 ```
 
@@ -105,7 +109,7 @@ DEFAULT_ILLUSTRATION_STYLE=digital_painting
 | **Imagen (Vertex AI Imagen 3)** | Photorealistic output, fine control | Realistic settings, atmospheric scenes |
 | **Flux 1.1 Pro** | Artistic styles, creative interpretation | Stylized art, concept illustrations |
 
-> Flux 1.1 Pro uses HuggingFace Inference Endpoints for both full generations and web previews. Configure `HUGGINGFACE_API_KEY` and `HUGGINGFACE_FLUX_ENDPOINT_URL` to point at your deployed endpoint. If you omit it, the app defaults to `https://qj029p0ofvfmjxus.us-east-1.aws.endpoints.huggingface.cloud` and automatically targets the `/text-to-image` invocation path for custom endpoints.
+> Flux 1.1 Pro can run through HuggingFace Inference Endpoints or Replicate. Configure `HUGGINGFACE_API_KEY` and `HUGGINGFACE_FLUX_ENDPOINT_URL` for self-hosted endpoints, or set `REPLICATE_API_TOKEN` to call the managed Replicate model. If you omit both, the app defaults to the hosted HuggingFace endpoint at `https://qj029p0ofvfmjxus.us-east-1.aws.endpoints.huggingface.cloud`.
 
 ## 📋 Example Usage
 
@@ -119,7 +123,7 @@ $ illustrator
 │ generate AI illustrations                  │
 │                                            │
 │ • Enter chapter content with CTRL+D       │
-│ • Choose from DALL-E, Vertex AI Imagen, or Flux    │
+│ • Choose from DALL-E, Imagen, Flux, or Seedream    │
 │ • Get emotional analysis and prompts      │
 │                                            │
 ╰────────────────────────────────────────────╯
@@ -133,7 +137,8 @@ Genre: Fantasy
 Available image providers:
   1. DALL-E 3 (OpenAI)
   2. Imagen (Google Vertex AI)
-  3. Flux 1.1 Pro (HuggingFace)
+  3. Flux 1.1 Pro (HuggingFace/Replicate)
+  4. Seedream 4 (Replicate)
 
 Select image provider [1]: 1
 Preferred art style [digital painting]: watercolor
@@ -234,7 +239,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 - Built with [LangGraph](https://langchain-ai.github.io/langgraph/) by LangChain
 - Powered by [Claude](https://anthropic.com) for literary analysis
-- Supports [DALL-E](https://openai.com/dall-e-3), [Vertex AI Imagen](https://cloud.google.com/vertex-ai), and [Flux](https://huggingface.co/black-forest-labs/FLUX.1-pro)
+- Supports [DALL-E](https://openai.com/dall-e-3), [Imagen](https://cloud.google.com/vertex-ai), [Flux 1.1 Pro](https://replicate.com/black-forest-labs/flux-1.1-pro), and [Seedream 4](https://replicate.com/bytedance/seedream-4)
 
 ---
 
