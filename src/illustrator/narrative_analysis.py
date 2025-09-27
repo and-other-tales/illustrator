@@ -162,8 +162,7 @@ class NarrativeAnalyzer:
         """Return a summary of the last analysis (stub for tests)."""
         base = getattr(self, 'last_analysis', {})
         summary = dict(base) if isinstance(base, dict) else {}
-        if 'primary_genre' not in summary:
-            summary['primary_genre'] = 'unknown'
+        summary['primary_genre'] = summary.get('primary_genre', 'unknown')
         return summary
     """Advanced narrative structure and literary analysis system."""
 
