@@ -482,9 +482,14 @@ class StyleTranslator:
 
         return configs
 
-    def _get_emotional_style_modifiers(self, style_config: Dict[str, Any], emotional_tones: List[str]) -> List[str]:
-        """Extract emotional style modifiers from rich configuration."""
-        modifiers = []
+    def _get_emotional_style_modifiers(
+        self,
+        style_config: Dict[str, Any],
+        emotional_tones: List[str]
+    ) -> tuple[List[str], List[str]]:
+        """Extract emotional style modifiers and atmosphere adjustments from rich configuration."""
+        modifiers: List[str] = []
+        atmosphere_notes: List[str] = []
 
         # Check if we have emotional adaptations in the config
         if "emotional_adaptations" in style_config:
@@ -495,8 +500,17 @@ class StyleTranslator:
                 if tone_lower in adaptations:
                     adaptation = adaptations[tone_lower]
                     modifiers.extend(adaptation.get("style_modifiers", []))
+                    atmosphere = adaptation.get("atmosphere_adjustments")
+                    if atmosphere:
+                        if isinstance(atmosphere, str):
+                            atmosphere_notes.append(atmosphere)
+                        else:
+                            try:
+                                atmosphere_notes.extend(list(atmosphere))
+                            except TypeError:
+                                atmosphere_notes.append(str(atmosphere))
 
-        return modifiers
+        return modifiers, atmosphere_notes
 
     def _get_provider_optimizations(self, style_config: Dict[str, Any], provider: ImageProvider) -> Dict[str, Any]:
         """Get provider-specific optimizations from rich configuration."""
@@ -563,25 +577,49 @@ class StyleTranslator:
         """Translate using rich configuration data."""
 
         # Start with base modifiers from rich config
-        style_modifiers = rich_config.get("base_prompt_modifiers", []).copy()
+        style_modifiers = list(rich_config.get("base_prompt_modifiers", []))
+        atmosphere_guidance: List[str] = []
 
         # Add emotional adaptations if available
         if hasattr(scene_composition, 'emotional_tones'):
-            emotional_modifiers = self._get_emotional_style_modifiers(
+            emotional_modifiers, atmosphere_notes = self._get_emotional_style_modifiers(
                 rich_config,
                 scene_composition.emotional_tones
             )
             style_modifiers.extend(emotional_modifiers)
+            atmosphere_guidance.extend(atmosphere_notes)
 
         # Get provider-specific optimizations
         provider_opts = self._get_provider_optimizations(rich_config, provider)
 
+        if provider_opts.get("style_emphasis"):
+            style_modifiers.append(provider_opts["style_emphasis"])
+        if provider_opts.get("quality_modifiers"):
+            style_modifiers.extend(provider_opts["quality_modifiers"])
+
+        # Merge technical parameters with provider overrides
+        technical_params = dict(rich_config.get("technical_params", {}))
+        if provider_opts.get("technical_adjustments"):
+            technical_params.update(provider_opts["technical_adjustments"])
+
+        # Deduplicate modifiers while preserving order
+        seen_modifiers: set[str] = set()
+        ordered_modifiers: List[str] = []
+        for modifier in style_modifiers:
+            if not modifier:
+                continue
+            normalized = modifier.strip()
+            if normalized and normalized not in seen_modifiers:
+                ordered_modifiers.append(normalized)
+                seen_modifiers.add(normalized)
+
         # Build translation result
         translation = {
-            "style_modifiers": style_modifiers,
+            "style_modifiers": ordered_modifiers,
             "negative_prompt": rich_config.get("negative_prompt", []),
-            "technical_params": rich_config.get("technical_params", {}),
-            "provider_optimizations": provider_opts
+            "technical_params": technical_params,
+            "provider_optimizations": provider_opts,
+            "atmosphere_guidance": atmosphere_guidance,
         }
 
         return translation
@@ -985,6 +1023,42 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 style_modifiers_formatted.append(str(m))
         style_modifiers_text = ", ".join(style_modifiers_formatted)
         prompt_parts.append(style_modifiers_text)
+
+        # Provider-specific stylistic emphasis
+        provider_opts = style_translation.get('provider_optimizations') or {}
+        style_emphasis = provider_opts.get('style_emphasis')
+        if style_emphasis and style_emphasis not in style_modifiers_formatted:
+            prompt_parts.append(style_emphasis)
+
+        quality_modifiers = provider_opts.get('quality_modifiers') or []
+        if quality_modifiers:
+            prompt_parts.append(
+                "Quality focus: " + ", ".join(str(mod) for mod in quality_modifiers if mod)
+            )
+
+        # Emotional atmosphere guidance from rich config
+        atmosphere_guidance = style_translation.get('atmosphere_guidance') or []
+        if atmosphere_guidance:
+            prompt_parts.append(
+                "Atmospheric adjustments: " + "; ".join(atmosphere_guidance)
+            )
+
+        # Technical guidance expressed textually for providers lacking direct parameters
+        technical_params = style_translation.get('technical_params') or {}
+        if technical_params:
+            formatted_params: List[str] = []
+            for key, value in technical_params.items():
+                if value in (None, ""):
+                    continue
+                human_key = key.replace('_', ' ')
+                if isinstance(value, (int, float)):
+                    formatted_params.append(f"{human_key}: {value}")
+                else:
+                    formatted_params.append(f"{human_key}: {value}")
+            if formatted_params:
+                prompt_parts.append(
+                    "Technical focus: " + "; ".join(formatted_params)
+                )
 
         # Join all parts
         comprehensive_prompt = ". ".join(prompt_parts)
