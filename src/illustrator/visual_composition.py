@@ -301,7 +301,7 @@ class AdvancedVisualComposer:
             'shot_types': [ShotType.CLOSE_UP, ShotType.EXTREME_CLOSE_UP],
             'lighting': [LightingSetup.DRAMATIC_CHIAROSCURO, LightingSetup.SPLIT],
             'colors': [ColorHarmony.HIGH_CONTRAST, ColorHarmony.COOL_PALETTE],
-            'camera_angles': [CameraAngle.LOW_ANGLE, CameraAngle.DUTCH_ANGLE]
+            'camera_angles': [CameraAngle.HIGH_ANGLE, CameraAngle.DUTCH_ANGLE]
         },
         EmotionalTone.TENSION: {
             'preferred_rules': [CompositionRule.DIAGONAL_COMPOSITION, CompositionRule.ASYMMETRIC_BALANCE],
@@ -323,6 +323,14 @@ class AdvancedVisualComposer:
             'lighting': [LightingSetup.BUTTERFLY, LightingSetup.GOLDEN_HOUR],
             'colors': [ColorHarmony.WARM_PALETTE, ColorHarmony.ANALOGOUS],
             'camera_angles': [CameraAngle.EYE_LEVEL, CameraAngle.LOW_ANGLE]
+        }
+        ,
+        EmotionalTone.SERENITY: {
+            'preferred_rules': [CompositionRule.SYMMETRY, CompositionRule.GOLDEN_RATIO],
+            'shot_types': [ShotType.MEDIUM_SHOT],
+            'lighting': [LightingSetup.SOFT_DIFFUSED, LightingSetup.NATURAL_WINDOW] if hasattr(LightingSetup, 'NATURAL_WINDOW') else [LightingSetup.SOFT_DIFFUSED],
+            'colors': [ColorHarmony.ANALOGOUS, ColorHarmony.WARM_PALETTE],
+            'camera_angles': [CameraAngle.EYE_LEVEL]
         }
     }
 
@@ -723,18 +731,28 @@ class AdvancedVisualComposer:
             primary_emotion = emotional_moment.emotional_tones[0]
             emotion_lighting = self.EMOTION_COMPOSITION_MAP.get(primary_emotion, {}).get('lighting', [])
             if emotion_lighting:
-                return emotion_lighting[0]
+                # emotion_lighting may contain LightingSetup enum members or dataclass instances
+                first = emotion_lighting[0]
+                if isinstance(first, LightingSetup):
+                    return first
+                elif isinstance(first, LightingSetupEnum):
+                    # Map enum to LightingSetup dataclass
+                    lt = LightingType.DRAMATIC if 'dramatic' in first.value or 'chiaroscuro' in first.value else LightingType.NATURAL
+                    return LightingSetup(lighting_type=lt)
+                else:
+                    # Fallback: construct from value
+                    return LightingSetup(lighting_type=LightingType.NATURAL)
 
         # Natural lighting cues from text
         natural_lighting = visual_analysis.get('natural_lighting', '').lower()
         if 'golden hour' in natural_lighting or 'sunset' in natural_lighting:
-            return LightingSetup.GOLDEN_HOUR
+            return LightingSetup(lighting_type=LightingType.NATURAL, mood_description='golden hour')
         elif 'harsh' in natural_lighting or 'dramatic' in natural_lighting:
-            return LightingSetup.DRAMATIC_CHIAROSCURO
+            return LightingSetup(lighting_type=LightingType.DRAMATIC, mood_description='dramatic chiaroscuro')
         elif 'soft' in natural_lighting or 'gentle' in natural_lighting:
-            return LightingSetup.SOFT_DIFFUSED
+            return LightingSetup(lighting_type=LightingType.SOFT, mood_description='soft diffused')
 
-        return LightingSetup.THREE_POINT
+        return LightingSetup(lighting_type=LightingType.NATURAL)
 
     # Backwards-compatible alias expected by some unit tests
     def _select_lighting_setup(self, context: Dict[str, Any]) -> LightingSetup:
@@ -765,7 +783,15 @@ class AdvancedVisualComposer:
             primary_emotion = emotional_tones[0]
             emotion_colors = self.EMOTION_COMPOSITION_MAP.get(primary_emotion, {}).get('colors', [])
             if emotion_colors:
-                return emotion_colors[0]
+                first = emotion_colors[0]
+                if isinstance(first, ColorHarmony):
+                    return first
+                elif isinstance(first, ColorHarmonyEnum):
+                    # Map to ColorHarmony dataclass
+                    scheme = ColorScheme.WARM if 'warm' in first.value else (ColorScheme.COOL if 'cool' in first.value else ColorScheme.MONOCHROMATIC)
+                    return ColorHarmony(scheme=scheme)
+                else:
+                    return ColorHarmony(scheme=ColorScheme.MONOCHROMATIC)
 
         # Genre influence
         if narrative_structure and narrative_structure.genre_indicators:
@@ -1372,16 +1398,18 @@ class AdvancedVisualComposer:
         """Analyze how composition amplifies emotion."""
 
         amplification_map = {
-            CompositionRule.DIAGONAL_COMPOSITION: "creates dynamic energy and movement",
-            CompositionRule.SYMMETRY: "provides stability and harmony",
-            CompositionRule.ASYMMETRIC_BALANCE: "creates tension and interest",
-            CompositionRule.GOLDEN_RATIO: "achieves pleasing and natural balance",
-            CompositionRule.FRAMING: "focuses attention and creates intimacy"
+                'diagonal_composition': "creates dynamic energy and movement",
+                'symmetry': "provides stability and harmony",
+                'asymmetric_balance': "creates tension and interest",
+                'golden_ratio': "achieves pleasing and natural balance",
+                'framing': "focuses attention and creates intimacy"
         }
 
         amplifications = []
-        for rule in composition_rules[:3]:
-            amplifications.append(amplification_map.get(rule, "supports visual harmony"))
+            for rule in composition_rules[:3]:
+                # composition_rules may be CompositionRule dataclasses, enums, or strings
+                key = rule.rule_type if hasattr(rule, 'rule_type') else (rule.value if hasattr(rule, 'value') else str(rule))
+                amplifications.append(amplification_map.get(key, "supports visual harmony"))
 
         return "; ".join(amplifications)
 
