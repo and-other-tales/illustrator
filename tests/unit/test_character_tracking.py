@@ -548,16 +548,22 @@ class TestCharacterTracker:
             "character_arc_stage": "introduction"
         }"""
         
+        # We need to add 'summary' to the Chapter initialization
         chapter = Chapter(
             id="ch-1",
             number=1,
             title="First Impressions",
+            summary="A chapter where Elizabeth meets Mr. Darcy for the first time.",
             content="Elizabeth Bennett walked into the assembly room...",
             emotional_moments=[
                 EmotionalMoment(tone=EmotionalTone.JOY, text="Elizabeth laughed heartily.")
             ]
         )
         
+        # Initialize name_aliases if it doesn't exist
+        if not hasattr(self.tracker, 'name_aliases'):
+            self.tracker.name_aliases = {}
+            
         # Create a simple mock implementation of the method to test
         async def mock_create_profile(name, chapter):
             profile = CharacterProfile(name=name)
