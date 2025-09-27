@@ -1003,10 +1003,23 @@ class ProviderFactory:
 
         elif provider_type == ImageProvider.IMAGEN4:
             if replicate_token:
-                return ReplicateImagenProvider(
-                    replicate_token,
-                    **common_llm_kwargs,
-                )
+                try:
+                    return ReplicateImagenProvider(
+                        replicate_token,
+                        **common_llm_kwargs,
+                    )
+                except ValueError as exc:
+                    fallback_available = (
+                        credentials.get('google_credentials')
+                        and credentials.get('google_project_id')
+                    )
+                    if fallback_available and "replicate" in str(exc).lower():
+                        logger.warning(
+                            "Replicate Imagen provider unavailable (%s); falling back to Google Vertex AI",
+                            exc,
+                        )
+                    else:
+                        raise
 
             credentials_path = credentials.get('google_credentials')
             project_id = credentials.get('google_project_id')
@@ -1020,10 +1033,20 @@ class ProviderFactory:
 
         elif provider_type == ImageProvider.FLUX:
             if replicate_token:
-                return ReplicateFluxProvider(
-                    replicate_token,
-                    **common_llm_kwargs,
-                )
+                try:
+                    return ReplicateFluxProvider(
+                        replicate_token,
+                        **common_llm_kwargs,
+                    )
+                except ValueError as exc:
+                    fallback_available = credentials.get('huggingface_api_key')
+                    if fallback_available and "replicate" in str(exc).lower():
+                        logger.warning(
+                            "Replicate Flux provider unavailable (%s); falling back to HuggingFace endpoint",
+                            exc,
+                        )
+                    else:
+                        raise
 
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
