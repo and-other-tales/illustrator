@@ -178,6 +178,7 @@ class ColorScheme(str, Enum):
     MONOCHROMATIC = "monochromatic"
     WARM = "warm"
     COOL = "cool"
+    NATURAL = "natural"
 
 
 @dataclass
@@ -798,7 +799,7 @@ class AdvancedVisualComposer:
         order = ['foreground', 'midground', 'background']
         return [l for l in order if l in layers]
 
-    async def _enhance_with_llm(self, analysis: CompositionAnalysis, scene_text: str) -> Dict[str, Any]:
+    async def _enhance_with_llm(self, analysis: 'CompositionAnalysis', scene_text: str) -> Dict[str, Any]:
         """Call LLM to enhance composition analysis, with robust failure handling."""
         prompt = f"Enhance the following composition analysis and give specific recommendations:\n{analysis}\nScene: {scene_text}"
         try:
@@ -813,7 +814,7 @@ class AdvancedVisualComposer:
             logger.warning(f"LLM enhancement failed: {e}")
             return {'llm_enhancement': 'LLM enhancement unavailable', 'specific_recommendations': []}
 
-    def _create_technical_specifications(self, composition: CompositionAnalysis) -> Dict[str, Any]:
+    def _create_technical_specifications(self, composition: 'CompositionAnalysis') -> Dict[str, Any]:
         """Create tech specs for downstream image generation."""
         shot = composition.composition_guide.shot_type.value.replace('_', '-') if composition.composition_guide and composition.composition_guide.shot_type else 'medium'
         lighting = composition.lighting_setup
@@ -826,14 +827,14 @@ class AdvancedVisualComposer:
             'camera_settings': {'angle': composition.composition_guide.camera_angle.value if composition.composition_guide and composition.composition_guide.camera_angle else 'eye-level'}
         }
 
-    def _get_composition_strength_score(self, composition: CompositionAnalysis) -> float:
+    def _get_composition_strength_score(self, composition: 'CompositionAnalysis') -> float:
         """Simple heuristic score for composition strength."""
         base = composition.composition_strength if hasattr(composition, 'composition_strength') else 0.5
         element_score = min(1.0, 0.1 * len(getattr(composition, 'visual_elements', [])) + 0.2)
         lighting_bonus = 0.1 if composition.lighting_setup and composition.lighting_setup.lighting_type == LightingType.DRAMATIC else 0.0
         return max(0.0, min(1.0, base * 0.6 + element_score * 0.3 + lighting_bonus))
 
-    def _generate_prompt_enhancements(self, composition: CompositionAnalysis) -> Dict[str, Any]:
+    def _generate_prompt_enhancements(self, composition: 'CompositionAnalysis') -> Dict[str, Any]:
         """Generate textual prompt enhancements from analysis."""
         comp_terms = [composition.composition_guide.shot_type.value.replace('_', ' ')] if composition.composition_guide and composition.composition_guide.shot_type else []
         lighting_terms = [composition.lighting_setup.value.replace('_', ' ')] if composition.lighting_setup else []
@@ -847,7 +848,7 @@ class AdvancedVisualComposer:
             'mood_descriptors': [mood] if mood else []
         }
 
-    def _optimize_for_emotional_impact(self, composition: CompositionAnalysis, target_emotion: EmotionalTone) -> CompositionAnalysis:
+    def _optimize_for_emotional_impact(self, composition: 'CompositionAnalysis', target_emotion: EmotionalTone) -> 'CompositionAnalysis':
         """Adjust a composition analysis to better express the given emotion."""
         # Minor mutations to composition to amplify emotion
         new_comp = CompositionAnalysis(
@@ -1086,10 +1087,29 @@ class AdvancedVisualComposer:
 
     def _analyze_scene_context(self, scene_text: str, emotional_tone: Optional[EmotionalTone] = None) -> Dict[str, Any]:
         """Simple scene context analyzer for unit tests."""
+        subjects = [n for n in re.findall(r"\b[A-Z][a-z]+\b", scene_text)][:3]
+        env = 'interior' if any(w in scene_text.lower() for w in ('room', 'house', 'door', 'window')) else 'exterior'
+        spatial = 'central' if len(scene_text) < 200 else 'complex'
+        # Derive a simple scene type
+        if any(w in scene_text.lower() for w in ('battle', 'fight', 'clash', 'war', 'battlefield')):
+            scene_type = 'action'
+        elif any(w in scene_text.lower() for w in ('whisper', 'conversation', 'dialogue', 'talk')):
+            scene_type = 'dialogue'
+        elif any(w in scene_text.lower() for w in ('sunset', 'dawn', 'dusk', 'sunrise')):
+            scene_type = 'scenic'
+        else:
+            scene_type = 'scene'
+
+        emotional_intensity = 0.7 if emotional_tone in (EmotionalTone.TENSION, EmotionalTone.FEAR, EmotionalTone.ANGER) else 0.4
+        character_count = len(subjects)
+
         return {
-            'primary_subjects': [n for n in re.findall(r"\b[A-Z][a-z]+\b", scene_text)][:3],
-            'environment_type': 'interior' if any(w in scene_text.lower() for w in ('room', 'house', 'door', 'window')) else 'exterior',
-            'spatial_layout': 'central' if len(scene_text) < 200 else 'complex'
+            'primary_subjects': subjects,
+            'environment_type': env,
+            'spatial_layout': spatial,
+            'scene_type': scene_type,
+            'emotional_intensity': emotional_intensity,
+            'character_count': character_count
         }
 
     def _generate_mood_descriptors(
