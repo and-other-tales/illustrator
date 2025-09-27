@@ -10,6 +10,7 @@ window.illustratorApp = {
         HUGGINGFACE_API_KEY: '',
         HUGGINGFACE_ENDPOINT_URL: '',
         HUGGINGFACE_FLUX_ENDPOINT_URL: '',
+        REPLICATE_API_TOKEN: '',
         GOOGLE_APPLICATION_CREDENTIALS: '',
         GOOGLE_PROJECT_ID: '',
         DEFAULT_LLM_PROVIDER: '',
@@ -241,6 +242,7 @@ function saveApiKeys() {
         HUGGINGFACE_API_KEY: document.getElementById('huggingfaceApiKey').value.trim(),
         HUGGINGFACE_ENDPOINT_URL: huggingfaceEndpoint,
         HUGGINGFACE_FLUX_ENDPOINT_URL: document.getElementById('huggingfaceFluxEndpointUrl').value.trim(),
+        REPLICATE_API_TOKEN: document.getElementById('replicateApiToken').value.trim(),
         GOOGLE_APPLICATION_CREDENTIALS: document.getElementById('googleCredentials').value.trim(),
         GOOGLE_PROJECT_ID: document.getElementById('googleProjectId').value.trim(),
         DEFAULT_LLM_PROVIDER: selectedProvider,
@@ -294,6 +296,7 @@ function populateApiKeyForm() {
     if (keys.HUGGINGFACE_API_KEY) document.getElementById('huggingfaceApiKey').value = keys.HUGGINGFACE_API_KEY;
     if (keys.HUGGINGFACE_ENDPOINT_URL) document.getElementById('huggingfaceEndpointUrl').value = keys.HUGGINGFACE_ENDPOINT_URL;
     if (keys.HUGGINGFACE_FLUX_ENDPOINT_URL) document.getElementById('huggingfaceFluxEndpointUrl').value = keys.HUGGINGFACE_FLUX_ENDPOINT_URL;
+    if (keys.REPLICATE_API_TOKEN) document.getElementById('replicateApiToken').value = keys.REPLICATE_API_TOKEN;
     if (keys.GOOGLE_APPLICATION_CREDENTIALS) document.getElementById('googleCredentials').value = keys.GOOGLE_APPLICATION_CREDENTIALS;
     if (keys.GOOGLE_PROJECT_ID) document.getElementById('googleProjectId').value = keys.GOOGLE_PROJECT_ID;
     const providerSelect = document.getElementById('llmProviderSelect');

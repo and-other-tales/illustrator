@@ -118,115 +118,137 @@
 
     <!-- API Keys Modal -->
     <div class="modal fade" id="apiKeysModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header border-0">
-                    <h5 class="modal-title d-flex align-items-center">
-                        <span class="material-icons-outlined me-2">vpn_key</span>
-                        API Configuration
-                    </h5>
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title d-flex align-items-center mb-1">
+                            <span class="material-icons-outlined me-2">vpn_key</span>
+                            API Configuration
+                        </h5>
+                        <p class="text-muted small mb-0">Store the credentials the illustrator uses for analysis and image generation. Values persist to your local <code>.env</code> file.</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <form id="apiKeysForm">
-                        <div class="mb-3">
-                            <label for="anthropicApiKey" class="form-label">Anthropic API Key</label>
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="anthropicApiKey" placeholder="sk-ant-...">
-                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('anthropicApiKey')">
-                                    <i class="bi bi-eye"></i>
-                                </button>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase fw-semibold text-muted small mb-3">Language Model Access</h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="llmProviderSelect" class="form-label">Default LLM Provider</label>
+                                    <select class="form-select" id="llmProviderSelect">
+                                        <option value="">Auto-detect from configured keys</option>
+                                        <option value="anthropic">Anthropic (Claude)</option>
+                                        <option value="huggingface">HuggingFace (Hosted Endpoint)</option>
+                                    </select>
+                                    <div class="form-text">Used for manuscript analysis and prompt engineering.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="llmModel" class="form-label">Preferred LLM Model</label>
+                                    <input type="text" class="form-control" id="llmModel" list="llmModelOptions" placeholder="claude-3-5-sonnet-20241022 or meta-llama/Meta-Llama-3.3-70B-Instruct">
+                                    <div class="form-text">Pick from suggestions or supply any hosted model identifier.</div>
+                                    <datalist id="llmModelOptions">
+                                        <option value="anthropic/claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                                        <option value="anthropic/claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
+                                        <option value="meta-llama/Meta-Llama-3.3-70B-Instruct">Llama 3.3 70B Instruct</option>
+                                        <option value="meta-llama/Meta-Llama-3.1-405B-Instruct">Llama 3.1 405B Instruct</option>
+                                        <option value="meta-llama/Meta-Llama-3.1-70B-Instruct">Llama 3.1 70B Instruct</option>
+                                        <option value="meta-llama/Meta-Llama-3.1-8B-Instruct">Llama 3.1 8B Instruct</option>
+                                        <option value="mistralai/Mistral-Large-Instruct">Mistral Large</option>
+                                        <option value="mistralai/Mistral-Small-Instruct-2409">Mistral Small 24.09</option>
+                                        <option value="nousresearch/Hermes-3-Llama-3.1-70B">Hermes 3 (Llama 3.1 70B)</option>
+                                        <option value="perplexity/llama-3.1-sonar-large-128k-online">Perplexity Sonar Large</option>
+                                        <option value="gpt-oss-120b">gpt-oss-120b (HuggingFace)</option>
+                                        <option value="openrouter/anthropic/claude-3.5-sonnet">OpenRouter Claude 3.5 Sonnet</option>
+                                        <option value="openrouter/meta-llama/llama-3.1-405b-instruct">OpenRouter Llama 3.1 405B</option>
+                                    </datalist>
+                                </div>
                             </div>
-                            <div class="form-text">Required for advanced analysis and prompt engineering</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="openaiApiKey" class="form-label">OpenAI API Key</label>
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="openaiApiKey" placeholder="sk-...">
-                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('openaiApiKey')">
-                                    <i class="bi bi-eye"></i>
-                                </button>
+                            <div class="row g-3 mt-1">
+                                <div class="col-md-6">
+                                    <label for="anthropicApiKey" class="form-label">Anthropic API Key</label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="anthropicApiKey" placeholder="sk-ant-...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('anthropicApiKey')">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Needed for Claude-based prompt engineering.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="huggingfaceApiKey" class="form-label">HuggingFace API Key</label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="huggingfaceApiKey" placeholder="hf_...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('huggingfaceApiKey')">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Required for HuggingFace-hosted LLMs and Flux endpoints.</div>
+                                </div>
                             </div>
-                            <div class="form-text">Required for DALL-E image generation</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="huggingfaceApiKey" class="form-label">HuggingFace API Key</label>
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="huggingfaceApiKey" placeholder="hf_...">
-                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('huggingfaceApiKey')">
-                                    <i class="bi bi-eye"></i>
-                                </button>
+                            <div class="mt-3">
+                                <label for="huggingfaceEndpointUrl" class="form-label">HuggingFace Endpoint URL</label>
+                                <input type="text" class="form-control" id="huggingfaceEndpointUrl" list="huggingfaceEndpointOptions" placeholder="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.3-70B-Instruct">
+                                <div class="form-text">Auto-filled when you choose a HuggingFace model.</div>
+                                <datalist id="huggingfaceEndpointOptions">
+                                    <option value="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.3-70B-Instruct">Meta Llama 3.3 70B (HF Inference)</option>
+                                    <option value="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.1-405B-Instruct">Meta Llama 3.1 405B</option>
+                                    <option value="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.1-70B-Instruct">Meta Llama 3.1 70B</option>
+                                    <option value="https://api-inference.huggingface.co/models/mistralai/Mistral-Large-Instruct">Mistral Large Instruct</option>
+                                    <option value="https://api-inference.huggingface.co/models/nousresearch/Hermes-3-Llama-3.1-70B">Hermes 3 (Llama 3.1 70B)</option>
+                                    <option value="https://api-inference.huggingface.co/models/gpt-oss-120b">gpt-oss-120b</option>
+                                </datalist>
                             </div>
-                            <div class="form-text">Required for HuggingFace language models and Flux image generation</div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="huggingfaceEndpointUrl" class="form-label">HuggingFace Endpoint URL</label>
-                            <input type="text" class="form-control" id="huggingfaceEndpointUrl" list="huggingfaceEndpointOptions" placeholder="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.3-70B-Instruct">
-                            <div class="form-text">Endpoint for your hosted HuggingFace model</div>
-                            <datalist id="huggingfaceEndpointOptions">
-                                <option value="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.3-70B-Instruct">Meta Llama 3.3 70B (HF Inference)</option>
-                                <option value="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.1-405B-Instruct">Meta Llama 3.1 405B</option>
-                                <option value="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.1-70B-Instruct">Meta Llama 3.1 70B</option>
-                                <option value="https://api-inference.huggingface.co/models/mistralai/Mistral-Large-Instruct">Mistral Large Instruct</option>
-                                <option value="https://api-inference.huggingface.co/models/nousresearch/Hermes-3-Llama-3.1-70B">Hermes 3 (Llama 3.1 70B)</option>
-                                <option value="https://api-inference.huggingface.co/models/gpt-oss-120b">gpt-oss-120b</option>
-                            </datalist>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="huggingfaceFluxEndpointUrl" class="form-label">Flux HuggingFace Endpoint URL</label>
-                            <input type="text" class="form-control" id="huggingfaceFluxEndpointUrl" placeholder="https://api.endpoints.huggingface.cloud/.../flux">
-                            <div class="form-text">Inference endpoint used for Flux image generation and previews</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="llmProviderSelect" class="form-label">Default LLM Provider</label>
-                            <select class="form-select" id="llmProviderSelect">
-                                <option value="">Auto-detect from configured keys</option>
-                                <option value="anthropic">Anthropic (Claude)</option>
-                                <option value="huggingface">HuggingFace (gpt-oss-120b)</option>
-                            </select>
-                            <div class="form-text">Choose the language model provider used for manuscript analysis.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="llmModel" class="form-label">Preferred LLM Model</label>
-                            <input type="text" class="form-control" id="llmModel" list="llmModelOptions" placeholder="claude-3-5-sonnet-20241022 or meta-llama/Meta-Llama-3.3-70B-Instruct">
-                            <div class="form-text">Select a suggested model or enter any compatible identifier supported by your provider.</div>
-                            <datalist id="llmModelOptions">
-                                <option value="anthropic/claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-                                <option value="anthropic/claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
-                                <option value="meta-llama/Meta-Llama-3.3-70B-Instruct">Llama 3.3 70B Instruct</option>
-                                <option value="meta-llama/Meta-Llama-3.1-405B-Instruct">Llama 3.1 405B Instruct</option>
-                                <option value="meta-llama/Meta-Llama-3.1-70B-Instruct">Llama 3.1 70B Instruct</option>
-                                <option value="meta-llama/Meta-Llama-3.1-8B-Instruct">Llama 3.1 8B Instruct</option>
-                                <option value="mistralai/Mistral-Large-Instruct">Mistral Large</option>
-                                <option value="mistralai/Mistral-Small-Instruct-2409">Mistral Small 24.09</option>
-                                <option value="nousresearch/Hermes-3-Llama-3.1-70B">Hermes 3 (Llama 3.1 70B)</option>
-                                <option value="perplexity/llama-3.1-sonar-large-128k-online">Perplexity Sonar Large</option>
-                                <option value="gpt-oss-120b">gpt-oss-120b (HuggingFace)</option>
-                                <option value="openrouter/anthropic/claude-3.5-sonnet">OpenRouter Claude 3.5 Sonnet</option>
-                                <option value="openrouter/meta-llama/llama-3.1-405b-instruct">OpenRouter Llama 3.1 405B</option>
-                            </datalist>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="googleCredentials" class="form-label">Google Cloud Credentials Path</label>
-                            <input type="text" class="form-control" id="googleCredentials" placeholder="/path/to/credentials.json">
-                            <div class="form-text">Required for Imagen4 image generation</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="googleProjectId" class="form-label">Google Cloud Project ID</label>
-                            <input type="text" class="form-control" id="googleProjectId" placeholder="my-gcp-project">
-                            <div class="form-text">Required for Imagen4 when using Vertex AI</div>
+                        <div class="mb-4">
+                            <h6 class="text-uppercase fw-semibold text-muted small mb-3">Image Generation Providers</h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="openaiApiKey" class="form-label">OpenAI API Key</label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="openaiApiKey" placeholder="sk-...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('openaiApiKey')">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Enables DALL-E generation.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="replicateApiToken" class="form-label">Replicate API Token</label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="replicateApiToken" placeholder="r8_...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('replicateApiToken')">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Needed for hosted Imagen 4 and Seedream models.</div>
+                                </div>
+                            </div>
+                            <div class="row g-3 mt-1">
+                                <div class="col-12">
+                                    <label for="huggingfaceFluxEndpointUrl" class="form-label">Flux HuggingFace Endpoint URL</label>
+                                    <input type="text" class="form-control" id="huggingfaceFluxEndpointUrl" placeholder="https://api.endpoints.huggingface.cloud/.../flux">
+                                    <div class="form-text">Alternate inference endpoint for Flux previews.</div>
+                                </div>
+                            </div>
+                            <div class="row g-3 mt-1">
+                                <div class="col-md-6">
+                                    <label for="googleCredentials" class="form-label">Google Cloud Credentials Path</label>
+                                    <input type="text" class="form-control" id="googleCredentials" placeholder="/path/to/credentials.json">
+                                    <div class="form-text">Used for Imagen 4 via Vertex AI.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="googleProjectId" class="form-label">Google Cloud Project ID</label>
+                                    <input type="text" class="form-control" id="googleProjectId" placeholder="my-gcp-project">
+                                    <div class="form-text">Required when supplying Google credentials.</div>
+                                </div>
+                            </div>
                         </div>
                     </form>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer border-0 pt-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" onclick="saveApiKeys()">Save Configuration</button>
                 </div>
