@@ -272,21 +272,27 @@ async function initializeProcessing() {
                         document.getElementById('startTime').textContent = formatDateTime(startTime);
                     }
 
-                    // Restore session state
-                    if (session.status) {
-                        const status = session.status;
-                        updateProgress(status.progress, status.message);
-                        updateProcessingStatus(status.status, status.status);
+                // Restore session state
+                if (session.status) {
+                    const status = session.status;
+                    updateProgress(status.progress, status.message);
+                    updateProcessingStatus(status.status, status.message || status.status);
+                    
+                    // Update statistics
+                    if (status.current_chapter !== null && status.current_chapter !== undefined) {
+                        document.getElementById('chaptersProcessed').textContent = status.current_chapter;
                     }
-
-                    // Restore step status
-                    if (session.step_status) {
-                        Object.keys(session.step_status).forEach(stepIndex => {
-                            updateProcessingStep(parseInt(stepIndex), session.step_status[stepIndex]);
-                        });
+                    if (status.images_generated !== null && status.images_generated !== undefined) {
+                        document.getElementById('imagesGenerated').textContent = status.images_generated;
                     }
+                }
 
-                    // Restore logs
+                // Restore step status
+                if (session.step_status) {
+                    Object.keys(session.step_status).forEach(stepIndex => {
+                        updateProcessingStep(parseInt(stepIndex), session.step_status[stepIndex]);
+                    });
+                }                    // Restore logs
                     if (session.logs && session.logs.length > 0) {
                         const log = document.getElementById('processingLog');
                         log.innerHTML = '';
@@ -355,7 +361,15 @@ async function initializeProcessing() {
                 if (session.status) {
                     const status = session.status;
                     updateProgress(status.progress, status.message);
-                    updateProcessingStatus(status.status, status.status);
+                    updateProcessingStatus(status.status, status.message || status.status);
+                    
+                    // Update statistics
+                    if (status.current_chapter !== null && status.current_chapter !== undefined) {
+                        document.getElementById('chaptersProcessed').textContent = status.current_chapter;
+                    }
+                    if (status.images_generated !== null && status.images_generated !== undefined) {
+                        document.getElementById('imagesGenerated').textContent = status.images_generated;
+                    }
                 }
 
                 // Restore step status
@@ -523,6 +537,16 @@ function connectWebSocket() {
 function handleProcessingUpdate(data) {
     if (data.type === 'progress') {
         updateProgress(data.progress, data.message);
+        
+        // Update chapter count if available
+        if (data.current_chapter !== undefined && data.current_chapter !== null) {
+            document.getElementById('chaptersProcessed').textContent = data.current_chapter;
+        }
+        
+        // Update image count if available
+        if (data.images_generated !== undefined && data.images_generated !== null) {
+            document.getElementById('imagesGenerated').textContent = data.images_generated;
+        }
     } else if (data.type === 'step') {
         updateProcessingStep(data.step, data.status);
     } else if (data.type === 'image') {
