@@ -297,6 +297,68 @@ class TestWebAppAPI:
         assert response.status_code == 200
         assert 'style-action-btn' in response.text
 
+    @patch('src.illustrator.web.routes.manuscripts.get_saved_manuscripts')
+    @patch('illustrator.providers.get_image_provider')
+    def test_style_preview_uses_rich_config(self, mock_get_provider, mock_get_manuscripts, client):
+        """Ensure style preview leverages rich configuration data."""
+        test_manuscript = SavedManuscript(
+            metadata=ManuscriptMetadata(
+                title="Test Manuscript",
+                author="Test Author",
+                genre="Fiction",
+                total_chapters=1,
+                created_at="2024-01-01T00:00:00"
+            ),
+            chapters=[
+                Chapter(
+                    title="Chapter 1",
+                    content="Sample content",
+                    number=1,
+                    word_count=2
+                )
+            ],
+            saved_at="2024-01-01T00:00:00",
+            file_path="/test/path"
+        )
+
+        import uuid as uuid_module
+        manuscript_id = str(uuid_module.uuid5(uuid_module.NAMESPACE_DNS, test_manuscript.file_path))
+
+        mock_get_manuscripts.return_value = [test_manuscript]
+
+        captured_prompt = {}
+
+        class DummyProvider:
+            async def generate_image(self, prompt, **kwargs):
+                captured_prompt['prompt'] = prompt
+                return {"success": True, "image_url": "https://example.com/preview.png"}
+
+        mock_get_provider.return_value = DummyProvider()
+
+        payload = {
+            "manuscript_id": manuscript_id,
+            "style_config": {
+                "image_provider": "imagen4",
+                "art_style": "pencil sketch",
+                "color_palette": "Black and White",
+                "style_config_path": "advanced_eh_shepard_config.json"
+            }
+        }
+
+        response = client.post(f"/api/manuscripts/{manuscript_id}/style/preview", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "hand-drawn pencil sketch" in data["preview_prompt"]
+        assert data["style_summary"]["provider"] == "imagen4"
+        assert any(
+            "hand-drawn pencil sketch" in modifier
+            for modifier in data["style_summary"].get("style_modifiers", [])
+        )
+        assert "prompt" in captured_prompt
+        assert "hand-drawn pencil sketch" in captured_prompt["prompt"].prompt
+
     def test_processing_page(self, client):
         """Test processing page."""
         response = client.get("/manuscript/test-id/process")

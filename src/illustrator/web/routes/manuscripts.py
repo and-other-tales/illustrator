@@ -548,6 +548,8 @@ async def preview_style_image(
         preview_prompt_text = ". ".join(section for section in prompt_sections if section)
         if not preview_prompt_text:
             preview_prompt_text = "Preview illustration showcasing the configured style settings"
+        if not preview_prompt_text.endswith('.'):
+            preview_prompt_text += '.'
 
         from illustrator.models import IllustrationPrompt
         illustration_prompt = IllustrationPrompt(
