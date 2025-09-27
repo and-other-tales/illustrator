@@ -206,7 +206,7 @@ class Imagen4Provider(ImageGenerationProvider):
             model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
 
             # Generate image
-            images = model.generate_images(
+            images_response = model.generate_images(
                 prompt=prompt.prompt,
                 negative_prompt=prompt.negative_prompt,
                 number_of_images=1,
@@ -215,8 +215,51 @@ class Imagen4Provider(ImageGenerationProvider):
                 seed=prompt.technical_params.get("seed")
             )
 
-            # Convert to base64 using the proper API method
-            image_b64 = images[0]._as_base64_string()
+            # Normalise different response shapes returned by Vertex AI preview SDK
+            if hasattr(images_response, "images"):
+                image_candidates = images_response.images
+            else:
+                image_candidates = images_response
+
+            if image_candidates is None:
+                normalized_images: List[Any] = []
+            elif isinstance(image_candidates, list):
+                normalized_images = image_candidates
+            elif isinstance(image_candidates, tuple):
+                normalized_images = list(image_candidates)
+            else:
+                try:
+                    normalized_images = list(image_candidates)
+                except TypeError as exc:  # pragma: no cover - defensive branch
+                    raise ValueError("Imagen4 API returned an unexpected response format") from exc
+
+            if not normalized_images:
+                raise ValueError("Imagen4 API returned no images")
+
+            first_image = normalized_images[0]
+
+            # Convert to base64 using the available helpers/fields on the image object
+            image_b64: str | None = None
+            if hasattr(first_image, "_as_base64_string"):
+                image_b64 = first_image._as_base64_string()
+            elif hasattr(first_image, "base64_data"):
+                image_b64 = first_image.base64_data
+            elif hasattr(first_image, "as_base64"):
+                image_b64 = first_image.as_base64()
+            else:
+                raw_data = getattr(first_image, "image_bytes", None)
+                if raw_data is None:
+                    raw_data = getattr(first_image, "bytes", None)
+                if raw_data is None:
+                    raw_data = getattr(first_image, "data", None)
+
+                if raw_data is None:
+                    raise ValueError("Imagen4 API response missing image data")
+
+                if isinstance(raw_data, str):
+                    image_b64 = raw_data
+                else:
+                    image_b64 = base64.b64encode(raw_data).decode("utf-8")
 
             return {
                 'success': True,
