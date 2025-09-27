@@ -1583,25 +1583,29 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
 
             enhanced_description = str(raw_content).strip()
 
+            import logging
+            logger = logging.getLogger("prompt_enhancer")
             # If LLM fails, create a visual scene description from the excerpt
             if not enhanced_description or "asyncmock" in enhanced_description.lower():
-                # Use deterministic rules to rewrite the excerpt visually
+                logger.debug("LLM failed or returned empty, using fallback for scene description.")
                 sentences = self._split_sentences(original_text)
                 summary = self._summarize_text_excerpt(original_text, max_sentences=2)
                 setting_sentence = self._find_sentence_with_keywords(sentences, self._SETTING_KEYWORDS)
                 character_sentence = self._find_sentence_with_keywords(sentences, self._CHARACTER_KEYWORDS)
 
                 # Compose a visual scene description
-                visual_scene = []
-                visual_scene.append("A pencil sketch in the classic style of E.H. Shepard.")
+                visual_scene = ["A pencil sketch in the classic style of E.H. Shepard."]
                 if setting_sentence:
                     visual_scene.append(setting_sentence)
-                if character_sentence:
+                if character_sentence and character_sentence != setting_sentence:
                     visual_scene.append(character_sentence)
                 if summary and summary not in visual_scene:
                     visual_scene.append(summary)
                 visual_scene.append("Delicate linework and light shading, nostalgic and gentle mood.")
                 enhanced_description = " ".join(visual_scene)
+                logger.debug(f"Fallback scene description: {enhanced_description}")
+            else:
+                logger.debug(f"LLM scene description: {enhanced_description}")
 
             # Ensure we have a substantive description
             if len(enhanced_description) < 50:
