@@ -696,6 +696,36 @@ class AdvancedVisualComposer:
         except Exception:
             return str(lighting)
 
+    def _rule_present(self, composition_rules: List[Any], target: Any) -> bool:
+        """Robust membership check for composition rules.
+
+        Accepts composition_rules as a list containing any of:
+        - CompositionRule dataclass instances (with .rule_type)
+        - CompositionRuleEnum or other enum members (with .value)
+        - plain strings
+
+        The target may be a CompositionRuleEnum, an enum-like member, or a string.
+        """
+        if not composition_rules:
+            return False
+        try:
+            target_value = target.value if hasattr(target, 'value') else str(target)
+        except Exception:
+            target_value = str(target)
+
+        for r in composition_rules:
+            # dataclass CompositionRule
+            if hasattr(r, 'rule_type') and str(r.rule_type) == target_value:
+                return True
+            # enum-like
+            if hasattr(r, 'value') and str(r.value) == target_value:
+                return True
+            # plain string
+            if isinstance(r, str) and r == target_value:
+                return True
+
+        return False
+
     def _determine_shot_type(
         self,
         emotional_moment_or_context,
@@ -1029,11 +1059,11 @@ class AdvancedVisualComposer:
 
         # Position primary subjects
         for i, subject in enumerate(primary_subjects[:3]):  # Limit to 3 primary subjects
-            if CompositionRule.RULE_OF_THIRDS in composition_rules:
+            if self._rule_present(composition_rules, CompositionRule.RULE_OF_THIRDS):
                 # Place on rule of thirds intersections
                 thirds_positions = [(0.33, 0.33), (0.67, 0.33), (0.33, 0.67), (0.67, 0.67)]
                 position = thirds_positions[i % len(thirds_positions)]
-            elif CompositionRule.GOLDEN_RATIO in composition_rules:
+            elif self._rule_present(composition_rules, CompositionRule.GOLDEN_RATIO):
                 # Golden ratio positions
                 golden_positions = [(0.382, 0.382), (0.618, 0.382), (0.382, 0.618), (0.618, 0.618)]
                 position = golden_positions[i % len(golden_positions)]
@@ -1056,7 +1086,7 @@ class AdvancedVisualComposer:
         # Position secondary elements
         for i, secondary in enumerate(secondary_elements[:5]):  # Limit to 5 secondary elements
             # Place secondary elements in supporting positions
-            if CompositionRule.ASYMMETRIC_BALANCE in composition_rules:
+            if self._rule_present(composition_rules, CompositionRule.ASYMMETRIC_BALANCE):
                 # Asymmetric positioning
                 position = (0.2 + i * 0.15, 0.7 - i * 0.1)
             else:
@@ -1085,10 +1115,10 @@ class AdvancedVisualComposer:
     ) -> Tuple[float, float]:
         """Calculate optimal focal point using professional techniques."""
 
-        if CompositionRule.GOLDEN_RATIO in composition_rules:
+        if self._rule_present(composition_rules, CompositionRule.GOLDEN_RATIO):
             # Golden ratio focal points
             return (0.618, 0.382)
-        elif CompositionRule.RULE_OF_THIRDS in composition_rules:
+        elif self._rule_present(composition_rules, CompositionRule.RULE_OF_THIRDS):
             # Rule of thirds intersection
             return (0.33, 0.33)
         elif composition_elements:
@@ -1314,9 +1344,9 @@ class AdvancedVisualComposer:
     ) -> str:
         """Determine the type of visual balance."""
 
-        if CompositionRule.SYMMETRY in composition_rules:
+        if self._rule_present(composition_rules, CompositionRule.SYMMETRY):
             return "symmetric"
-        elif CompositionRule.ASYMMETRIC_BALANCE in composition_rules:
+        elif self._rule_present(composition_rules, CompositionRule.ASYMMETRIC_BALANCE):
             return "asymmetric"
         else:
             # Analyze element distribution
@@ -1347,10 +1377,15 @@ class AdvancedVisualComposer:
                 contrast_areas.append(element.position)
 
         # Lighting-specific contrast areas
-        if lighting_setup == LightingSetup.DRAMATIC_CHIAROSCURO:
-            contrast_areas.extend([(0.2, 0.3), (0.8, 0.7)])  # Traditional chiaroscuro positions
-        elif lighting_setup == LightingSetup.SPLIT:
-            contrast_areas.append((0.5, 0.5))  # Center split
+        # Normalize lighting and compare to known enum values
+        try:
+            key = self._normalize_lighting_key(lighting_setup)
+            if key == LightingSetupEnum.DRAMATIC_CHIAROSCURO.value:
+                contrast_areas.extend([(0.2, 0.3), (0.8, 0.7)])  # Traditional chiaroscuro positions
+            elif key == LightingSetupEnum.SPLIT.value:
+                contrast_areas.append((0.5, 0.5))  # Center split
+        except Exception:
+            pass
 
         return contrast_areas[:4]  # Limit to 4 contrast areas
 
