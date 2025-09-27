@@ -159,13 +159,25 @@
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
-                            <div class="form-text">Required for Flux image generation</div>
+                            <div class="form-text">Required for HuggingFace language models and Flux image generation</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="huggingfaceEndpointUrl" class="form-label">HuggingFace Endpoint URL</label>
+                            <input type="text" class="form-control" id="huggingfaceEndpointUrl" placeholder="https://api-inference.huggingface.co/models/gpt-oss-120b">
+                            <div class="form-text">Endpoint for the gpt-oss-120b hosted model</div>
                         </div>
 
                         <div class="mb-3">
                             <label for="googleCredentials" class="form-label">Google Cloud Credentials Path</label>
                             <input type="text" class="form-control" id="googleCredentials" placeholder="/path/to/credentials.json">
                             <div class="form-text">Required for Imagen4 image generation</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="googleProjectId" class="form-label">Google Cloud Project ID</label>
+                            <input type="text" class="form-control" id="googleProjectId" placeholder="my-gcp-project">
+                            <div class="form-text">Required for Imagen4 when using Vertex AI</div>
                         </div>
                     </form>
                 </div>

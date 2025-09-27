@@ -545,6 +545,8 @@ class IllustrationGenerator:
             huggingface_max_new_tokens=self.context.huggingface_max_new_tokens,
             huggingface_temperature=self.context.huggingface_temperature,
             huggingface_model_kwargs=self.context.huggingface_model_kwargs,
+            huggingface_endpoint_url=self.context.huggingface_endpoint_url,
+            huggingface_timeout=self.context.huggingface_timeout,
         )
 
     async def generate_illustration_prompts(

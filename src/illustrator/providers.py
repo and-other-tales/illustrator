@@ -459,6 +459,8 @@ class ProviderFactory:
 
         if llm_provider == LLMProvider.ANTHROPIC and not anthropic_key:
             raise ValueError("Anthropic API key is required when using the Anthropic provider for prompt engineering")
+        if llm_provider == LLMProvider.HUGGINGFACE and not credentials.get('huggingface_api_key'):
+            raise ValueError("HuggingFace API key is required when using the HuggingFace provider for prompt engineering")
 
         llm_model = (
             credentials.get('model')
@@ -466,7 +468,7 @@ class ProviderFactory:
             or (
                 "claude-3-5-sonnet-20241022"
                 if llm_provider == LLMProvider.ANTHROPIC
-                else "microsoft/phi-2"
+                else "gpt-oss-120b"
             )
         )
 

@@ -39,6 +39,14 @@ class ManuscriptContext(BaseModel):
         default=None,
         description="Additional keyword arguments passed to the HuggingFace pipeline",
     )
+    huggingface_endpoint_url: str | None = Field(
+        default=None,
+        description="HuggingFace Inference Endpoint URL for hosted models",
+    )
+    huggingface_timeout: float | None = Field(
+        default=None,
+        description="Timeout in seconds for HuggingFace endpoint requests",
+    )
 
     # System prompts
     analysis_prompt: str = Field(
@@ -87,7 +95,7 @@ Scene context: {scene_context}""",
     anthropic_api_key: str | None = Field(default=None, description="Anthropic API key for Claude")
     google_credentials: str | None = Field(default=None, description="Google Cloud credentials for Imagen4")
     google_project_id: str | None = Field(default=None, description="Google Cloud project ID for Imagen4")
-    huggingface_api_key: str | None = Field(default=None, description="HuggingFace API key for Flux")
+    huggingface_api_key: str | None = Field(default=None, description="HuggingFace API key for language models and Flux")
 
     # Advanced settings
     enable_content_filtering: bool = Field(default=True, description="Enable content filtering for generated images")
@@ -137,7 +145,7 @@ def get_default_context() -> IllustratorContext:
         default_model = (
             "claude-3-5-sonnet-20241022"
             if provider == LLMProvider.ANTHROPIC
-            else "microsoft/phi-2"
+            else "gpt-oss-120b"
         )
 
     # Ensure Anthropic models are referenced without provider prefix for LangChain init
@@ -163,6 +171,16 @@ def get_default_context() -> IllustratorContext:
     except ValueError:
         huggingface_temperature = 0.7
 
+    hf_endpoint = os.getenv('HUGGINGFACE_ENDPOINT_URL')
+    if not hf_endpoint and provider == LLMProvider.HUGGINGFACE:
+        hf_endpoint = f"https://api-inference.huggingface.co/models/{default_model}"
+
+    hf_timeout_env = os.getenv('HUGGINGFACE_TIMEOUT')
+    try:
+        huggingface_timeout = float(hf_timeout_env) if hf_timeout_env is not None else None
+    except ValueError:
+        huggingface_timeout = None
+
     return IllustratorContext(
         user_id="default_user",
         llm_provider=provider,
@@ -176,4 +194,6 @@ def get_default_context() -> IllustratorContext:
         huggingface_device=huggingface_device,
         huggingface_max_new_tokens=huggingface_max_new_tokens,
         huggingface_temperature=huggingface_temperature,
+        huggingface_endpoint_url=hf_endpoint,
+        huggingface_timeout=huggingface_timeout,
     )

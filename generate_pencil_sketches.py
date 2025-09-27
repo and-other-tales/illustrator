@@ -3,12 +3,12 @@
 
 import asyncio
 import base64
-import os
 from pathlib import Path
 from typing import Dict, Any
 
 from dotenv import load_dotenv
 
+from src.illustrator.context import get_default_context
 from src.illustrator.models import EmotionalMoment, EmotionalTone, ImageProvider
 from src.illustrator.providers import ProviderFactory
 
@@ -86,10 +86,23 @@ async def generate_pencil_illustrations():
     output_dir = Path("pencil_sketches")
     output_dir.mkdir(exist_ok=True)
 
+    context = get_default_context()
+
     # Initialize DALL-E provider
     provider = ProviderFactory.create_provider(
         ImageProvider.DALLE,
-        openai_api_key=os.getenv("OPENAI_API_KEY")
+        openai_api_key=context.openai_api_key,
+        anthropic_api_key=context.anthropic_api_key,
+        huggingface_api_key=context.huggingface_api_key,
+        llm_provider=context.llm_provider,
+        llm_model=context.model,
+        huggingface_task=context.huggingface_task,
+        huggingface_device=context.huggingface_device,
+        huggingface_max_new_tokens=context.huggingface_max_new_tokens,
+        huggingface_temperature=context.huggingface_temperature,
+        huggingface_model_kwargs=context.huggingface_model_kwargs,
+        huggingface_endpoint_url=context.huggingface_endpoint_url,
+        huggingface_timeout=context.huggingface_timeout,
     )
 
     print(f"🎨 Generating {len(CLASSIC_SCENES)} pencil sketch illustrations...")

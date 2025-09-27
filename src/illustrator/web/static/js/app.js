@@ -4,7 +4,14 @@
 
 // Global state management
 window.illustratorApp = {
-    apiKeys: {},
+    apiKeys: {
+        ANTHROPIC_API_KEY: '',
+        OPENAI_API_KEY: '',
+        HUGGINGFACE_API_KEY: '',
+        HUGGINGFACE_ENDPOINT_URL: '',
+        GOOGLE_APPLICATION_CREDENTIALS: '',
+        GOOGLE_PROJECT_ID: ''
+    },
     currentTheme: 'light',
     websocket: null,
     processing: false,
@@ -23,6 +30,9 @@ function initializeApp() {
 
     // Load saved preferences
     loadUserPreferences();
+
+    // Load persisted API credentials
+    loadApiKeysFromServer();
 
     // Setup event listeners
     setupEventListeners();
@@ -81,15 +91,29 @@ function loadUserPreferences() {
         setTheme(savedTheme);
     }
 
-    // Load API keys from localStorage (not recommended for production)
-    const savedKeys = localStorage.getItem('illustrator_api_keys');
-    if (savedKeys) {
-        try {
-            window.illustratorApp.apiKeys = JSON.parse(savedKeys);
-            populateApiKeyForm();
-        } catch (error) {
-            console.warn('Failed to load saved API keys:', error);
+}
+
+async function loadApiKeysFromServer() {
+    try {
+        const response = await fetch('/api/config/credentials');
+        if (!response.ok) {
+            throw new Error(`Failed to load API credentials (${response.status})`);
         }
+
+        const payload = await response.json();
+        if (!payload.success) {
+            throw new Error(payload.message || 'Unknown error while loading credentials');
+        }
+
+        window.illustratorApp.apiKeys = {
+            ...window.illustratorApp.apiKeys,
+            ...payload.credentials
+        };
+
+        populateApiKeyForm();
+    } catch (error) {
+        console.error('Unable to load API credentials:', error);
+        showError('Unable to load saved API credentials. Please verify server permissions.');
     }
 }
 
@@ -170,37 +194,63 @@ function handleKeyboardShortcuts(event) {
 
 // API Key management
 function saveApiKeys() {
-    const apiKeys = {
-        anthropic: document.getElementById('anthropicApiKey').value.trim(),
-        openai: document.getElementById('openaiApiKey').value.trim(),
-        huggingface: document.getElementById('huggingfaceApiKey').value.trim(),
-        google_credentials: document.getElementById('googleCredentials').value.trim()
+    const credentials = {
+        ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
+        OPENAI_API_KEY: document.getElementById('openaiApiKey').value.trim(),
+        HUGGINGFACE_API_KEY: document.getElementById('huggingfaceApiKey').value.trim(),
+        HUGGINGFACE_ENDPOINT_URL: document.getElementById('huggingfaceEndpointUrl').value.trim(),
+        GOOGLE_APPLICATION_CREDENTIALS: document.getElementById('googleCredentials').value.trim(),
+        GOOGLE_PROJECT_ID: document.getElementById('googleProjectId').value.trim()
     };
 
     // Validate at least one key is provided
-    const hasAnyKey = Object.values(apiKeys).some(key => key.length > 0);
+    const hasAnyKey = Object.values(credentials).some(value => value.length > 0);
     if (!hasAnyKey) {
         showError('Please provide at least one API key');
         return;
     }
 
-    // Save to app state and localStorage
-    window.illustratorApp.apiKeys = apiKeys;
-    localStorage.setItem('illustrator_api_keys', JSON.stringify(apiKeys));
+    fetch('/api/config/credentials', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ credentials })
+    })
+        .then(async response => {
+            if (!response.ok) {
+                throw new Error(`Failed to persist API credentials (${response.status})`);
+            }
 
-    // Close modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('apiKeysModal'));
-    modal.hide();
+            const payload = await response.json();
+            if (!payload.success) {
+                throw new Error(payload.message || 'Unknown error while saving credentials');
+            }
 
-    showSuccess('API keys saved successfully');
+            window.illustratorApp.apiKeys = {
+                ...window.illustratorApp.apiKeys,
+                ...payload.credentials
+            };
+
+            const modal = bootstrap.Modal.getInstance(document.getElementById('apiKeysModal'));
+            modal.hide();
+
+            showSuccess('API credentials saved successfully');
+        })
+        .catch(error => {
+            console.error('Failed to store API credentials:', error);
+            showError('Failed to store API credentials. Please check server permissions.');
+        });
 }
 
 function populateApiKeyForm() {
     const keys = window.illustratorApp.apiKeys;
-    if (keys.anthropic) document.getElementById('anthropicApiKey').value = keys.anthropic;
-    if (keys.openai) document.getElementById('openaiApiKey').value = keys.openai;
-    if (keys.huggingface) document.getElementById('huggingfaceApiKey').value = keys.huggingface;
-    if (keys.google_credentials) document.getElementById('googleCredentials').value = keys.google_credentials;
+    if (keys.ANTHROPIC_API_KEY) document.getElementById('anthropicApiKey').value = keys.ANTHROPIC_API_KEY;
+    if (keys.OPENAI_API_KEY) document.getElementById('openaiApiKey').value = keys.OPENAI_API_KEY;
+    if (keys.HUGGINGFACE_API_KEY) document.getElementById('huggingfaceApiKey').value = keys.HUGGINGFACE_API_KEY;
+    if (keys.HUGGINGFACE_ENDPOINT_URL) document.getElementById('huggingfaceEndpointUrl').value = keys.HUGGINGFACE_ENDPOINT_URL;
+    if (keys.GOOGLE_APPLICATION_CREDENTIALS) document.getElementById('googleCredentials').value = keys.GOOGLE_APPLICATION_CREDENTIALS;
+    if (keys.GOOGLE_PROJECT_ID) document.getElementById('googleProjectId').value = keys.GOOGLE_PROJECT_ID;
 }
 
 function togglePasswordVisibility(fieldId) {

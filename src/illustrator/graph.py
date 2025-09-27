@@ -178,6 +178,8 @@ Return your analysis in JSON format with these fields:
                     huggingface_max_new_tokens=getattr(context, 'huggingface_max_new_tokens', None),
                     huggingface_temperature=getattr(context, 'huggingface_temperature', None),
                     huggingface_model_kwargs=getattr(context, 'huggingface_model_kwargs', None),
+                    huggingface_endpoint_url=getattr(context, 'huggingface_endpoint_url', None),
+                    huggingface_timeout=getattr(context, 'huggingface_timeout', None),
                 )
             except ValueError as e:
                 return {
@@ -298,8 +300,11 @@ async def generate_illustrations(state: ManuscriptState, runtime: Runtime[Manusc
         analysis = state["current_analysis"]
         context = runtime.context
 
-        # Verify we have the required Anthropic API key for advanced prompt engineering
-        if not context.anthropic_api_key:
+        # Verify we have the required LLM credentials for prompt engineering
+        if (
+            getattr(context, 'llm_provider', None) == LLMProvider.ANTHROPIC
+            and not context.anthropic_api_key
+        ):
             return {
                 "error_message": "Anthropic API key is required for advanced prompt engineering",
                 "retry_count": state.get("retry_count", 0) + 1,
@@ -314,6 +319,15 @@ async def generate_illustrations(state: ManuscriptState, runtime: Runtime[Manusc
                 google_project_id=context.google_project_id or runtime.context.user_id,
                 huggingface_api_key=context.huggingface_api_key,
                 anthropic_api_key=context.anthropic_api_key,
+                llm_provider=getattr(context, 'llm_provider', None),
+                model=context.model,
+                huggingface_task=getattr(context, 'huggingface_task', None),
+                huggingface_device=getattr(context, 'huggingface_device', None),
+                huggingface_max_new_tokens=getattr(context, 'huggingface_max_new_tokens', None),
+                huggingface_temperature=getattr(context, 'huggingface_temperature', None),
+                huggingface_model_kwargs=getattr(context, 'huggingface_model_kwargs', None),
+                huggingface_endpoint_url=getattr(context, 'huggingface_endpoint_url', None),
+                huggingface_timeout=getattr(context, 'huggingface_timeout', None),
             )
         except ValueError as e:
             return {
