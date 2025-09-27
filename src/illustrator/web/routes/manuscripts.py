@@ -634,16 +634,26 @@ async def preview_style_image(
         )
 
         excerpt_text = (request.manuscript_excerpt or "").strip()
+        logger.debug("Excerpt text provided: %s", bool(excerpt_text))
+        logger.debug("Excerpt text length: %d", len(excerpt_text) if excerpt_text else 0)
 
         if excerpt_text:
             try:
+                logger.debug("Starting excerpt analysis for preview generation")
                 context = get_default_context()
                 context.image_provider = style_config.image_provider
                 context.default_art_style = style_config.art_style or context.default_art_style
                 context.color_palette = style_config.color_palette or context.color_palette
                 context.artistic_influences = style_config.artistic_influences or context.artistic_influences
 
+                logger.debug("Creating LLM for excerpt analysis")
+                logger.debug("Context LLM provider: %s", context.llm_provider)
+                logger.debug("Context model: %s", context.model)
+                logger.debug("Context has anthropic_api_key: %s", bool(getattr(context, 'anthropic_api_key', None)))
+                logger.debug("Context has huggingface_api_key: %s", bool(getattr(context, 'huggingface_api_key', None)))
+
                 llm = create_chat_model_from_context(context)
+                logger.debug("LLM created successfully: %s", type(llm))
                 emotional_analyzer = EmotionalAnalyzer(llm)
 
                 chapter_excerpt = Chapter(
@@ -653,14 +663,17 @@ async def preview_style_image(
                     word_count=len(excerpt_text.split()) or 1,
                 )
 
+                logger.debug("Running emotional analysis on excerpt")
                 analysis_result = await emotional_analyzer.analyze_chapter(
                     chapter_excerpt,
                     max_moments=1,
                     min_intensity=0.3,
                 )
+                logger.debug("Emotional analysis completed. Found %d moments", len(analysis_result) if analysis_result else 0)
 
                 preview_moment = analysis_result[0] if analysis_result else None
                 if not preview_moment:
+                    logger.debug("No emotional moments found, creating fallback moment")
                     preview_moment = EmotionalMoment(
                         text_excerpt=excerpt_text[:240],
                         start_position=0,
@@ -669,7 +682,10 @@ async def preview_style_image(
                         intensity_score=0.5,
                         context=excerpt_text[:240],
                     )
+                else:
+                    logger.debug("Using emotional moment: %s", preview_moment.text_excerpt[:100] + "..." if len(preview_moment.text_excerpt) > 100 else preview_moment.text_excerpt)
 
+                logger.debug("Creating prompt engineer and generating enhanced prompt")
                 prompt_engineer = PromptEngineer(llm)
                 engineered_prompt = await prompt_engineer.engineer_prompt(
                     emotional_moment=preview_moment,
@@ -682,6 +698,9 @@ async def preview_style_image(
                 preview_prompt_text = engineered_prompt.prompt
                 technical_params = engineered_prompt.technical_params or technical_params
 
+                logger.debug("Enhanced prompt generated: %s", preview_prompt_text[:200] + "..." if len(preview_prompt_text) > 200 else preview_prompt_text)
+                logger.debug("Style modifiers: %r", style_modifiers[:3] if style_modifiers else [])
+
                 illustration_prompt = IllustrationPrompt(
                     provider=style_config.image_provider,
                     prompt=preview_prompt_text,
@@ -691,10 +710,11 @@ async def preview_style_image(
                 )
 
             except Exception as excerpt_error:
-                logger.warning(
+                logger.error(
                     "Excerpt-aware preview generation failed: %s", excerpt_error,
                     exc_info=True,
                 )
+                logger.debug("Falling back to generic prompt due to analysis failure")
 
         # Generate the image
         logger.debug("About to generate image with provider %s", style_config.image_provider)
