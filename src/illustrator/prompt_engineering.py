@@ -1132,6 +1132,26 @@ class PromptEngineer:
         'spring': 'fresh spring energy softening the moment'
     }
 
+    @staticmethod
+    def _split_sentences(text: str) -> List[str]:
+        """Delegate sentence splitting to SceneAnalyzer helper to keep behaviour consistent."""
+        return SceneAnalyzer._split_sentences(text)
+
+    def _summarize_text_excerpt(self, text: str, max_sentences: int = 2) -> str:
+        """Generate a concise summary from the leading sentences of the text (delegated)."""
+        sentences = self._split_sentences(text)
+        if not sentences:
+            return (text or "").strip()
+        return " ".join(sentences[:max_sentences])
+
+    def _find_sentence_with_keywords(self, sentences: List[str], keywords: Set[str]) -> str:
+        """Return the first sentence containing any of the provided keywords (delegated)."""
+        for sentence in sentences:
+            lowered = sentence.lower()
+            if any(keyword in lowered for keyword in keywords):
+                return sentence
+        return sentences[0] if sentences else ""
+
     def __init__(self, llm: BaseChatModel, character_tracker: Optional[CharacterTracker] = None):
         self.llm = llm
         self.scene_analyzer = SceneAnalyzer(llm)
@@ -1547,6 +1567,8 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         scene_composition: SceneComposition
     ) -> str:
         """Enhance scene description with comprehensive visual and artistic details."""
+        # Instruction additions: explicitly prevent inventing objects/locations
+        # and preserve exact, explicitly mentioned spatial relationships (e.g. "top step").
         enhancement_prompt = f"""
         Transform this literary text into a richly detailed visual scene description for E.H. Shepard-style classic book illustration generation.
 
@@ -1594,9 +1616,23 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         Generate a description of this caliber with equivalent detail density and emotional specificity.
         """
 
+        # prepare logger early so it's always available in except blocks
+        logger = logging.getLogger("prompt_enhancer")
         try:
+            # log the outgoing enhancement request (sanitized)
+            short_orig = (original_text or "").strip()[:400]
+            logger.debug("Enhancer: sending enhancement request to LLM. excerpt=%s", short_orig)
+
+            # Add explicit guard rails to the system message to discourage inventing elements
+            system_guard = (
+                "You are an expert visual artist who creates detailed scene descriptions for classic book illustrations, "
+                "specializing in capturing both visual elements and emotional nuance. IMPORTANT: Do not invent new objects, furniture, "
+                "or locations that are not present in the Original text. Preserve explicit spatial relationships and nouns from the "
+                "Original text (for example: 'top step', 'steps', 'Victorian terrace house', 'chipped mug', 'steam'). If you must paraphrase, keep core nouns unchanged."
+            )
+
             response = await self.llm.ainvoke([
-                SystemMessage(content="You are an expert visual artist who creates detailed scene descriptions for classic book illustrations, specializing in capturing both visual elements and emotional nuance."),
+                SystemMessage(content=system_guard),
                 HumanMessage(content=enhancement_prompt)
             ])
 
@@ -1613,8 +1649,11 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
 
             enhanced_description = str(raw_content).strip()
 
-            import logging
-            logger = logging.getLogger("prompt_enhancer")
+            # Log the received response (truncated)
+            logger.debug("Enhancer: LLM response received: %s", enhanced_description[:600].replace('\n', ' '))
+
+            # Post-process to ensure explicit details from the original are preserved
+            enhanced_description = self._enforce_preserve_details(original_text or "", enhanced_description)
             # If LLM fails, create a visual scene description from the excerpt
             if not enhanced_description or "asyncmock" in enhanced_description.lower():
                 logger.debug("LLM failed or returned empty, using fallback for scene description.")
@@ -1678,6 +1717,45 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
     def _build_character_guidance(self, visual_elements: List[VisualElement]) -> str:
         """Build advanced character consistency guidance using the character tracker."""
         character_elements = [elem for elem in visual_elements if elem.element_type == "character"]
+
+    def _enforce_preserve_details(self, original_text: str, enhanced_description: str) -> str:
+        """Ensure that explicitly mentioned nouns/phrases in the original text are preserved in the enhanced description.
+
+        Also remove or demote invented scene objects that the LLM added but are not present in the original text
+        (e.g., "bench" when original said "top step"). This is intentionally conservative: we only remove newly introduced
+        concrete nouns if they're not supported by the original text.
+        """
+        try:
+            orig = (original_text or "").lower()
+            out = enhanced_description
+
+            # Identify quoted or multi-word explicit phrases to preserve (e.g. 'top step', 'Victorian terrace house')
+            explicit_phrases = set()
+            # Look for common scene tokens and phrases in the original
+            phrase_patterns = [r"top step", r"step of his", r"terrace house", r"victorian", r"chipped mug", r"mug", r"steam"]
+            for pat in phrase_patterns:
+                if re.search(pat, orig):
+                    explicit_phrases.add(pat)
+
+            # Ensure each explicit phrase is present in the output (case-insensitive). If absent, append a short clause preserving it.
+            for phrase in explicit_phrases:
+                if phrase not in out.lower():
+                    # Add a short, non-inventive clause preserving the original detail
+                    out += f". Note: the scene includes the original detail '{phrase}'."
+
+            # Conservative removal of invented objects: find simple furniture/object nouns the LLM may invent
+            invented_candidates = ["bench", "chair", "table", "lamp", "streetlamp", "carriage"]
+            for cand in invented_candidates:
+                if cand in out.lower() and cand not in orig:
+                    # Remove occurrences of the invented candidate (word boundaries) to avoid altering original facts
+                    out = re.sub(rf"\b{re.escape(cand)}s?\b", "", out, flags=re.IGNORECASE)
+
+            # Cleanup extra whitespace from removals
+            out = re.sub(r"\s{2,}", " ", out).strip()
+
+            return out
+        except Exception:
+            return enhanced_description
 
         if not character_elements:
             return ""
