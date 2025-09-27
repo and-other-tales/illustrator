@@ -180,7 +180,31 @@ class TestCharacterTracker:
         assert "Captain Jones" in names
         assert "Mrs. Williams" in names
         assert "Mr. Anderson" in names
-
+        
+    def test_extract_character_names_patterns(self):
+        """Test character name extraction using regex patterns."""
+        text = """
+        Elizabeth Bennett was walking with Mr. Darcy through the garden. 
+        Colonel Brandon and Marianne Dashwood were discussing poetry.
+        The Duke of Wellington arrived at the party fashionably late.
+        """
+        
+        names = self.tracker._extract_character_names_patterns(text)
+        
+        assert "Elizabeth" in names
+        assert "Bennett" in names
+        assert "Darcy" in names
+        assert "Brandon" in names
+        assert "Marianne" in names
+        assert "Dashwood" in names
+        assert "Wellington" in names
+        assert "Elizabeth Bennett" in names
+        assert "Marianne Dashwood" in names
+        
+        # Common words that start with capitals should be excluded
+        assert "The" not in names
+        assert "Duke" not in names  # "Duke" alone might be filtered as a title
+        
     @pytest.mark.asyncio
     async def test_analyze_character_mentions_success(self):
         """Test successful character mention analysis."""
