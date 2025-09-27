@@ -524,6 +524,8 @@ async def preview_style_image(
         )
 
         style_modifiers = _normalize_style_modifiers(style_translation.get("style_modifiers", []))
+        if style_config.image_provider == ImageProvider.FLUX and len(style_modifiers) > 6:
+            style_modifiers = style_modifiers[:6]
         provider_opts = style_translation.get("provider_optimizations", {}) or {}
 
         # Flux prompts are sensitive to length; trim verbose quality modifiers
@@ -582,6 +584,7 @@ async def preview_style_image(
         result = await provider.generate_image(illustration_prompt)
 
         # Extract image URL from result
+        metadata: Dict[str, Any] = {}
         if result.get('success'):
             if result.get('image_data'):
                 # Persist preview image to disk so the browser can load it reliably
@@ -596,6 +599,8 @@ async def preview_style_image(
             else:
                 # Use direct URL if available
                 image_url = result.get('image_url', '')
+
+            metadata = result.get('metadata', {}) or {}
         else:
             status_code = result.get('status_code') or status.HTTP_502_BAD_GATEWAY
             error_message = result.get('error', 'Image generation failed')
@@ -617,8 +622,14 @@ async def preview_style_image(
             style_summary["style_name"] = rich_config["style_name"]
         if provider_opts.get("style_emphasis"):
             style_summary["style_emphasis"] = provider_opts["style_emphasis"]
-        if provider_opts.get("quality_modifiers"):
+        if provider_opts.get("quality_modifiers") and style_config.image_provider != ImageProvider.FLUX:
             style_summary["quality_modifiers"] = provider_opts["quality_modifiers"]
+        if style_config.image_provider == ImageProvider.FLUX:
+            effective_prompt = metadata.get('prompt') or preview_prompt_text
+            style_summary["effective_prompt"] = effective_prompt
+            if metadata.get('prompt_truncated'):
+                style_summary["prompt_truncated"] = True
+                preview_prompt_text = effective_prompt
 
         return {
             "image_url": image_url,
