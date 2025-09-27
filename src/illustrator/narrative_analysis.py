@@ -198,8 +198,104 @@ class NarrativeAnalyzer:
         ]
     }
 
+    THEME_KEYWORDS = {
+        "family": ["family", "sister", "brother", "mother", "father"],
+        "courage": ["courage", "brave", "bold", "fearless"],
+        "mystery": ["mystery", "secret", "hidden", "unknown"],
+        "loss": ["loss", "grief", "mourning", "missing"],
+        "hope": ["hope", "optimism", "faith", "promise"],
+    }
+
     def __init__(self, llm: BaseChatModel):
         self.llm = llm
+
+    async def analyze_complete_narrative(self, chapters: List[Chapter]) -> Dict[str, Any]:
+        """Provide a manuscript-level narrative analysis across all chapters."""
+
+        if not chapters:
+            return {
+                "chapters_analyzed": 0,
+                "narrative_structure": {
+                    "overall_structure": "unknown",
+                    "narrative_arcs": [],
+                    "pacing_analysis": {},
+                },
+                "character_arcs": [],
+                "thematic_elements": [],
+                "genre_classification": {
+                    "primary_genre": "unknown",
+                    "secondary_genres": [],
+                    "detected_indicators": [],
+                    "confidence": 0.0,
+                },
+                "analysis_notes": {
+                    "total_word_count": 0,
+                    "status": "no_content",
+                },
+            }
+
+        full_text = "\n\n".join(chapter.content or "" for chapter in chapters)
+
+        try:
+            narrative_arcs = self._find_pattern_based_arcs(full_text)
+        except Exception as exc:
+            logger.warning("Pattern-based arc extraction failed: %s", exc)
+            narrative_arcs = []
+
+        try:
+            pacing_analysis = await self._analyze_pacing(full_text, narrative_arcs)
+        except Exception as exc:
+            logger.warning("Pacing analysis failed: %s", exc)
+            pacing_analysis = {
+                "average_sentence_length": 0.0,
+                "average_paragraph_length": 0.0,
+                "narrative_intensity": 0.0,
+                "pacing_score": 0.0,
+            }
+
+        try:
+            character_arcs = self._build_character_arcs_from_text(full_text)
+        except Exception as exc:
+            logger.warning("Character arc heuristics failed: %s", exc)
+            character_arcs = []
+
+        try:
+            thematic_elements = self._derive_thematic_elements(full_text, character_arcs)
+        except Exception as exc:
+            logger.warning("Thematic heuristic analysis failed: %s", exc)
+            thematic_elements = []
+
+        genre_indicators = self._identify_genre(full_text)
+        primary_genre = genre_indicators[0].value if genre_indicators else "unknown"
+        secondary_genres = [genre.value for genre in genre_indicators[1:]]
+
+        overall_structure = self._determine_overall_structure(narrative_arcs)
+
+        total_word_count = sum(
+            chapter.word_count or len((chapter.content or "").split())
+            for chapter in chapters
+        )
+
+        return {
+            "chapters_analyzed": len(chapters),
+            "narrative_structure": {
+                "overall_structure": overall_structure,
+                "narrative_arcs": narrative_arcs,
+                "pacing_analysis": pacing_analysis,
+            },
+            "character_arcs": character_arcs,
+            "thematic_elements": thematic_elements,
+            "genre_classification": {
+                "primary_genre": primary_genre,
+                "secondary_genres": secondary_genres,
+                "detected_indicators": [genre.value for genre in genre_indicators],
+                "confidence": 0.6 if genre_indicators else 0.0,
+            },
+            "analysis_notes": {
+                "total_word_count": total_word_count,
+                "status": "completed",
+            },
+        }
 
     async def analyze_narrative_structure(
         self,
@@ -292,6 +388,100 @@ class NarrativeAnalyzer:
                     arcs.append(arc)
 
         return arcs
+
+    def _extract_character_names(self, text: str) -> List[str]:
+        """Heuristically extract capitalized character names from the text."""
+
+        candidates = re.findall(r"\b[A-Z][a-zA-Z]+\b", text)
+        ignore = {
+            "Chapter", "The", "And", "But", "When", "Then", "Once", "After",
+            "Before", "While", "During", "Into", "From", "Their", "They",
+            "She", "He", "Her", "His", "Its", "For", "With", "At",
+        }
+
+        seen = set()
+        names = []
+        for candidate in candidates:
+            if candidate in ignore or len(candidate) < 3:
+                continue
+            if candidate not in seen:
+                seen.add(candidate)
+                names.append(candidate)
+
+        return names[:10]
+
+    def _build_character_arcs_from_text(self, text: str) -> List[CharacterArc]:
+        """Build lightweight character arcs using heuristic analysis."""
+
+        arcs: List[CharacterArc] = []
+        for name in self._extract_character_names(text):
+            matches = [match.start() for match in re.finditer(rf"\b{name}\b", text)]
+            if not matches:
+                continue
+
+            significance = min(1.0, 0.3 + 0.1 * len(matches))
+            emotional_journey = [(matches[0], EmotionalTone.NEUTRAL)]
+
+            arc = CharacterArc(
+                character_name=name,
+                arc_type="growth" if len(matches) > 1 else "static",
+                starting_state={"summary": "Introduced in narrative."},
+                ending_state={"summary": "Continues to influence the story."},
+                key_moments=matches[:5],
+                emotional_journey=emotional_journey,
+                relationships_evolution={},
+                significance=significance,
+            )
+            arcs.append(arc)
+
+        return arcs
+
+    def _derive_thematic_elements(
+        self,
+        text: str,
+        character_arcs: List[CharacterArc],
+    ) -> List[ThematicElement]:
+        """Infer thematic elements by scanning for known keyword clusters."""
+
+        elements: List[ThematicElement] = []
+        lower_text = text.lower()
+
+        for theme, keywords in self.THEME_KEYWORDS.items():
+            evidence_positions: List[int] = []
+            supporting_quotes: List[str] = []
+
+            for keyword in keywords:
+                for match in re.finditer(rf"\b{re.escape(keyword)}\b", lower_text):
+                    start = match.start()
+                    evidence_positions.append(start)
+
+                    excerpt_start = max(0, start - 60)
+                    excerpt_end = min(len(text), start + 120)
+                    snippet = text[excerpt_start:excerpt_end].strip()
+                    if snippet:
+                        supporting_quotes.append(snippet)
+
+            if not evidence_positions:
+                continue
+
+            character_connections = [
+                arc.character_name
+                for arc in character_arcs
+                if arc.character_name.lower() in lower_text
+            ]
+
+            element = ThematicElement(
+                theme=theme,
+                evidence_positions=evidence_positions[:5],
+                supporting_quotes=supporting_quotes[:3],
+                character_connections=list(dict.fromkeys(character_connections))[:5],
+                symbolic_elements=[theme],
+                development_arc=f"The theme of {theme} recurs {len(evidence_positions)} times across the manuscript.",
+                visual_manifestations=[f"Depict {theme} through key emotional moments."],
+            )
+            elements.append(element)
+
+        return elements
 
     async def _analyze_narrative_structure_llm(
         self,

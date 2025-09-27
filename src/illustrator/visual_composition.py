@@ -4,9 +4,10 @@ import re
 import json
 import logging
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Tuple, Set, Any
 from enum import Enum
 import math
+from types import SimpleNamespace
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -312,6 +313,53 @@ class AdvancedVisualComposer:
             emotional_amplification=self._analyze_emotional_amplification(emotional_moment, composition_rules),
             genre_appropriate_elements=self._select_genre_elements(narrative_structure)
         )
+
+    async def create_advanced_composition(
+        self,
+        scene_text: str,
+        emotional_tone: EmotionalTone,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """High-level helper used by integration tests to build composition bundles."""
+
+        context = context or {}
+
+        emotional_moment = EmotionalMoment(
+            text_excerpt=scene_text,
+            start_position=0,
+            end_position=len(scene_text),
+            emotional_tones=[emotional_tone],
+            intensity_score=float(context.get("intensity", 0.6)),
+            context=context.get("chapter", "") or "scene_preview",
+        )
+
+        composition = await self.design_advanced_composition(
+            emotional_moment,
+            style_preferences=context,
+        )
+
+        analysis_summary = SimpleNamespace(
+            visual_elements=[element.name for element in composition.composition_elements],
+            lighting_setup=composition.lighting_setup,
+            color_harmony=composition.color_harmony,
+        )
+
+        technical_specifications = {
+            "shot_type": composition.shot_type,
+            "camera_angle": composition.camera_angle,
+            "composition_rules": composition.composition_rules,
+            "visual_focus": composition.visual_focus,
+            "lighting": composition.lighting_setup,
+            "color_harmony": composition.color_harmony,
+        }
+
+        prompt_summary = self.generate_composition_prompt(composition)
+
+        return {
+            "composition_analysis": analysis_summary,
+            "technical_specifications": technical_specifications,
+            "visual_prompt_enhancement": prompt_summary,
+        }
 
     async def _analyze_visual_content(
         self,

@@ -285,6 +285,42 @@ Extract the most important visual elements for illustration.""")
         logger.info(f"Created {len(visual_elements)} fallback visual elements")
         return visual_elements
 
+    def _create_fallback_scene_composition(
+        self,
+        emotional_moment: EmotionalMoment,
+        visual_elements: List[VisualElement],
+    ) -> SceneComposition:
+        """Provide a resilient fallback scene composition when LLM analysis fails."""
+
+        focal_point_description = (
+            visual_elements[0].description if visual_elements else emotional_moment.text_excerpt[:120]
+        )
+
+        background_elements = [
+            element.description
+            for element in visual_elements
+            if element.element_type in {"environment", "atmosphere"}
+        ][:3]
+
+        foreground_elements = [
+            element.description
+            for element in visual_elements
+            if element.element_type == "character"
+        ][:3]
+
+        emotional_weight = 0.5 + 0.1 * len(foreground_elements)
+
+        return SceneComposition(
+            composition_type=CompositionType.MEDIUM_SHOT,
+            focal_point=focal_point_description or "primary subject",
+            background_elements=background_elements,
+            foreground_elements=foreground_elements,
+            lighting_mood=LightingMood.NATURAL,
+            atmosphere="Fallback composition emphasizing core scene elements.",
+            color_palette_suggestion="balanced natural tones",
+            emotional_weight=min(1.0, emotional_weight),
+        )
+
     async def _analyze_composition(
         self,
         emotional_moment: EmotionalMoment,
@@ -351,9 +387,12 @@ Recommend the optimal composition for maximum visual and emotional impact.""")
                 emotional_weight=float(composition_data.get('emotional_weight', 0.5))
             )
 
+        except ValueError as parsing_error:
+            logger.error(f"Scene composition analysis failed to parse JSON: {parsing_error}")
+            return self._create_fallback_scene_composition(emotional_moment, visual_elements)
         except Exception as e:
             logger.error(f"Scene composition analysis failed: {e}")
-            raise ValueError(f"Failed to analyze scene composition: {str(e)}")
+            return self._create_fallback_scene_composition(emotional_moment, visual_elements)
 
 
 
