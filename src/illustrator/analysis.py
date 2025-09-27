@@ -596,6 +596,53 @@ Return ONLY a decimal number between 0.0 and 1.0."""
             HumanMessage(content=f"Text to analyze:\n\n{segment.text}")
         ]
 
+        def _extract_text(raw_response: Any) -> str:
+            if raw_response is None:
+                return ""
+
+            if isinstance(raw_response, str):
+                return raw_response.strip()
+
+            content = getattr(raw_response, "content", None)
+            if content is None:
+                return str(raw_response).strip()
+
+            if isinstance(content, str):
+                return content.strip()
+
+            if isinstance(content, dict):
+                text_value = content.get("text")
+                if isinstance(text_value, str):
+                    return text_value.strip()
+                blocks = content.get("content")
+                if isinstance(blocks, (list, tuple)):
+                    collected: list[str] = []
+                    for block in blocks:
+                        if isinstance(block, str):
+                            collected.append(block)
+                        elif isinstance(block, dict):
+                            block_text = block.get("text")
+                            if isinstance(block_text, str):
+                                collected.append(block_text)
+                    if collected:
+                        return "\n".join(collected).strip()
+
+            if isinstance(content, (list, tuple)):
+                collected = []
+                for item in content:
+                    if isinstance(item, str):
+                        collected.append(item)
+                    elif hasattr(item, "text") and isinstance(getattr(item, "text"), str):
+                        collected.append(getattr(item, "text"))
+                    elif isinstance(item, dict):
+                        block_text = item.get("text")
+                        if isinstance(block_text, str):
+                            collected.append(block_text)
+                if collected:
+                    return "\n".join(collected).strip()
+
+            return str(content).strip()
+
         # First try the LLM call itself; on transport/LLM failures, fall back
         try:
             response = await self.llm.ainvoke(messages)
@@ -603,28 +650,27 @@ Return ONLY a decimal number between 0.0 and 1.0."""
             logger.error(f"LLM intensity scoring failed: {e}")
             return self._calculate_pattern_score(segment.text)
 
-        # If the LLM responded, handle both plain string and object with .content
-        try:
-            score_text = response.strip() if isinstance(response, str) else response.content.strip()
-            score = float(score_text)
-            return max(0.0, min(1.0, score))
-        except (ValueError, AttributeError) as e:
-            logger.warning(f"LLM intensity scoring returned non-numeric output: {e}. Applying fallback parsing.")
+        score_text = _extract_text(response)
+
+        if not score_text:
+            logger.warning("LLM intensity scoring returned empty output; applying fallback parsing.")
+        else:
             try:
-                score_text = response.strip() if isinstance(response, str) else response.content.strip()
-            except Exception:  # pragma: no cover - unlikely branch
-                score_text = ""
+                score = float(score_text)
+                return max(0.0, min(1.0, score))
+            except ValueError as e:
+                logger.warning(f"LLM intensity scoring returned non-numeric output: {e}. Applying fallback parsing.")
 
-            match = re.search(r"(0?\.\d+|1(?:\.0+)?)", score_text)
-            if match:
-                try:
-                    score = float(match.group(1))
-                    return max(0.0, min(1.0, score))
-                except ValueError:
-                    logger.debug("Failed to parse float from fallback match")
+        match = re.search(r"(0?\.\d+|1(?:\.0+)?)", score_text)
+        if match:
+            try:
+                score = float(match.group(1))
+                return max(0.0, min(1.0, score))
+            except ValueError:
+                logger.debug("Failed to parse float from fallback match")
 
-            logger.error("LLM intensity scoring failed; using heuristic pattern score as fallback.")
-            return self._calculate_pattern_score(segment.text)
+        logger.error("LLM intensity scoring failed; using heuristic pattern score as fallback.")
+        return self._calculate_pattern_score(segment.text)
 
     async def _analyze_segment_detailed(
         self,
