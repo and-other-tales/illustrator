@@ -52,8 +52,8 @@ class EmotionalTone(str, Enum):
 class Chapter(BaseModel):
     """Represents a manuscript chapter."""
     id: str | None = Field(default=None, description="Optional chapter id")
-    title: str = Field(description="Chapter title")
-    content: str = Field(description="Full chapter text")
+    title: str = Field(default="", description="Chapter title")
+    content: str = Field(default="", description="Full chapter text")
     number: int = Field(default=0, description="Chapter number")
     word_count: int = Field(default=0, description="Number of words in chapter")
     emotional_moments: list = Field(default_factory=list, description="Optional emotional moments in chapter")
@@ -61,12 +61,12 @@ class Chapter(BaseModel):
 
 class EmotionalMoment(BaseModel):
     """Represents a highly emotive moment in the text."""
-    text_excerpt: str = Field(description="The specific text passage")
-    start_position: int = Field(description="Character position where excerpt starts")
-    end_position: int = Field(description="Character position where excerpt ends")
-    emotional_tones: List[EmotionalTone] = Field(description="Detected emotional tones")
-    intensity_score: float = Field(description="Emotional intensity from 0.0 to 1.0")
-    context: str = Field(description="Surrounding context for the moment")
+    text_excerpt: str = Field(default="", description="The specific text passage")
+    start_position: int = Field(default=0, description="Character position where excerpt starts")
+    end_position: int = Field(default=0, description="Character position where excerpt ends")
+    emotional_tones: List[EmotionalTone] = Field(default_factory=list, description="Detected emotional tones")
+    intensity_score: float = Field(default=0.0, description="Emotional intensity from 0.0 to 1.0")
+    context: str = Field(default="", description="Surrounding context for the moment")
 
 
 class IllustrationPrompt(BaseModel):
@@ -82,8 +82,11 @@ class IllustrationPrompt(BaseModel):
     def _coerce_negative_prompt(self):
         np = self.negative_prompt
         if isinstance(np, list):
-            # join list into comma-separated string
             self.negative_prompt = ", ".join(str(x) for x in np)
+        elif np is None:
+            self.negative_prompt = ""
+        else:
+            self.negative_prompt = str(np)
         return self
 
 
