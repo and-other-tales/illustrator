@@ -4,6 +4,7 @@ import os
 import json
 from pathlib import Path
 from typing import Any, Dict, List
+from collections.abc import MutableMapping
 
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
@@ -414,6 +415,11 @@ async def run_processing_workflow(
                     }),
                     session_id
                 )
+
+        # Ensure connection manager has a mutable session store (supports tests with mocks)
+        sessions = getattr(connection_manager, "sessions", None)
+        if not isinstance(sessions, MutableMapping):
+            connection_manager.sessions = {}
 
         # Create or restore session data
         if resume_info:
