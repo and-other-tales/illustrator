@@ -392,7 +392,13 @@ async def run_processing_workflow(
         import base64
         from pathlib import Path
         sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-        from generate_scene_illustrations import ComprehensiveSceneAnalyzer, IllustrationGenerator
+        try:
+            from illustrator import generate_scene_illustrations as _scene_tools
+        except ModuleNotFoundError:
+            import generate_scene_illustrations as _scene_tools  # type: ignore
+
+        ComprehensiveSceneAnalyzer = _scene_tools.ComprehensiveSceneAnalyzer
+        IllustrationGenerator = _scene_tools.IllustrationGenerator
         from illustrator.web.routes.manuscripts import get_saved_manuscripts
         from illustrator.web.models.web_models import ProcessingSessionData, ProcessingStatus
         from illustrator.services.checkpoint_manager import CheckpointManager, ProcessingStep
@@ -1039,7 +1045,12 @@ class WebSocketComprehensiveSceneAnalyzer:
 
     def __init__(self, connection_manager, session_id, llm_model: str = "claude-sonnet-4-20250514"):
         # Import here to avoid circular imports
-        from generate_scene_illustrations import ComprehensiveSceneAnalyzer
+        try:
+            from illustrator import generate_scene_illustrations as _scene_tools
+        except ModuleNotFoundError:
+            import generate_scene_illustrations as _scene_tools  # type: ignore
+
+        ComprehensiveSceneAnalyzer = _scene_tools.ComprehensiveSceneAnalyzer
         self.analyzer = ComprehensiveSceneAnalyzer(llm_model)
         self.connection_manager = connection_manager
         self.session_id = session_id
@@ -1170,7 +1181,12 @@ class WebSocketIllustrationGenerator:
 
     def __init__(self, connection_manager, session_id, provider, output_dir):
         # Import here to avoid circular imports
-        from generate_scene_illustrations import IllustrationGenerator
+        try:
+            from illustrator import generate_scene_illustrations as _scene_tools
+        except ModuleNotFoundError:
+            import generate_scene_illustrations as _scene_tools  # type: ignore
+
+        IllustrationGenerator = _scene_tools.IllustrationGenerator
         from illustrator.prompt_engineering import PromptEngineer
         from langchain.chat_models import init_chat_model
 

@@ -20,7 +20,12 @@ from illustrator.web.models.web_models import (
 )
 from illustrator.services.illustration_service import IllustrationService
 from langchain.chat_models import init_chat_model  # expose for test patching
-from generate_scene_illustrations import ComprehensiveSceneAnalyzer  # expose for test patching
+try:
+    from illustrator import generate_scene_illustrations as _scene_tools
+except ModuleNotFoundError:
+    import generate_scene_illustrations as _scene_tools  # type: ignore
+
+ComprehensiveSceneAnalyzer = _scene_tools.ComprehensiveSceneAnalyzer  # expose for test patching
 
 # Lazy-import friendly placeholders for patchability in tests
 EmotionalAnalyzer = None  # type: ignore
