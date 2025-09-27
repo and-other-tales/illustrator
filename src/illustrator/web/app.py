@@ -14,8 +14,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key, unset_key, dotenv_values
 from rich.console import Console
+
+from pydantic import BaseModel
 
 from illustrator.web.routes import manuscripts, chapters
 from illustrator.db_config import create_tables
@@ -64,6 +66,25 @@ app.mount("/generated", StaticFiles(directory=str(GENERATED_IMAGES_DIR)), name="
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
+CREDENTIAL_ENV_KEYS = [
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "HUGGINGFACE_API_KEY",
+    "HUGGINGFACE_ENDPOINT_URL",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_PROJECT_ID",
+    "HUGGINGFACE_TIMEOUT",
+    "DEFAULT_LLM_PROVIDER",
+    "DEFAULT_LLM_MODEL",
+]
+
+
+class CredentialUpdateRequest(BaseModel):
+    """Payload for updating persistent API credentials."""
+
+    credentials: Dict[str, str | None]
+
+
 def _latest_commit_timestamp() -> str | None:
     """Return the latest git commit timestamp if available."""
     try:
@@ -102,6 +123,77 @@ async def _ensure_tables():
 # Include routers
 app.include_router(manuscripts.router, prefix="/api/manuscripts", tags=["manuscripts"])
 app.include_router(chapters.router, prefix="/api/chapters", tags=["chapters"])
+
+
+def _ensure_env_file() -> None:
+    """Ensure the .env file exists for credential persistence."""
+
+    try:
+        env_file.parent.mkdir(parents=True, exist_ok=True)
+        env_file.touch(exist_ok=True)
+    except Exception as exc:  # pragma: no cover - filesystem permission issues
+        console.log(f"Unable to ensure .env file exists: {exc}")
+
+
+def _current_env_snapshot() -> Dict[str, str]:
+    """Capture current credential-related environment values."""
+
+    env_values = dotenv_values(env_file) if env_file.exists() else {}
+    snapshot: Dict[str, str] = {}
+
+    for key in CREDENTIAL_ENV_KEYS:
+        value = os.getenv(key)
+        if value is None:
+            value = env_values.get(key)
+        snapshot[key] = value or ""
+
+    return snapshot
+
+
+@app.get("/api/config/credentials")
+async def get_persisted_credentials() -> Dict[str, Any]:
+    """Return persisted API credentials from environment configuration."""
+
+    snapshot = _current_env_snapshot()
+    return {
+        "success": True,
+        "credentials": snapshot,
+    }
+
+
+@app.post("/api/config/credentials")
+async def update_persisted_credentials(payload: CredentialUpdateRequest) -> Dict[str, Any]:
+    """Persist API credentials to the project's .env file and process environment."""
+
+    try:
+        _ensure_env_file()
+
+        for key, raw_value in payload.credentials.items():
+            if key not in CREDENTIAL_ENV_KEYS:
+                continue
+
+            value = (raw_value or "").strip()
+
+            if value:
+                set_key(str(env_file), key, value, quote_mode="never")
+                os.environ[key] = value
+            else:
+                unset_key(str(env_file), key)
+                os.environ.pop(key, None)
+
+        load_dotenv(env_file, override=True)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        console.log(f"Failed to persist credentials: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to persist credentials: {exc}",
+        ) from exc
+
+    snapshot = _current_env_snapshot()
+    return {
+        "success": True,
+        "credentials": snapshot,
+    }
 
 # Add the process endpoint directly here for simplicity
 from illustrator.web.models.web_models import ProcessingRequest
