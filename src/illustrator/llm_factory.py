@@ -138,13 +138,21 @@ def create_chat_model(
 
     config = huggingface_config or HuggingFaceConfig()
 
-    endpoint_url = config.endpoint_url or f"https://api-inference.huggingface.co/models/{model}"
+    endpoint_url = (config.endpoint_url or "").strip() or None
+    default_endpoint = f"https://api-inference.huggingface.co/models/{model}".rstrip("/")
+    if endpoint_url and endpoint_url.rstrip("/") == default_endpoint:
+        # Treat the default HuggingFace inference endpoint as a standard model lookup
+        endpoint_url = None
 
-    client = InferenceClient(
-        base_url=endpoint_url,
-        token=huggingface_api_key,
-        timeout=config.timeout,
-    )
+    client_kwargs: dict[str, Any] = {
+        "token": huggingface_api_key,
+        "timeout": config.timeout,
+    }
+
+    if endpoint_url:
+        client = InferenceClient(base_url=endpoint_url, **client_kwargs)
+    else:
+        client = InferenceClient(model=model, **client_kwargs)
 
     generation_kwargs = {
         "max_new_tokens": config.max_new_tokens,
@@ -155,8 +163,11 @@ def create_chat_model(
     if config.model_kwargs:
         generation_kwargs.update(config.model_kwargs)
 
-    if "model" not in generation_kwargs:
-        generation_kwargs["model"] = model
+    if endpoint_url:
+        # Custom endpoints expect routing to be handled by the base URL
+        generation_kwargs.pop("model", None)
+    else:
+        generation_kwargs.setdefault("model", model)
 
     return HuggingFaceEndpointChatWrapper(client, generation_kwargs)
 
