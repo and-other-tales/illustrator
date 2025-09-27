@@ -479,6 +479,8 @@ h5, h6 { font: var(--md-type-scale-label); }
 
 /* Modern Stats Cards */
 .modern-stats-card {
+    display: flex;
+    flex-direction: column;
     border: none;
     border-radius: 24px;
     overflow: hidden;
@@ -516,6 +518,7 @@ h5, h6 { font: var(--md-type-scale-label); }
     display: flex;
     flex-direction: column;
     justify-content: center;
+    flex: 1 1 auto;
     padding: 2rem;
     position: relative;
     z-index: 2;
