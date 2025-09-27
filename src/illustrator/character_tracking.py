@@ -692,16 +692,32 @@ class CharacterTracker:
                 "character_arc_stage": "introduction"
             }
 
-    # Keep the original version for backward compatibility
-    async def _update_character_profile(self, name: str, chapter: Chapter):
-        """Update an existing character profile with new information."""
-
-        if name not in self.characters:
+    # Add a method that can handle both signatures based on arguments
+    async def _update_character_profile(self, name: str, *args):
+        """Update an existing character profile with new information.
+        
+        Can be called with either:
+        - name, chapter: Chapter
+        - name, character_data: dict, chapter_id: str, scene_context: str
+        """
+        if len(args) == 1:
+            # First signature - name, chapter
+            chapter = args[0]
+            if name not in self.characters:
+                return
+            profile = self.characters[name]
+            # Update appearance tracking
+        elif len(args) == 3:
+            # Second signature - name, character_data, chapter_id, scene_context
+            character_data, chapter_id, scene_context = args
+            # Call the non-async version
+            self._update_character_profile_sync(name, character_data, chapter_id, scene_context)
             return
+        else:
+            raise ValueError(f"Invalid arguments for _update_character_profile: {args}")
 
-        profile = self.characters[name]
-
-        # Update appearance tracking
+    def _update_character_profile_sync(self, name: str, character_data: dict, chapter_id: str, scene_context: str):
+        """Non-async version of _update_character_profile for direct calls."""
         profile.last_appearance_chapter = chapter.number
         profile.total_appearances += 1
 

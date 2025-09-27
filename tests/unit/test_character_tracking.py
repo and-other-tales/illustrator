@@ -317,7 +317,7 @@ class TestCharacterTracker:
             "emotional_state": "confident"
         }
 
-        self.tracker._update_character_profile(
+        self.tracker._update_character_profile_sync(
             "John", character_data, "ch-1", "morning scene"
         )
 
@@ -343,7 +343,7 @@ class TestCharacterTracker:
             "emotional_state": "determined"
         }
 
-        self.tracker._update_character_profile(
+        self.tracker._update_character_profile_sync(
             "John", character_data, "ch-2", "action scene"
         )
 
