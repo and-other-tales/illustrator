@@ -142,7 +142,7 @@ class ManuscriptCLI:
 
         if self.llm_provider and self.llm_provider not in self.available_llm_providers:
             console.print(
-                "[yellow]Warning: DEFAULT_LLM_PROVIDER is set but required credentials are missing. The provider will be re-selected.[/yellow]"
+                "[yellow]Warning: Configured LLM provider is missing required credentials. The provider will be re-selected.[/yellow]"
             )
             self.llm_provider = None
 
@@ -158,7 +158,11 @@ class ManuscriptCLI:
 
         self.available_llm_providers = providers
 
-        preferred = (os.getenv('DEFAULT_LLM_PROVIDER') or '').strip().lower()
+        preferred = (
+            os.getenv('LLM_PROVIDER')
+            or os.getenv('DEFAULT_LLM_PROVIDER')
+            or ''
+        ).strip().lower()
         if preferred:
             try:
                 preferred_provider = LLMProvider(preferred)
@@ -200,13 +204,14 @@ class ManuscriptCLI:
                     console.print("[red]Please enter a number.[/red]")
         else:
             console.print(
-                "[red]Error: Multiple LLM providers detected. Set DEFAULT_LLM_PROVIDER to choose one in batch mode.[/red]"
+                "[red]Error: Multiple LLM providers detected. Set LLM_PROVIDER (or legacy DEFAULT_LLM_PROVIDER) to choose one in batch mode.[/red]"
             )
             sys.exit(1)
             return self.llm_provider
 
         if self.llm_provider:
-            os.environ['DEFAULT_LLM_PROVIDER'] = self.llm_provider.value
+            os.environ['LLM_PROVIDER'] = self.llm_provider.value
+            os.environ.pop('DEFAULT_LLM_PROVIDER', None)
         return self.llm_provider
 
     def display_welcome(self):
@@ -418,7 +423,8 @@ class ManuscriptCLI:
 
         context.llm_provider = resolved_provider
         self.llm_provider = resolved_provider
-        os.environ['DEFAULT_LLM_PROVIDER'] = resolved_provider.value
+        os.environ['LLM_PROVIDER'] = resolved_provider.value
+        os.environ.pop('DEFAULT_LLM_PROVIDER', None)
 
         default_model = (os.getenv('DEFAULT_LLM_MODEL') or '').strip()
         if default_model:

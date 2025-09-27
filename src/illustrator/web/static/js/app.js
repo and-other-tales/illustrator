@@ -13,6 +13,7 @@ window.illustratorApp = {
         REPLICATE_API_TOKEN: '',
         GOOGLE_APPLICATION_CREDENTIALS: '',
         GOOGLE_PROJECT_ID: '',
+        LLM_PROVIDER: '',
         DEFAULT_LLM_PROVIDER: '',
         DEFAULT_LLM_MODEL: ''
     },
@@ -245,7 +246,8 @@ function saveApiKeys() {
         REPLICATE_API_TOKEN: document.getElementById('replicateApiToken').value.trim(),
         GOOGLE_APPLICATION_CREDENTIALS: document.getElementById('googleCredentials').value.trim(),
         GOOGLE_PROJECT_ID: document.getElementById('googleProjectId').value.trim(),
-        DEFAULT_LLM_PROVIDER: selectedProvider,
+        LLM_PROVIDER: selectedProvider,
+        DEFAULT_LLM_PROVIDER: '',
         DEFAULT_LLM_MODEL: preferredModel
     };
 
@@ -301,7 +303,8 @@ function populateApiKeyForm() {
     if (keys.GOOGLE_PROJECT_ID) document.getElementById('googleProjectId').value = keys.GOOGLE_PROJECT_ID;
     const providerSelect = document.getElementById('llmProviderSelect');
     if (providerSelect) {
-        providerSelect.value = (keys.DEFAULT_LLM_PROVIDER || '').toLowerCase();
+        const providerValue = (keys.LLM_PROVIDER || keys.DEFAULT_LLM_PROVIDER || '').toLowerCase();
+        providerSelect.value = providerValue;
     }
     const modelInput = document.getElementById('llmModel');
     if (modelInput) {

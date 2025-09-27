@@ -142,7 +142,11 @@ def get_default_context() -> IllustratorContext:
         pass
 
     # Determine preferred LLM provider based on environment configuration
-    provider_value = (os.getenv('DEFAULT_LLM_PROVIDER') or '').strip().lower()
+    provider_value = (
+        os.getenv('LLM_PROVIDER')
+        or os.getenv('DEFAULT_LLM_PROVIDER')
+        or ''
+    ).strip().lower()
     provider = None
     if provider_value:
         try:

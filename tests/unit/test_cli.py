@@ -80,7 +80,7 @@ class TestManuscriptCLI:
         'OPENAI_API_KEY': 'test_key',
         'ANTHROPIC_API_KEY': 'test_key',
         'HUGGINGFACE_API_KEY': 'hf_key',
-        'DEFAULT_LLM_PROVIDER': 'huggingface'
+        'LLM_PROVIDER': 'huggingface'
     })
     def test_setup_environment_dalle(self, cli):
         """Test environment setup for DALL-E provider."""
@@ -92,7 +92,7 @@ class TestManuscriptCLI:
         'GOOGLE_APPLICATION_CREDENTIALS': 'test_creds',
         'GOOGLE_PROJECT_ID': 'test_project',
         'HUGGINGFACE_API_KEY': 'hf_key',
-        'DEFAULT_LLM_PROVIDER': 'huggingface'
+        'LLM_PROVIDER': 'huggingface'
     })
     def test_setup_environment_imagen4(self, cli):
         """Test environment setup for Imagen4 provider."""
@@ -103,7 +103,7 @@ class TestManuscriptCLI:
         'DEFAULT_IMAGE_PROVIDER': 'flux',
         'HUGGINGFACE_API_KEY': 'test_key',
         'ANTHROPIC_API_KEY': 'test_key',
-        'DEFAULT_LLM_PROVIDER': 'anthropic'
+        'LLM_PROVIDER': 'anthropic'
     })
     def test_setup_environment_flux(self, cli):
         """Test environment setup for Flux provider."""
@@ -119,6 +119,22 @@ class TestManuscriptCLI:
     }, clear=True)
     def test_select_llm_provider_single_option(self, mock_load_dotenv, mock_find_dotenv, cli):
         """When only one provider is configured it should be selected automatically."""
+        cli.setup_environment()
+        provider = cli.select_llm_provider(interactive=False)
+
+        assert provider == LLMProvider.HUGGINGFACE
+        assert cli.llm_provider == LLMProvider.HUGGINGFACE
+
+    @patch('illustrator.cli.find_dotenv', return_value='')
+    @patch('illustrator.cli.load_dotenv')
+    @patch.dict(os.environ, {
+        'DEFAULT_IMAGE_PROVIDER': 'dalle',
+        'OPENAI_API_KEY': 'openai',
+        'HUGGINGFACE_API_KEY': 'hf_key',
+        'DEFAULT_LLM_PROVIDER': 'huggingface'
+    }, clear=True)
+    def test_select_llm_provider_legacy_env(self, mock_load_dotenv, mock_find_dotenv, cli):
+        """Legacy DEFAULT_LLM_PROVIDER is still honored for backwards compatibility."""
         cli.setup_environment()
         provider = cli.select_llm_provider(interactive=False)
 
@@ -152,7 +168,7 @@ class TestManuscriptCLI:
         'ANTHROPIC_API_KEY': 'anth_key'
     }, clear=True)
     def test_select_llm_provider_batch_requires_env(self, mock_load_dotenv, mock_find_dotenv, cli):
-        """Batch mode without DEFAULT_LLM_PROVIDER should exit when multiple providers exist."""
+        """Batch mode without LLM_PROVIDER should exit when multiple providers exist."""
         cli.setup_environment()
 
         with patch('sys.exit') as mock_exit:

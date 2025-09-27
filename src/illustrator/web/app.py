@@ -76,7 +76,7 @@ CREDENTIAL_ENV_KEYS = [
     "GOOGLE_APPLICATION_CREDENTIALS",
     "GOOGLE_PROJECT_ID",
     "HUGGINGFACE_TIMEOUT",
-    "DEFAULT_LLM_PROVIDER",
+    "LLM_PROVIDER",
     "DEFAULT_LLM_MODEL",
 ]
 
@@ -149,6 +149,12 @@ def _current_env_snapshot() -> Dict[str, str]:
             value = env_values.get(key)
         snapshot[key] = value or ""
 
+    # Legacy support: fall back to DEFAULT_LLM_PROVIDER when LLM_PROVIDER is unset
+    if not snapshot.get("LLM_PROVIDER"):
+        legacy_provider = os.getenv("DEFAULT_LLM_PROVIDER") or env_values.get("DEFAULT_LLM_PROVIDER")
+        if legacy_provider:
+            snapshot["LLM_PROVIDER"] = legacy_provider
+
     return snapshot
 
 
@@ -182,6 +188,10 @@ async def update_persisted_credentials(payload: CredentialUpdateRequest) -> Dict
             else:
                 unset_key(str(env_file), key)
                 os.environ.pop(key, None)
+
+        if "LLM_PROVIDER" in payload.credentials:
+            unset_key(str(env_file), "DEFAULT_LLM_PROVIDER")
+            os.environ.pop("DEFAULT_LLM_PROVIDER", None)
 
         load_dotenv(env_file, override=True)
     except Exception as exc:  # pragma: no cover - defensive logging
