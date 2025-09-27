@@ -729,6 +729,8 @@ async def run_processing_workflow(
             provider = ImageProvider.IMAGEN4
         elif provider_str == "flux":
             provider = ImageProvider.FLUX
+        elif provider_str == "huggingface":
+            provider = ImageProvider.HUGGINGFACE
         elif provider_str in {"seedream", "seedream4"}:
             provider = ImageProvider.SEEDREAM
         else:

@@ -12,6 +12,7 @@ class ImageProvider(str, Enum):
     IMAGEN4 = "imagen4"
     FLUX = "flux"
     SEEDREAM = "seedream"
+    HUGGINGFACE = "huggingface"
 
 
 class LLMProvider(str, Enum):
@@ -79,6 +80,8 @@ class StyleConfig(BaseModel):
     color_palette: str | None = Field(default=None, description="Color palette preferences")
     artistic_influences: str | None = Field(default=None, description="Artistic influences or inspirations")
     style_config_path: str | None = Field(default=None, description="Path to custom style config file")
+    huggingface_model_id: str | None = Field(default=None, description="HuggingFace text-to-image model identifier")
+    huggingface_provider: str | None = Field(default=None, description="Optional HuggingFace provider override (e.g. fal-ai, replicate)")
 
 
 class ChapterAnalysis(BaseModel):

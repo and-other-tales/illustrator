@@ -707,6 +707,14 @@ class IllustrationGenerator:
                 "cfg_scale": 6.5,
                 "steps": 30
             }
+        elif self.provider == ImageProvider.HUGGINGFACE:
+            return {
+                "model_id": getattr(self.context, 'huggingface_image_model', None),
+                "width": 1024,
+                "height": 1024,
+                "guidance_scale": 7.0,
+                "num_inference_steps": 40,
+            }
         return {}
 
     async def generate_images(
@@ -838,6 +846,9 @@ This script will:
     elif provider_name == 'flux':
         provider = ImageProvider.FLUX
         console.print("[blue]🎨 Using Flux 1.1 Pro for image generation[/blue]")
+    elif provider_name == 'huggingface':
+        provider = ImageProvider.HUGGINGFACE
+        console.print("[blue]🎨 Using HuggingFace Endpoint for image generation[/blue]")
     elif provider_name in {'seedream', 'seedream4'}:
         provider = ImageProvider.SEEDREAM
         console.print("[blue]🎨 Using Seedream 4 for image generation[/blue]")

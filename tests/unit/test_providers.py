@@ -20,6 +20,7 @@ from illustrator.models import (
 from illustrator.providers import (
     DalleProvider,
     FluxProvider,
+    HuggingFaceImageProvider,
     Imagen4Provider,
     ProviderFactory,
     ReplicateFluxProvider,
@@ -131,6 +132,16 @@ class TestProviderFactory:
 
         assert isinstance(provider, ReplicateFluxProvider)
 
+    def test_create_huggingface_image_provider(self):
+        """Test creating HuggingFace text-to-image provider."""
+        provider = ProviderFactory.create_provider(
+            ImageProvider.HUGGINGFACE,
+            huggingface_api_key="test-hf-key",
+            huggingface_image_model="stabilityai/stable-diffusion-2-1",
+        )
+
+        assert isinstance(provider, HuggingFaceImageProvider)
+
     def test_create_seedream_provider(self, monkeypatch: pytest.MonkeyPatch):
         """Test creating Seedream provider via Replicate."""
         _setup_replicate_stub(monkeypatch)
@@ -164,6 +175,12 @@ class TestProviderFactory:
 
         with pytest.raises(ValueError, match="Replicate API token required"):
             ProviderFactory.create_provider(ImageProvider.SEEDREAM, anthropic_api_key="test-anthropic-key")
+
+        with pytest.raises(ValueError, match="requires a model identifier"):
+            ProviderFactory.create_provider(
+                ImageProvider.HUGGINGFACE,
+                huggingface_api_key="test-hf-key",
+            )
 
     def test_unsupported_provider(self):
         """Test error handling for unsupported provider."""
@@ -199,12 +216,20 @@ class TestProviderFactory:
             ImageProvider.FLUX,
         }
 
+        available = ProviderFactory.get_available_providers(
+            huggingface_api_key="test-hf-key",
+            huggingface_image_model="stabilityai/stable-diffusion-2-1",
+            anthropic_api_key="test-anthropic-key",
+        )
+        assert ImageProvider.HUGGINGFACE in available
+
         # Replicate token unlocks additional providers
         available = ProviderFactory.get_available_providers(
             openai_api_key="test-key",
             google_credentials="path/to/creds",
             google_project_id="test-project",
             huggingface_api_key="test-hf-key",
+            huggingface_image_model="stabilityai/stable-diffusion-2-1",
             replicate_api_token="replicate-token",
             anthropic_api_key="test-anthropic-key",
         )

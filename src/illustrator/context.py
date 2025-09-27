@@ -51,6 +51,18 @@ class ManuscriptContext(BaseModel):
         default=None,
         description="HuggingFace Inference Endpoint URL used for Flux image generation",
     )
+    huggingface_image_model: str | None = Field(
+        default=None,
+        description="Default HuggingFace text-to-image model identifier",
+    )
+    huggingface_image_endpoint_url: str | None = Field(
+        default=None,
+        description="Optional override endpoint for HuggingFace text-to-image inference",
+    )
+    huggingface_image_provider: str | None = Field(
+        default=None,
+        description="Optional routed provider for HuggingFace text-to-image (e.g., fal-ai, replicate)",
+    )
 
     # System prompts
     analysis_prompt: str = Field(
@@ -190,6 +202,10 @@ def get_default_context() -> IllustratorContext:
     if not hf_flux_endpoint:
         hf_flux_endpoint = "https://qj029p0ofvfmjxus.us-east-1.aws.endpoints.huggingface.cloud"
 
+    hf_image_model = os.getenv('HUGGINGFACE_IMAGE_MODEL')
+    hf_image_endpoint = os.getenv('HUGGINGFACE_IMAGE_ENDPOINT_URL')
+    hf_image_provider = os.getenv('HUGGINGFACE_IMAGE_PROVIDER')
+
     replicate_token = os.getenv('REPLICATE_API_TOKEN')
 
     return IllustratorContext(
@@ -209,4 +225,7 @@ def get_default_context() -> IllustratorContext:
         huggingface_endpoint_url=hf_endpoint,
         huggingface_timeout=huggingface_timeout,
         huggingface_flux_endpoint_url=hf_flux_endpoint,
+        huggingface_image_model=hf_image_model,
+        huggingface_image_endpoint_url=hf_image_endpoint,
+        huggingface_image_provider=hf_image_provider,
     )

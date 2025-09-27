@@ -416,7 +416,12 @@ async def save_style_config(
         style_config_file = style_config_dir / f"{manuscript_id}_style.json"
 
         with open(style_config_file, 'w', encoding='utf-8') as f:
-            json.dump(request.style_config.model_dump(), f, indent=2, ensure_ascii=False)
+            json.dump(
+                request.style_config.model_dump(exclude={'replicate_model'}),
+                f,
+                indent=2,
+                ensure_ascii=False,
+            )
 
         return SuccessResponse(
             message="Style configuration saved successfully",
@@ -490,10 +495,14 @@ async def preview_style_image(
 
     try:
         # Create style config from request
-        style_config = StyleConfig(**request.style_config.model_dump())
+        style_config = StyleConfig(**request.style_config.model_dump(exclude={'replicate_model'}))
 
         # Get the image provider
-        provider = get_image_provider(style_config.image_provider)
+        provider = get_image_provider(
+            style_config.image_provider,
+            huggingface_image_model=style_config.huggingface_model_id,
+            huggingface_image_provider=style_config.huggingface_provider,
+        )
 
         # Merge base config with any linked rich configuration for accurate previews
         rich_config = None
@@ -527,6 +536,7 @@ async def preview_style_image(
         is_flux_family = style_config.image_provider in {
             ImageProvider.FLUX,
             ImageProvider.SEEDREAM,
+            ImageProvider.HUGGINGFACE,
         }
 
         if is_flux_family and len(style_modifiers) > 6:
@@ -542,6 +552,10 @@ async def preview_style_image(
 
         technical_params = dict(style_translation.get("technical_params", {}) or {})
         technical_params.update(provider_opts.get("technical_adjustments", {}) or {})
+        if style_config.huggingface_model_id:
+            technical_params.setdefault('model_id', style_config.huggingface_model_id)
+        if style_config.huggingface_provider:
+            technical_params.setdefault('provider', style_config.huggingface_provider)
 
         negative_prompt_items = [str(item) for item in style_translation.get("negative_prompt", []) or []]
         negative_prompt = ", ".join(negative_prompt_items) if negative_prompt_items else None
@@ -620,6 +634,11 @@ async def preview_style_image(
             "style_config_path": style_config.style_config_path,
             "style_modifiers": style_modifiers,
         }
+
+        if style_config.huggingface_model_id:
+            style_summary["huggingface_model_id"] = style_config.huggingface_model_id
+        if style_config.huggingface_provider:
+            style_summary["huggingface_provider"] = style_config.huggingface_provider
 
         if rich_config and rich_config.get("style_name"):
             style_summary["style_name"] = rich_config["style_name"]

@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import io
 import logging
 import re
 from abc import ABC, abstractmethod
@@ -9,6 +10,8 @@ from typing import Any, Dict, List, Mapping, Sequence
 
 import aiohttp
 from langchain.chat_models import init_chat_model
+from langchain_huggingface.llms.huggingface_endpoint import HuggingFaceEndpoint
+from huggingface_hub import InferenceClient
 
 from illustrator.models import (
     Chapter,
@@ -57,6 +60,18 @@ MAX_FLUX_PROMPT_TOKENS = 60
 REPLICATE_FLUX_PARAMETERS: set[str] = ALLOWED_FLUX_PARAMETERS | {
     "aspect_ratio",
     "output_format",
+}
+
+HUGGINGFACE_TTI_PARAMETERS: set[str] = {
+    "height",
+    "width",
+    "num_inference_steps",
+    "guidance_scale",
+    "scheduler",
+    "seed",
+    "model_id",
+    "provider",
+    "extra_body",
 }
 
 
@@ -599,6 +614,193 @@ class FluxProvider(ImageGenerationProvider):
                     }
 
 
+class HuggingFaceImageProvider(ImageGenerationProvider):
+    """Text-to-image generation using HuggingFace Inference Endpoints."""
+
+    def __init__(
+        self,
+        api_token: str,
+        *,
+        model_id: str,
+        endpoint_url: str | None = None,
+        provider_override: str | None = None,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+    ) -> None:
+        if not api_token:
+            raise ValueError("HuggingFace API token is required for the HuggingFace image provider")
+        if not model_id:
+            raise ValueError("A HuggingFace text-to-image model identifier (e.g. 'username/model') is required")
+
+        super().__init__(
+            prompt_engineer=prompt_engineer,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            anthropic_api_key=anthropic_api_key,
+            huggingface_api_key=huggingface_api_key,
+            huggingface_config=huggingface_config,
+        )
+
+        self._api_token = api_token
+        self._default_model_id = model_id
+        self._endpoint_url = endpoint_url
+        self._provider = provider_override
+        timeout = None
+        if huggingface_config and huggingface_config.timeout is not None:
+            try:
+                timeout = int(huggingface_config.timeout)
+            except (TypeError, ValueError):
+                timeout = None
+
+        endpoint_kwargs: Dict[str, Any] = {
+            'model': model_id,
+            'huggingfacehub_api_token': api_token,
+            'task': 'text-to-image',
+        }
+        if endpoint_url:
+            endpoint_kwargs['endpoint_url'] = endpoint_url
+        if provider_override:
+            endpoint_kwargs['provider'] = provider_override
+        if timeout is not None:
+            endpoint_kwargs['timeout'] = timeout
+
+        self._endpoint = HuggingFaceEndpoint(**endpoint_kwargs)
+        self._client: InferenceClient = self._endpoint.client
+        self._timeout = timeout
+
+    def get_provider_type(self) -> ImageProvider:
+        return ImageProvider.HUGGINGFACE
+
+    def _sanitize_parameters(self, parameters: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        if not parameters:
+            return {}, {}
+
+        sanitized: Dict[str, Any] = {}
+        extra_body: Dict[str, Any] = {}
+
+        for raw_key, value in parameters.items():
+            if raw_key not in HUGGINGFACE_TTI_PARAMETERS or value in (None, ''):
+                continue
+
+            key = raw_key
+            if key == 'extra_body':
+                if isinstance(value, Mapping):
+                    extra_body.update(value)
+                continue
+
+            if key in {'height', 'width', 'num_inference_steps', 'seed'}:
+                try:
+                    sanitized[key] = int(value)
+                except (TypeError, ValueError):
+                    logger.debug("Ignoring HuggingFace %s parameter with non-integer value %r", key, value)
+            elif key == 'guidance_scale':
+                try:
+                    sanitized[key] = float(value)
+                except (TypeError, ValueError):
+                    logger.debug("Ignoring HuggingFace guidance_scale parameter with non-float value %r", value)
+            elif key in {'model_id', 'provider', 'scheduler'}:
+                sanitized[key] = str(value)
+            else:
+                sanitized[key] = value
+
+        return sanitized, extra_body
+
+    def _build_client(
+        self,
+        model_id: str,
+        provider_override: str | None,
+    ) -> InferenceClient:
+        if not provider_override or provider_override == self._provider:
+            return self._client
+
+        return InferenceClient(
+            model=model_id or self._default_model_id,
+            token=self._api_token,
+            provider=provider_override,
+            timeout=self._timeout,
+        )
+
+    @resilient_async(
+        max_attempts=3,
+        fallback_functions={
+            'generation': _async_generation_failure('huggingface'),
+        },
+    )
+    async def generate_image(
+        self,
+        prompt: IllustrationPrompt,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        sanitized_params, extra_body = self._sanitize_parameters(prompt.technical_params)
+
+        model_id = sanitized_params.pop('model_id', None) or self._default_model_id
+        provider_override = sanitized_params.pop('provider', None) or self._provider
+
+        if not model_id:
+            return {
+                'success': False,
+                'error': 'No HuggingFace model id supplied for text-to-image generation',
+                'status_code': 400,
+            }
+
+        client = self._build_client(model_id, provider_override)
+
+        call_kwargs = sanitized_params.copy()
+        if extra_body:
+            call_kwargs['extra_body'] = extra_body
+
+        try:
+            image = await asyncio.to_thread(
+                client.text_to_image,
+                prompt=prompt.prompt,
+                negative_prompt=prompt.negative_prompt,
+                model=model_id,
+                **call_kwargs,
+            )
+        except Exception as exc:
+            logger.error("HuggingFace image generation failed", exc_info=exc)
+            return {
+                'success': False,
+                'error': f"HuggingFace image generation failed: {exc}",
+                'status_code': 502,
+            }
+
+        buffer = io.BytesIO()
+        try:
+            image.save(buffer, format='PNG')
+        except Exception as exc:
+            logger.error("Failed to serialise HuggingFace image output", exc_info=exc)
+            return {
+                'success': False,
+                'error': f"Could not encode HuggingFace image output: {exc}",
+                'status_code': 502,
+            }
+
+        image_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+        metadata = {
+            'provider': ImageProvider.HUGGINGFACE.value,
+            'model_id': model_id,
+            'endpoint_url': self._endpoint_url,
+            'provider_override': provider_override,
+            'prompt': prompt.prompt,
+            'negative_prompt': prompt.negative_prompt,
+            'parameters': sanitized_params,
+        }
+        if extra_body:
+            metadata['extra_body'] = extra_body
+
+        return {
+            'success': True,
+            'image_data': image_b64,
+            'format': 'base64',
+            'metadata': metadata,
+        }
+
 class ReplicateImageProvider(ImageGenerationProvider):
     """Base provider for models hosted on Replicate."""
 
@@ -1099,6 +1301,25 @@ class ProviderFactory:
                 **common_llm_kwargs,
             )
 
+        elif provider_type == ImageProvider.HUGGINGFACE:
+            api_key = credentials.get('huggingface_api_key')
+            if not api_key:
+                raise ValueError("HuggingFace API key required for the HuggingFace image provider")
+
+            model_id = credentials.get('huggingface_image_model')
+            if not model_id:
+                raise ValueError(
+                    "HuggingFace image provider requires a model identifier (e.g. 'stabilityai/stable-diffusion-2-1')"
+                )
+
+            return HuggingFaceImageProvider(
+                api_key,
+                model_id=model_id,
+                endpoint_url=credentials.get('huggingface_image_endpoint_url'),
+                provider_override=credentials.get('huggingface_image_provider'),
+                **common_llm_kwargs,
+            )
+
         elif provider_type == ImageProvider.SEEDREAM:
             if not replicate_token:
                 raise ValueError("Replicate API token required for Seedream provider")
@@ -1139,6 +1360,8 @@ class ProviderFactory:
 
         if credentials.get('huggingface_api_key'):
             available.append(ImageProvider.FLUX)
+            if credentials.get('huggingface_image_model'):
+                available.append(ImageProvider.HUGGINGFACE)
 
         replicate_token = credentials.get('replicate_api_token')
         if replicate_token:
@@ -1178,6 +1401,9 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
             'huggingface_temperature': getattr(context, 'huggingface_temperature', None),
             'huggingface_model_kwargs': getattr(context, 'huggingface_model_kwargs', None),
             'huggingface_flux_endpoint_url': getattr(context, 'huggingface_flux_endpoint_url', None),
+            'huggingface_image_model': getattr(context, 'huggingface_image_model', None),
+            'huggingface_image_endpoint_url': getattr(context, 'huggingface_image_endpoint_url', None),
+            'huggingface_image_provider': getattr(context, 'huggingface_image_provider', None),
             'replicate_api_token': getattr(context, 'replicate_api_token', None),
             **credentials
         }.items() if value is not None

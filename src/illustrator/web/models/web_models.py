@@ -56,6 +56,9 @@ class StyleConfigRequest(BaseModel):
     color_palette: Optional[str] = None
     artistic_influences: Optional[str] = None
     style_config_path: Optional[str] = None
+    replicate_model: Optional[str] = None
+    huggingface_model_id: Optional[str] = None
+    huggingface_provider: Optional[str] = None
 
 
 class StyleConfigSaveRequest(BaseModel):

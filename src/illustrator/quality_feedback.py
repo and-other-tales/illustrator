@@ -296,7 +296,7 @@ Generation success: {generation_result.get('success', False)}
             if "cinematic" not in prompt.prompt.lower():
                 suggestions.append("Add cinematic language for better Imagen4 results")
 
-        elif prompt.provider in (ImageProvider.FLUX, ImageProvider.SEEDREAM):
+        elif prompt.provider in (ImageProvider.FLUX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
             if not any(word in prompt.prompt.lower() for word in ["artistic", "detailed", "style"]):
                 suggestions.append("Enhance artistic style descriptions for Flux optimization")
 

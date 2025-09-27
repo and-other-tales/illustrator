@@ -41,6 +41,7 @@
                                     <option value="dalle">DALL-E</option>
                                     <option value="imagen4">Imagen 4</option>
                                     <option value="flux">Flux</option>
+                                    <option value="huggingface">HuggingFace Endpoint</option>
                                     <option value="replicate">Replicate</option>
                                 </select>
                                 <div class="form-text">Choose the AI image generation provider</div>
@@ -59,6 +60,21 @@
                                     <option value="seedream">Seedream 4</option>
                                 </select>
                                 <div class="form-text">Pick the Replicate-hosted text-to-image model</div>
+                            </div>
+
+                            <!-- HuggingFace Model Selection -->
+                            <div class="mb-4" id="huggingfaceModelGroup" style="display: none;">
+                                <label for="huggingfaceModelId" class="form-label fw-semibold d-flex align-items-center">
+                                    <span class="material-icons-outlined me-2">hub</span>
+                                    HuggingFace Model
+                                </label>
+                                <input type="text" class="form-control" id="huggingfaceModelId" name="huggingface_model_id" placeholder="stabilityai/stable-diffusion-2-1" disabled>
+                                <div class="form-text">Enter the HuggingFace text-to-image model in the format <code>author/model</code>.</div>
+                                <div class="mt-3">
+                                    <label for="huggingfaceProvider" class="form-label fw-semibold">Optional Provider Routing</label>
+                                    <input type="text" class="form-control" id="huggingfaceProvider" name="huggingface_provider" placeholder="e.g. fal-ai or replicate" disabled>
+                                    <div class="form-text">Set when using third-party providers via HuggingFace routing. Leave blank for default HuggingFace hosting.</div>
+                                </div>
                             </div>
 
                             <!-- Art Style -->
@@ -338,6 +354,12 @@ async function previewStyle() {
             if (result.style_summary.artistic_influences) {
                 preview += `<div class="col-md-6 mb-1"><strong>Influences:</strong> ${result.style_summary.artistic_influences}</div>`;
             }
+            if (result.style_summary.huggingface_model_id) {
+                preview += `<div class="col-md-6 mb-1"><strong>HuggingFace Model:</strong> ${result.style_summary.huggingface_model_id}</div>`;
+            }
+            if (result.style_summary.huggingface_provider) {
+                preview += `<div class="col-md-6 mb-1"><strong>HF Provider:</strong> ${result.style_summary.huggingface_provider}</div>`;
+            }
             preview += '</div>';
 
             if (result.preview_prompt) {
@@ -449,10 +471,14 @@ function populateForm(styleConfig) {
             replicateSelect.value = 'seedream';
         } else {
             providerSelect.value = providerValue;
-            replicateSelect.value = providerValue;
+            if (providerValue === 'replicate') {
+                replicateSelect.value = providerValue;
+            } else {
+                replicateSelect.value = '';
+            }
         }
 
-        toggleReplicateModel();
+        toggleProviderSpecificFields();
     }
 }
 
@@ -481,23 +507,27 @@ function showAlert(message, type = 'info') {
 document.addEventListener('DOMContentLoaded', function() {
     const providerSelect = document.getElementById('imageProvider');
     if (providerSelect) {
-        providerSelect.addEventListener('change', toggleReplicateModel);
-        toggleReplicateModel();
+        providerSelect.addEventListener('change', toggleProviderSpecificFields);
+        toggleProviderSpecificFields();
     }
 
     loadSavedStyleConfig();
 });
 
-function toggleReplicateModel() {
+function toggleProviderSpecificFields() {
     const providerSelect = document.getElementById('imageProvider');
     const replicateGroup = document.getElementById('replicateModelGroup');
     const replicateSelect = document.getElementById('replicateModel');
+    const huggingfaceGroup = document.getElementById('huggingfaceModelGroup');
+    const huggingfaceModelInput = document.getElementById('huggingfaceModelId');
+    const huggingfaceProviderInput = document.getElementById('huggingfaceProvider');
 
-    if (!providerSelect || !replicateGroup || !replicateSelect) {
+    if (!providerSelect || !replicateGroup || !replicateSelect || !huggingfaceGroup || !huggingfaceModelInput || !huggingfaceProviderInput) {
         return;
     }
 
-    const isReplicate = providerSelect.value === 'replicate';
+    const providerValue = providerSelect.value;
+    const isReplicate = providerValue === 'replicate';
     replicateGroup.style.display = isReplicate ? 'block' : 'none';
     replicateSelect.disabled = !isReplicate;
 
@@ -506,6 +536,11 @@ function toggleReplicateModel() {
     } else if (!replicateSelect.value) {
         replicateSelect.value = 'flux';
     }
+
+    const isHuggingFace = providerValue === 'huggingface';
+    huggingfaceGroup.style.display = isHuggingFace ? 'block' : 'none';
+    huggingfaceModelInput.disabled = !isHuggingFace;
+    huggingfaceProviderInput.disabled = !isHuggingFace;
 }
 
 function normalizeStyleProvider(styleConfig) {
@@ -521,6 +556,27 @@ function normalizeStyleProvider(styleConfig) {
             throw new Error('Please choose a Replicate model before continuing.');
         }
         styleConfig.image_provider = replicateModel;
+    }
+
+    if (provider === 'huggingface') {
+        const modelField = document.getElementById('huggingfaceModelId');
+        const modelId = (styleConfig.huggingface_model_id || '').trim();
+        if (!modelId) {
+            throw new Error('Please provide a HuggingFace model identifier (e.g. `stabilityai/stable-diffusion-2-1`).');
+        }
+        styleConfig.huggingface_model_id = modelId;
+
+        if (modelField) {
+            modelField.value = modelId;
+        }
+
+        const providerField = document.getElementById('huggingfaceProvider');
+        if (providerField && styleConfig.huggingface_provider) {
+            styleConfig.huggingface_provider = styleConfig.huggingface_provider.trim();
+        }
+    } else {
+        delete styleConfig.huggingface_model_id;
+        delete styleConfig.huggingface_provider;
     }
 
     delete styleConfig.replicate_model;

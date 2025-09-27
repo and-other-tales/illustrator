@@ -262,6 +262,7 @@ def enforce_prompt_length(provider: str, prompt: str) -> str:
         'imagen4': 2200,      # Vertex Imagen
         'imagen': 2200,
         'flux': 2400,
+        'huggingface': 2400,
     }
     max_len = limits.get(provider.lower(), 2000)
     if len(prompt) <= max_len:
