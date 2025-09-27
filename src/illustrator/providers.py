@@ -682,20 +682,25 @@ class ReplicateImageProvider(ImageGenerationProvider):
         if output is None:
             return urls
 
+        potential_url = getattr(output, "url", None)
+        if isinstance(potential_url, str):
+            urls.append(potential_url)
+            return urls
+
         if isinstance(output, str):
             return [output]
-
-        if isinstance(output, Sequence) and not isinstance(output, (bytes, bytearray)):
-            for item in output:
-                urls.extend(self._extract_image_urls(item))
-            return urls
 
         if isinstance(output, dict):
             for value in output.values():
                 urls.extend(self._extract_image_urls(value))
             return urls
 
-        if hasattr(output, "__iter__") and not isinstance(output, (bytes, bytearray)):
+        if isinstance(output, Sequence) and not isinstance(output, (str, bytes, bytearray)):
+            for item in output:
+                urls.extend(self._extract_image_urls(item))
+            return urls
+
+        if hasattr(output, "__iter__") and not isinstance(output, (str, bytes, bytearray)):
             try:
                 sequence = list(output)
             except TypeError:
@@ -704,10 +709,6 @@ class ReplicateImageProvider(ImageGenerationProvider):
             for item in sequence:
                 urls.extend(self._extract_image_urls(item))
             return urls
-
-        potential_url = getattr(output, "url", None)
-        if isinstance(potential_url, str):
-            urls.append(potential_url)
 
         return urls
 
