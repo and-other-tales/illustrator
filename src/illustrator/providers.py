@@ -41,6 +41,7 @@ class ImageGenerationProvider(ABC):
         llm_provider: LLMProvider | str | None = None,
         llm_model: str | None = None,
         anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
     ) -> None:
         """Initialize provider, preparing prompt engineering resources as needed."""
@@ -70,6 +71,7 @@ class ImageGenerationProvider(ABC):
                 provider=resolved_provider,
                 model=llm_model,
                 anthropic_api_key=anthropic_api_key,
+                huggingface_api_key=huggingface_api_key,
                 huggingface_config=huggingface_config,
             )
         except Exception as exc:
@@ -125,6 +127,7 @@ class DalleProvider(ImageGenerationProvider):
         llm_provider: LLMProvider | str | None = None,
         llm_model: str | None = None,
         anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
     ) -> None:
         """Initialize DALL-E provider."""
@@ -133,6 +136,7 @@ class DalleProvider(ImageGenerationProvider):
             llm_provider=llm_provider,
             llm_model=llm_model,
             anthropic_api_key=anthropic_api_key,
+            huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
         )
         self.api_key = api_key
@@ -222,6 +226,7 @@ class Imagen4Provider(ImageGenerationProvider):
         llm_provider: LLMProvider | str | None = None,
         llm_model: str | None = None,
         anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
     ) -> None:
         """Initialize Imagen4 provider."""
@@ -230,6 +235,7 @@ class Imagen4Provider(ImageGenerationProvider):
             llm_provider=llm_provider,
             llm_model=llm_model,
             anthropic_api_key=anthropic_api_key,
+            huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
         )
         self.credentials_path = credentials_path
@@ -351,6 +357,7 @@ class FluxProvider(ImageGenerationProvider):
         llm_provider: LLMProvider | str | None = None,
         llm_model: str | None = None,
         anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
     ) -> None:
         """Initialize Flux provider."""
@@ -359,6 +366,7 @@ class FluxProvider(ImageGenerationProvider):
             llm_provider=llm_provider,
             llm_model=llm_model,
             anthropic_api_key=anthropic_api_key,
+            huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
         )
         self.api_key = api_key
@@ -463,10 +471,10 @@ class ProviderFactory:
         )
 
         huggingface_config = HuggingFaceConfig(
-            task=credentials.get('huggingface_task', 'text-generation'),
-            device=credentials.get('huggingface_device'),
+            endpoint_url=credentials.get('huggingface_endpoint_url'),
             max_new_tokens=credentials.get('huggingface_max_new_tokens', 512),
             temperature=credentials.get('huggingface_temperature', 0.7),
+            timeout=credentials.get('huggingface_timeout'),
             model_kwargs=credentials.get('huggingface_model_kwargs'),
         )
 
@@ -474,6 +482,7 @@ class ProviderFactory:
             'llm_provider': llm_provider,
             'llm_model': llm_model,
             'anthropic_api_key': anthropic_key,
+            'huggingface_api_key': credentials.get('huggingface_api_key'),
             'huggingface_config': huggingface_config,
         }
 
