@@ -718,16 +718,64 @@ class CharacterTracker:
 
     def _update_character_profile_sync(self, name: str, character_data: dict, chapter_id: str, scene_context: str):
         """Non-async version of _update_character_profile for direct calls."""
-        profile.last_appearance_chapter = chapter.number
-        profile.total_appearances += 1
-
-        # Extract new appearance details from this chapter
-        new_appearance = await self._extract_character_appearance(name, chapter.content, chapter.number)
-        profile.appearance_history.append(new_appearance)
-
-        # Check for consistency issues
-        inconsistencies = self._check_physical_consistency(profile)
-        profile.physical_inconsistencies.extend(inconsistencies)
+        # This is the implementation we already had in _update_character_profile
+        # Handle existing character update
+        if name in self.characters:
+            profile = self.characters[name]
+            
+            # Add a new appearance
+            physical_desc = self._merge_physical_descriptions(
+                profile.physical_description, character_data.get('physical_traits', [])
+            )
+            
+            appearance = CharacterAppearance(
+                chapter_id=chapter_id,
+                scene_context=scene_context,
+                physical_description=physical_desc,
+                emotional_state=character_data.get('emotional_state'),
+                actions=character_data.get('actions', []),
+                dialogue_tone=character_data.get('dialogue_tone')
+            )
+            
+            profile.appearances.append(appearance)
+            return
+            
+        # Create new character profile
+        physical_desc = PhysicalDescription()
+        for trait in character_data.get('physical_traits', []):
+            if 'hair' in trait.lower():
+                physical_desc.hair_color = trait
+            elif 'eye' in trait.lower():
+                physical_desc.eye_color = trait
+            elif any(word in trait.lower() for word in ['tall', 'short', 'average']):
+                physical_desc.height = trait
+            elif any(word in trait.lower() for word in ['slim', 'thin', 'muscular', 'heavy']):
+                physical_desc.build = trait
+            else:
+                if not physical_desc.distinguishing_features:
+                    physical_desc.distinguishing_features = []
+                physical_desc.distinguishing_features.append(trait)
+                
+        profile = CharacterProfile(
+            name=name,
+            primary_role=character_data.get('role'),
+            physical_description=physical_desc,
+            personality_traits=character_data.get('personality_traits', []),
+            background=''
+        )
+        
+        # Add appearance
+        appearance = CharacterAppearance(
+            chapter_id=chapter_id,
+            scene_context=scene_context,
+            physical_description=physical_desc,
+            emotional_state=character_data.get('emotional_state')
+        )
+        
+        profile.appearances.append(appearance)
+        self.characters[name] = profile
+        # Just a placeholder for async version - we've moved the actual implementation
+        pass
 
         # Update consistency score
         profile.consistency_score = self._calculate_consistency_score(profile)
