@@ -1,9 +1,11 @@
 """Data models for manuscript analysis and illustration generation."""
 
+from __future__ import annotations
+
 from enum import Enum
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ImageProvider(str, Enum):
@@ -49,10 +51,12 @@ class EmotionalTone(str, Enum):
 
 class Chapter(BaseModel):
     """Represents a manuscript chapter."""
+    id: str | None = Field(default=None, description="Optional chapter id")
     title: str = Field(description="Chapter title")
     content: str = Field(description="Full chapter text")
-    number: int = Field(description="Chapter number")
-    word_count: int = Field(description="Number of words in chapter")
+    number: int = Field(default=0, description="Chapter number")
+    word_count: int = Field(default=0, description="Number of words in chapter")
+    emotional_moments: list = Field(default_factory=list, description="Optional emotional moments in chapter")
 
 
 class EmotionalMoment(BaseModel):
@@ -70,8 +74,17 @@ class IllustrationPrompt(BaseModel):
     provider: ImageProvider = Field(description="Target image generation provider")
     prompt: str = Field(description="Main generation prompt")
     style_modifiers: List[str] = Field(description="Style and artistic modifiers")
-    negative_prompt: str | None = Field(default=None, description="Negative prompt for providers that support it")
+    # Accept either a string or a list of strings and coerce to a single string for downstream providers
+    negative_prompt: str | List[str] | None = Field(default=None, description="Negative prompt for providers that support it")
     technical_params: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific parameters")
+
+    @model_validator(mode='after')
+    def _coerce_negative_prompt(self):
+        np = self.negative_prompt
+        if isinstance(np, list):
+            # join list into comma-separated string
+            self.negative_prompt = ", ".join(str(x) for x in np)
+        return self
 
 
 class StyleConfig(BaseModel):
