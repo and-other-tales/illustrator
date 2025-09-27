@@ -62,6 +62,14 @@ app.mount("/generated", StaticFiles(directory=str(GENERATED_IMAGES_DIR)), name="
 # Templates
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+
+def _current_app_version() -> str:
+    """Return the About dialog version string using current server time."""
+    return f"0.1.{int(datetime.now().timestamp())}"
+
+
+templates.env.globals["app_version"] = _current_app_version
+
 # WebSocket connection manager
 connection_manager = ConnectionManager()
 

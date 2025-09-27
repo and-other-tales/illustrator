@@ -301,6 +301,16 @@ class TestWebAppAPI:
         response = client.get("/manuscript/test-id/process")
         assert response.status_code == 200
 
+    def test_dashboard_includes_about_modal(self, client):
+        """Ensure the dashboard page renders the About modal."""
+        response = client.get("/")
+        assert response.status_code == 200
+
+        html = response.text
+        assert 'id="aboutModal"' in html
+        assert 'Version 0.1.' in html
+        assert 'Copyright © 2025 PI & Other Tales, Inc. All Rights Reserved.' in html
+
 
 class TestProcessingWorkflow:
     """Test the complete processing workflow."""
