@@ -512,7 +512,7 @@ class TestCharacterTracker:
         violations = self.tracker._check_consistency_violations(profile)
 
         assert len(violations) > 0
-        assert any("hair_color" in str(v) for v in violations)
+        assert any("hair color" in str(v).lower() for v in violations)
 
     @pytest.mark.asyncio
     async def test_create_character_profile(self):
