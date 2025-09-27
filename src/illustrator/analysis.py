@@ -574,22 +574,25 @@ class EmotionalAnalyzer:
 
     async def _llm_intensity_score(self, segment: TextSegment) -> float:
         """Use LLM to score emotional intensity of a text segment."""
-        system_prompt = """You are an expert in literary emotional analysis. Rate the emotional intensity of the following text passage on a scale from 0.0 to 1.0, where:
+        system_prompt = """You are a literary emotional analysis expert. Rate the emotional intensity of a text passage.
 
+RESPONSE FORMAT: A single decimal number from 0.0 to 1.0.
+
+SCALE:
 0.0 = No emotional content, purely descriptive or neutral
 0.3 = Mild emotional undertones
-0.5 = Moderate emotional content
+0.5 = Moderate emotional content 
 0.7 = Strong emotional resonance
 1.0 = Peak emotional intensity, highly dramatic
 
-Consider factors like:
-- Emotional vocabulary and imagery
-- Narrative tension and conflict
-- Character emotional states
-- Sensory details that evoke emotion
-- Pacing and rhythm that builds emotion
+ANALYSIS FACTORS:
+- Emotional vocabulary and sensory imagery
+- Narrative tension and conflict 
+- Character emotional states and reactions
+- Environmental and atmospheric details
+- Pacing and emotional build-up
 
-Return ONLY a decimal number between 0.0 and 1.0."""
+CRITICAL: Your response must ONLY be a decimal between 0.0 and 1.0 with no other text or explanation."""
 
         messages = [
             SystemMessage(content=system_prompt),
@@ -645,12 +648,26 @@ Return ONLY a decimal number between 0.0 and 1.0."""
 
         # First try the LLM call itself; on transport/LLM failures, fall back
         try:
-            response = await self.llm.ainvoke(messages)
+            # Set a reasonable timeout
+            response = await self.llm.ainvoke(messages, timeout=10.0)
+            
+            # Extract and validate response
+            score_text_raw = _extract_text(response)
+            score_text = str(score_text_raw or "").strip()
+            
+            # Early success path for clean numeric responses
+            if score_text and re.match(r'^0?\.\d+$|^1(\.0+)?$', score_text):
+                score = float(score_text)
+                if 0.0 <= score <= 1.0:
+                    return score
+                    
+        except asyncio.TimeoutError:
+            logger.warning("LLM intensity scoring timed out after 10s")
+            # Fall through to pattern scoring
         except Exception as e:
-            logger.error(f"LLM intensity scoring failed: {e}")
-            return self._calculate_pattern_score(segment.text)
-
-        score_text_raw = _extract_text(response)
+            logger.error(f"LLM intensity scoring failed: {str(e)}")
+            # Fall through to pattern scoring
+            
         score_text = str(score_text_raw or "").strip()
 
         match_source = score_text
@@ -675,13 +692,27 @@ Return ONLY a decimal number between 0.0 and 1.0."""
                     )
             match_source = sanitized_score
 
-        match = re.search(r"(0?\.\d+|1(?:\.0+)?)", match_source)
-        if match:
-            try:
-                score = float(match.group(1))
-                return max(0.0, min(1.0, score))
-            except ValueError:
-                logger.debug("Failed to parse float from fallback match")
+        # Try multiple numeric patterns
+        patterns = [
+            r'(0?\.\d+|1(?:\.0+)?)',  # Standard decimal
+            r'(\d*\.?\d+e[-+]?\d+)',   # Scientific notation
+            r'(\d+/\d+)',              # Fractions
+            r'(\d+)'                   # Whole numbers
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, match_source)
+            if match:
+                try:
+                    raw_value = match.group(1)
+                    if '/' in raw_value:  # Handle fractions
+                        num, denom = map(float, raw_value.split('/'))
+                        score = num / denom
+                    else:
+                        score = float(raw_value)
+                    return max(0.0, min(1.0, score))
+                except (ValueError, ZeroDivisionError):
+                    continue
 
         logger.error("LLM intensity scoring failed; using heuristic pattern score as fallback.")
         return self._calculate_pattern_score(segment.text)
