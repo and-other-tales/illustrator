@@ -803,6 +803,43 @@ class CharacterTracker:
                 "confidence": 0.3
             }
 
+    def _check_consistency_violations(self, profile: CharacterProfile) -> List[str]:
+        """Check for consistency violations in character descriptions."""
+        inconsistencies = []
+        
+        # Need at least 2 appearances to check for inconsistencies
+        if len(profile.appearances) < 2:
+            return inconsistencies
+            
+        # Track physical features across appearances
+        hair_colors = set()
+        eye_colors = set()
+        heights = set()
+        builds = set()
+        
+        for appearance in profile.appearances:
+            if appearance.physical_description:
+                if appearance.physical_description.hair_color:
+                    hair_colors.add(appearance.physical_description.hair_color.lower())
+                if appearance.physical_description.eye_color:
+                    eye_colors.add(appearance.physical_description.eye_color.lower())
+                if appearance.physical_description.height:
+                    heights.add(appearance.physical_description.height.lower())
+                if appearance.physical_description.build:
+                    builds.add(appearance.physical_description.build.lower())
+        
+        # Check for contradictions
+        if len(hair_colors) > 1:
+            inconsistencies.append(f"Inconsistent hair color: {', '.join(hair_colors)}")
+        if len(eye_colors) > 1:
+            inconsistencies.append(f"Inconsistent eye color: {', '.join(eye_colors)}")
+        if len(heights) > 1:
+            inconsistencies.append(f"Inconsistent height: {', '.join(heights)}")
+        if len(builds) > 1:
+            inconsistencies.append(f"Inconsistent build: {', '.join(builds)}")
+            
+        return inconsistencies
+    
     def _check_physical_consistency(self, profile: CharacterProfile) -> List[str]:
         """Check for physical description inconsistencies."""
         inconsistencies = []
@@ -1044,18 +1081,22 @@ class CharacterTracker:
             "total_characters": len(self.characters),
             "character_summaries": [],
             "overall_consistency": 0.0,
-            "characters_with_issues": []
+            "characters_with_issues": [],
+            "consistency_violations": []
         }
 
         total_consistency = 0.0
 
         for name, profile in self.characters.items():
+            # Count total appearances from appearance lists
+            appearances_count = len(profile.appearances) if hasattr(profile, 'appearances') else 0
+            
             char_summary = {
                 "name": name,
-                "appearances": profile.total_appearances,
-                "consistency_score": profile.consistency_score,
-                "inconsistencies": len(profile.physical_inconsistencies),
-                "narrative_importance": profile.narrative_importance
+                "appearances": appearances_count,
+                "consistency_score": profile.consistency_score if hasattr(profile, 'consistency_score') else 1.0,
+                "inconsistencies": len(profile.physical_inconsistencies) if hasattr(profile, 'physical_inconsistencies') else 0,
+                "narrative_importance": profile.narrative_importance if hasattr(profile, 'narrative_importance') else 0.5
             }
 
             report["character_summaries"].append(char_summary)
