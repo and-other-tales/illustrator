@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 T = TypeVar('T')
 R = TypeVar('R')
 
+__all__ = [
+    'ProcessingTask', 'BatchConfig', 'RateLimitConfig', 'CircuitBreakerConfig', 'ProcessingStats'
+]
+
 
 @dataclass
 class ProcessingTask(Generic[T, R]):

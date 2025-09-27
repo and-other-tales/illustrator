@@ -40,14 +40,52 @@ class IterationReason(str, Enum):
 
 @dataclass
 class QualityAssessment:
-    """Quality assessment for a generated image."""
-    prompt_id: str
-    generation_success: bool
-    quality_scores: Dict[QualityMetric, float]  # 0.0 to 1.0
-    feedback_notes: str
-    improvement_suggestions: List[str]
-    provider: ImageProvider
-    timestamp: str
+    """Quality assessment for a generated image.
+
+    This class is intentionally flexible to accept both the modern shape
+    (quality_scores dict) and legacy flat numeric fields used by older tests
+    and code paths.
+    """
+    # Modern fields
+    prompt_id: Optional[str] = None
+    generation_success: Optional[bool] = None
+    quality_scores: Optional[Dict[QualityMetric, float]] = None  # 0.0 to 1.0
+    feedback_notes: str = ""
+    improvement_suggestions: Optional[List[str]] = None
+    provider: Optional[ImageProvider] = None
+    timestamp: Optional[str] = None
+
+    # Legacy / convenience numeric fields (0-100 scale in some tests)
+    overall_score: Optional[float] = None
+    accuracy_score: Optional[float] = None
+    style_consistency: Optional[float] = None
+    emotional_alignment: Optional[float] = None
+    technical_quality: Optional[float] = None
+    prompt_effectiveness: Optional[float] = None
+
+    # legacy lists
+    areas_for_improvement: Optional[List[str]] = None
+    strengths: Optional[List[str]] = None
+    recommendations: Optional[List[str]] = None
+
+    def needs_improvement(self) -> bool:
+        """Return True if assessment indicates the prompt needs improvement.
+
+        Priority: use overall_score if present (0-100), otherwise use
+        quality_scores average (0.0-1.0) with threshold ~0.75.
+        """
+        if self.overall_score is not None:
+            try:
+                return float(self.overall_score) < 75.0
+            except Exception:
+                pass
+
+        if self.quality_scores:
+            avg = sum(self.quality_scores.values()) / len(self.quality_scores)
+            return avg < 0.75
+
+        # Fall back to conservative default
+        return True
 
 
 @dataclass
@@ -78,12 +116,14 @@ class QualityReport:
     """Comprehensive quality report for a prompt improvement session."""
     session_id: str
     initial_prompt: IllustrationPrompt
-    final_prompt: IllustrationPrompt
-    iterations: List[PromptIteration]
-    total_improvements: int
-    final_quality_score: float
-    processing_time: float
-    success: bool
+    original_prompt: Optional[IllustrationPrompt] = None
+    summary: Optional[str] = None
+    final_prompt: Optional[IllustrationPrompt] = None
+    iterations: Optional[List[PromptIteration]] = None
+    total_improvements: int = 0
+    final_quality_score: float = 0.0
+    processing_time: float = 0.0
+    success: bool = False
 
 
 class QualityAnalyzer:

@@ -4,7 +4,7 @@ import json
 import re
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from enum import Enum, auto
 
@@ -58,14 +58,41 @@ class LightingMood(str, Enum):
 @dataclass
 class VisualElement:
     """Represents a visual element extracted from text."""
-    element_type: ElementType
-    description: str
-    modifier: str
-    importance: float  # 0.0 to 1.0
-    element_type: str  # "character", "object", "environment", "atmosphere"
-    description: str
-    importance: float  # 0.0 to 1.0
-    attributes: Dict[str, Any]
+    # Support both positional-style construction used in composition tests
+    # and keyword-style construction used by LLM extraction code.
+    element_type: str
+    position: Optional[Tuple[float, float]] = None
+    size: Optional[float] = None
+    visual_weight: Optional[float] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    modifier: Optional[str] = None
+    importance: Optional[float] = None  # 0.0 to 1.0
+    attributes: Dict[str, Any] = field(default_factory=dict)
+    def __init__(
+        self,
+        element_type: str,
+        position: Optional[Tuple[float, float]] = None,
+        size_ratio: Optional[float] = None,
+        importance: Optional[float] = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        modifier: Optional[str] = None,
+        attributes: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ):
+        # Allow tests to construct with positional args like (type, pos, size, importance, name)
+        self.element_type = element_type
+        self.position = position
+        # map size_ratio to size or size attribute used in other parts
+        self.size = size_ratio
+        self.size_ratio = size_ratio
+        self.visual_weight = importance
+        self.importance = importance
+        self.name = name
+        self.description = description
+        self.modifier = modifier
+        self.attributes = attributes or {}
 
 
 @dataclass
@@ -78,6 +105,9 @@ class SceneComposition:
     lighting_mood: LightingMood
     atmosphere: str
     color_palette_suggestion: str
+    # Added to support fallback/emotional weighting used elsewhere in the codebase/tests
+    emotional_weight: float = 0.5
+    emotional_tones: List[EmotionalTone] | None = None
     emotional_weight: float
     emotional_tones: List[EmotionalTone] | None = None
 
