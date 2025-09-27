@@ -1652,8 +1652,11 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             # Log the received response (truncated)
             logger.debug("Enhancer: LLM response received: %s", enhanced_description[:600].replace('\n', ' '))
 
-            # Post-process to ensure explicit details from the original are preserved
-            enhanced_description = self._enforce_preserve_details(original_text or "", enhanced_description)
+            # Post-process to ensure explicit details from the original and extracted visual elements are preserved
+            preservation_source = " ".join(filter(None, [original_text, 
+                                                           " ".join([str(e.description) for e in visual_elements]),
+                                                           getattr(scene_composition, 'focal_point', '')]))
+            enhanced_description = self._enforce_preserve_details(preservation_source, enhanced_description)
             # If LLM fails, create a visual scene description from the excerpt
             if not enhanced_description or "asyncmock" in enhanced_description.lower():
                 logger.debug("LLM failed or returned empty, using fallback for scene description.")
