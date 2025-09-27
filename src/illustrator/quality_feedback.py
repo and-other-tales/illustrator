@@ -698,6 +698,66 @@ class FeedbackSystem:
         self.prompt_iterator = PromptIterator(llm)
         self.iterator = self.prompt_iterator  # legacy alias used in tests
 
+    def get_system_insights(self) -> Dict[str, Any]:
+        """Return aggregated insights about prompt performance and quality trends.
+
+        This is a lightweight implementation intended for tests and basic
+        observability. It summarizes counts and average scores where available.
+        """
+        insights: Dict[str, Any] = {
+            "total_assessments": len(self.prompt_iterator.quality_history) if hasattr(self.prompt_iterator, 'quality_history') else 0,
+            "tracked_prompts": len(self.prompt_iterator.prompt_performance) if hasattr(self.prompt_iterator, 'prompt_performance') else 0,
+            "average_scores": {}
+        }
+
+        # Average quality scores across stored history
+        if hasattr(self.prompt_iterator, 'quality_history') and self.prompt_iterator.quality_history:
+            avg_scores = {}
+            count = len(self.prompt_iterator.quality_history)
+            # Sum up modern quality_scores dicts when present
+            for qa in self.prompt_iterator.quality_history:
+                if qa.quality_scores:
+                    for metric, score in qa.quality_scores.items():
+                        avg_scores.setdefault(metric.value if hasattr(metric, 'value') else str(metric), 0.0)
+                        avg_scores[metric.value if hasattr(metric, 'value') else str(metric)] += float(score or 0.0)
+
+            for k in list(avg_scores.keys()):
+                avg_scores[k] = avg_scores[k] / max(1, count)
+
+            insights['average_scores'] = avg_scores
+
+        return insights
+
+    def export_feedback_data(self) -> Dict[str, Any]:
+        """Export internal feedback tracking data into a serializable dict.
+
+        Tests expect a dict, so provide a conservative snapshot of prompt performance
+        and recent assessments.
+        """
+        data: Dict[str, Any] = {
+            "prompt_performance": {},
+            "recent_assessments": [],
+        }
+
+        if hasattr(self.prompt_iterator, 'prompt_performance'):
+            for k, perf in self.prompt_iterator.prompt_performance.items():
+                data['prompt_performance'][k] = {
+                    "prompt_template": getattr(perf, 'prompt_template', ''),
+                    "provider": getattr(perf, 'provider', None).value if getattr(perf, 'provider', None) else None,
+                    "success_rate": getattr(perf, 'success_rate', 0.0),
+                    "usage_count": getattr(perf, 'usage_count', 0)
+                }
+
+        if hasattr(self.prompt_iterator, 'quality_history'):
+            for qa in list(self.prompt_iterator.quality_history)[-10:]:
+                data['recent_assessments'].append({
+                    "prompt_id": getattr(qa, 'prompt_id', None),
+                    "overall_score": getattr(qa, 'overall_score', None),
+                    "quality_scores": {m.value if hasattr(m, 'value') else str(m): s for m, s in (qa.quality_scores or {}).items()}
+                })
+
+        return data
+
     async def process_generation_feedback(
         self,
         prompt: IllustrationPrompt,

@@ -783,6 +783,71 @@ class StyleTranslator:
 
         return provider_opts
 
+    async def analyze_chapter_for_headers(self, chapter: Chapter) -> List[ChapterHeaderOption]:
+        """Generate chapter header options using the attached LLM if available.
+
+        Returns a list of ChapterHeaderOption. On failure, returns 4 default options.
+        """
+        defaults: List[ChapterHeaderOption] = []
+        for i in range(1, 5):
+            defaults.append(ChapterHeaderOption(
+                option_number=i,
+                title=f"Header Option {i}",
+                description=f"Default header option {i} for chapter {chapter.title}",
+                visual_focus="central character",
+                artistic_style="pencil sketch",
+                composition_notes="balanced composition",
+                prompt=IllustrationPrompt(
+                    provider=ImageProvider.DALLE,
+                    prompt=f"{chapter.title} header option {i}",
+                    style_modifiers=["chapter header", "illustration"],
+                    negative_prompt="low quality",
+                    technical_params={}
+                )
+            ))
+
+        if hasattr(self, 'llm') and getattr(self, 'llm') is not None:
+            try:
+                messages = [
+                    SystemMessage(content="You are an assistant that proposes chapter header options."),
+                    HumanMessage(content=f"Analyze this chapter and propose up to 4 header options with title, description, visual_focus, artistic_style, composition_notes and a short prompt. Chapter:\n{chapter.content}")
+                ]
+
+                response = await self.llm.ainvoke(messages)
+                parsed = parse_llm_json(response.content)
+
+                options = []
+                for opt in parsed.get('options', [])[:4]:
+                    try:
+                        prompt_data = opt.get('prompt', {}) if isinstance(opt.get('prompt'), dict) else {}
+                        provider_val = prompt_data.get('provider') or opt.get('provider') or ImageProvider.DALLE.value
+                        prompt = IllustrationPrompt(
+                            provider=ImageProvider(provider_val),
+                            prompt=prompt_data.get('prompt', opt.get('prompt', f"{chapter.title} header")),
+                            style_modifiers=prompt_data.get('style_modifiers', opt.get('style_modifiers', [])),
+                            negative_prompt=prompt_data.get('negative_prompt', opt.get('negative_prompt', 'low quality')),
+                            technical_params=prompt_data.get('technical_params', opt.get('technical_params', {}))
+                        )
+
+                        options.append(ChapterHeaderOption(
+                            option_number=opt.get('option_number', len(options) + 1),
+                            title=opt.get('title', f"Header Option {len(options)+1}"),
+                            description=opt.get('description', ''),
+                            visual_focus=opt.get('visual_focus', 'central character'),
+                            artistic_style=opt.get('artistic_style', 'pencil sketch'),
+                            composition_notes=opt.get('composition_notes', ''),
+                            prompt=prompt
+                        ))
+                    except Exception:
+                        continue
+
+                if options:
+                    return options
+            except Exception:
+                logger.debug("StyleTranslator.analyze_chapter_for_headers: LLM call failed, returning defaults")
+
+        return defaults
+
     def translate_style_config(
         self,
         style_config: Dict[str, Any],

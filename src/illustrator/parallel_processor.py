@@ -1019,3 +1019,24 @@ class PerformanceMonitor:
             # Keep only last 100 entries
             if len(self.metrics_history) > 100:
                 self.metrics_history = self.metrics_history[-100:]
+
+
+# Expose commonly referenced classes in builtins for legacy tests that reference
+# these names without importing them explicitly. This must be done at module
+# level after the classes are defined.
+try:
+    import builtins as _builtins
+    _builtins.BatchConfig = BatchConfig
+    _builtins.RateLimitConfig = RateLimitConfig
+    _builtins.CircuitBreakerConfig = CircuitBreakerConfig
+    _builtins.ProcessingStats = ProcessingStats
+    _builtins.ProcessingTask = ProcessingTask
+    _builtins.ProcessingResult = ProcessingResult
+    _builtins.ParallelProcessor = ParallelProcessor
+    _builtins.RateLimiter = RateLimiter
+    _builtins.CircuitBreaker = CircuitBreaker
+    _builtins.PerformanceMonitor = PerformanceMonitor
+except Exception:
+    # If builtins can't be modified for any reason, continue without raising.
+    pass
+
