@@ -175,6 +175,22 @@
                         </div>
 
                         <div class="mb-3">
+                            <label for="llmProviderSelect" class="form-label">Default LLM Provider</label>
+                            <select class="form-select" id="llmProviderSelect">
+                                <option value="">Auto-detect from configured keys</option>
+                                <option value="anthropic">Anthropic (Claude)</option>
+                                <option value="huggingface">HuggingFace (gpt-oss-120b)</option>
+                            </select>
+                            <div class="form-text">Choose the language model provider used for manuscript analysis.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="llmModel" class="form-label">Preferred LLM Model</label>
+                            <input type="text" class="form-control" id="llmModel" placeholder="claude-3-5-sonnet-20241022 or gpt-oss-120b">
+                            <div class="form-text">Optional override for the default model used by the selected provider.</div>
+                        </div>
+
+                        <div class="mb-3">
                             <label for="googleCredentials" class="form-label">Google Cloud Credentials Path</label>
                             <input type="text" class="form-control" id="googleCredentials" placeholder="/path/to/credentials.json">
                             <div class="form-text">Required for Imagen4 image generation</div>

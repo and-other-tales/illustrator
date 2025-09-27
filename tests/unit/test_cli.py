@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, Mock, patch, mock_open
 from uuid import uuid4
 
 from illustrator.cli import ManuscriptCLI
-from illustrator.models import Chapter, ChapterAnalysis, ManuscriptMetadata, SavedManuscript, EmotionalMoment, EmotionalTone, ImageProvider
+from illustrator.models import Chapter, ChapterAnalysis, ManuscriptMetadata, SavedManuscript, EmotionalMoment, EmotionalTone, ImageProvider, LLMProvider
 
 
 class TestManuscriptCLI:
@@ -78,7 +78,9 @@ class TestManuscriptCLI:
     @patch.dict(os.environ, {
         'DEFAULT_IMAGE_PROVIDER': 'dalle',
         'OPENAI_API_KEY': 'test_key',
-        'ANTHROPIC_API_KEY': 'test_key'
+        'ANTHROPIC_API_KEY': 'test_key',
+        'HUGGINGFACE_API_KEY': 'hf_key',
+        'DEFAULT_LLM_PROVIDER': 'huggingface'
     })
     def test_setup_environment_dalle(self, cli):
         """Test environment setup for DALL-E provider."""
@@ -89,7 +91,8 @@ class TestManuscriptCLI:
         'DEFAULT_IMAGE_PROVIDER': 'imagen4',
         'GOOGLE_APPLICATION_CREDENTIALS': 'test_creds',
         'GOOGLE_PROJECT_ID': 'test_project',
-        'ANTHROPIC_API_KEY': 'test_key'
+        'HUGGINGFACE_API_KEY': 'hf_key',
+        'DEFAULT_LLM_PROVIDER': 'huggingface'
     })
     def test_setup_environment_imagen4(self, cli):
         """Test environment setup for Imagen4 provider."""
@@ -99,12 +102,56 @@ class TestManuscriptCLI:
     @patch.dict(os.environ, {
         'DEFAULT_IMAGE_PROVIDER': 'flux',
         'HUGGINGFACE_API_KEY': 'test_key',
-        'ANTHROPIC_API_KEY': 'test_key'
+        'ANTHROPIC_API_KEY': 'test_key',
+        'DEFAULT_LLM_PROVIDER': 'anthropic'
     })
     def test_setup_environment_flux(self, cli):
         """Test environment setup for Flux provider."""
         cli.setup_environment()
         # Should not raise an exception
+
+    @patch.dict(os.environ, {
+        'DEFAULT_IMAGE_PROVIDER': 'dalle',
+        'OPENAI_API_KEY': 'openai',
+        'HUGGINGFACE_API_KEY': 'hf_key'
+    }, clear=True)
+    def test_select_llm_provider_single_option(self, cli):
+        """When only one provider is configured it should be selected automatically."""
+        cli.setup_environment()
+        provider = cli.select_llm_provider(interactive=False)
+
+        assert provider == LLMProvider.HUGGINGFACE
+        assert cli.llm_provider == LLMProvider.HUGGINGFACE
+
+    @patch('illustrator.cli.Prompt.ask', return_value='2')
+    @patch.dict(os.environ, {
+        'DEFAULT_IMAGE_PROVIDER': 'dalle',
+        'OPENAI_API_KEY': 'openai',
+        'HUGGINGFACE_API_KEY': 'hf_key',
+        'ANTHROPIC_API_KEY': 'anth_key'
+    }, clear=True)
+    def test_select_llm_provider_interactive(self, mock_prompt, cli):
+        """Interactive selection should honor the user's choice."""
+        cli.setup_environment()
+        provider = cli.select_llm_provider(interactive=True)
+
+        mock_prompt.assert_called()
+        assert provider == LLMProvider.HUGGINGFACE
+        assert cli.llm_provider == LLMProvider.HUGGINGFACE
+
+    @patch.dict(os.environ, {
+        'DEFAULT_IMAGE_PROVIDER': 'dalle',
+        'OPENAI_API_KEY': 'openai',
+        'HUGGINGFACE_API_KEY': 'hf_key',
+        'ANTHROPIC_API_KEY': 'anth_key'
+    }, clear=True)
+    def test_select_llm_provider_batch_requires_env(self, cli):
+        """Batch mode without DEFAULT_LLM_PROVIDER should exit when multiple providers exist."""
+        cli.setup_environment()
+
+        with patch('sys.exit') as mock_exit:
+            cli.select_llm_provider(interactive=False)
+            mock_exit.assert_called_with(1)
 
     @patch.dict(os.environ, {'DEFAULT_IMAGE_PROVIDER': 'dalle'}, clear=True)
     def test_setup_environment_missing_openai_key(self, cli):

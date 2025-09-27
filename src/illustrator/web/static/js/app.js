@@ -11,7 +11,9 @@ window.illustratorApp = {
         HUGGINGFACE_ENDPOINT_URL: '',
         HUGGINGFACE_FLUX_ENDPOINT_URL: '',
         GOOGLE_APPLICATION_CREDENTIALS: '',
-        GOOGLE_PROJECT_ID: ''
+        GOOGLE_PROJECT_ID: '',
+        DEFAULT_LLM_PROVIDER: '',
+        DEFAULT_LLM_MODEL: ''
     },
     currentTheme: 'light',
     websocket: null,
@@ -195,6 +197,11 @@ function handleKeyboardShortcuts(event) {
 
 // API Key management
 function saveApiKeys() {
+    const llmProviderSelect = document.getElementById('llmProviderSelect');
+    const llmModelInput = document.getElementById('llmModel');
+    const selectedProvider = llmProviderSelect ? llmProviderSelect.value.trim().toLowerCase() : '';
+    const preferredModel = llmModelInput ? llmModelInput.value.trim() : '';
+
     const credentials = {
         ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
         OPENAI_API_KEY: document.getElementById('openaiApiKey').value.trim(),
@@ -202,7 +209,9 @@ function saveApiKeys() {
         HUGGINGFACE_ENDPOINT_URL: document.getElementById('huggingfaceEndpointUrl').value.trim(),
         HUGGINGFACE_FLUX_ENDPOINT_URL: document.getElementById('huggingfaceFluxEndpointUrl').value.trim(),
         GOOGLE_APPLICATION_CREDENTIALS: document.getElementById('googleCredentials').value.trim(),
-        GOOGLE_PROJECT_ID: document.getElementById('googleProjectId').value.trim()
+        GOOGLE_PROJECT_ID: document.getElementById('googleProjectId').value.trim(),
+        DEFAULT_LLM_PROVIDER: selectedProvider,
+        DEFAULT_LLM_MODEL: preferredModel
     };
 
     // Validate at least one key is provided
@@ -254,6 +263,14 @@ function populateApiKeyForm() {
     if (keys.HUGGINGFACE_FLUX_ENDPOINT_URL) document.getElementById('huggingfaceFluxEndpointUrl').value = keys.HUGGINGFACE_FLUX_ENDPOINT_URL;
     if (keys.GOOGLE_APPLICATION_CREDENTIALS) document.getElementById('googleCredentials').value = keys.GOOGLE_APPLICATION_CREDENTIALS;
     if (keys.GOOGLE_PROJECT_ID) document.getElementById('googleProjectId').value = keys.GOOGLE_PROJECT_ID;
+    const providerSelect = document.getElementById('llmProviderSelect');
+    if (providerSelect) {
+        providerSelect.value = (keys.DEFAULT_LLM_PROVIDER || '').toLowerCase();
+    }
+    const modelInput = document.getElementById('llmModel');
+    if (modelInput) {
+        modelInput.value = keys.DEFAULT_LLM_MODEL || '';
+    }
 }
 
 function togglePasswordVisibility(fieldId) {
