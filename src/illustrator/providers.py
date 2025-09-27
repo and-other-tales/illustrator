@@ -5,7 +5,7 @@ import base64
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Mapping, Sequence
 
 import aiohttp
 from langchain.chat_models import init_chat_model
@@ -679,25 +679,59 @@ class ReplicateImageProvider(ImageGenerationProvider):
         """Normalise Replicate outputs into a list of downloadable URLs."""
         urls: List[str] = []
 
+        def _append(candidate: str | None) -> None:
+            if isinstance(candidate, str) and candidate:
+                if candidate not in urls:
+                    urls.append(candidate)
+
         if output is None:
             return urls
 
         potential_url = getattr(output, "url", None)
-        if isinstance(potential_url, str):
-            urls.append(potential_url)
-            return urls
+        _append(potential_url)
+
+        urls_mapping = getattr(output, "urls", None)
+        if isinstance(urls_mapping, Mapping):
+            for key in ("get", "content", "self", "download", "url"):
+                _append(urls_mapping.get(key))
 
         if isinstance(output, str):
-            return [output]
+            if output.startswith(("http://", "https://", "data:")):
+                _append(output)
+            return urls
 
-        if isinstance(output, dict):
+        if hasattr(output, "model_dump") and callable(output.model_dump):
+            try:
+                dumped = output.model_dump()
+            except (TypeError, ValueError):
+                dumped = None
+            if isinstance(dumped, Mapping):
+                for value in dumped.values():
+                    for candidate in self._extract_image_urls(value):
+                        _append(candidate)
+                return urls
+
+        if hasattr(output, "dict") and callable(output.dict):
+            try:
+                dumped = output.dict()
+            except (TypeError, ValueError):
+                dumped = None
+            if isinstance(dumped, Mapping):
+                for value in dumped.values():
+                    for candidate in self._extract_image_urls(value):
+                        _append(candidate)
+                return urls
+
+        if isinstance(output, Mapping):
             for value in output.values():
-                urls.extend(self._extract_image_urls(value))
+                for candidate in self._extract_image_urls(value):
+                    _append(candidate)
             return urls
 
         if isinstance(output, Sequence) and not isinstance(output, (str, bytes, bytearray)):
             for item in output:
-                urls.extend(self._extract_image_urls(item))
+                for candidate in self._extract_image_urls(item):
+                    _append(candidate)
             return urls
 
         if hasattr(output, "__iter__") and not isinstance(output, (str, bytes, bytearray)):
@@ -707,7 +741,8 @@ class ReplicateImageProvider(ImageGenerationProvider):
                 sequence = [output]
 
             for item in sequence:
-                urls.extend(self._extract_image_urls(item))
+                for candidate in self._extract_image_urls(item):
+                    _append(candidate)
             return urls
 
         return urls

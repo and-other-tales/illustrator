@@ -606,9 +606,10 @@ async def preview_style_image(
         else:
             status_code = result.get('status_code') or status.HTTP_502_BAD_GATEWAY
             error_message = result.get('error', 'Image generation failed')
+            provider_label = style_config.image_provider.name.replace('_', ' ').title()
             raise HTTPException(
                 status_code=status_code,
-                detail=f"Flux preview failed: {error_message}"
+                detail=f"{provider_label} preview failed: {error_message}"
             )
 
         style_summary: Dict[str, Any] = {
