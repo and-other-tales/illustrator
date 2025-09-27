@@ -257,6 +257,45 @@ class TestEnhancedPromptEngineering:
         assert isinstance(imagen_style["style_modifiers"], list)
         assert len(imagen_style["negative_prompt"]) > 0
 
+    def test_rich_style_configuration_applies_provider_directives(self):
+        translator = StyleTranslator()
+
+        rich_style = translator.rich_style_configs.get("advanced_eh_shepard")
+        assert rich_style is not None
+
+        composition = SceneComposition(
+            composition_type=CompositionType.MEDIUM_SHOT,
+            focal_point="primary subjects",
+            background_elements=["storybook forest"],
+            foreground_elements=["joyful characters"],
+            lighting_mood=LightingMood.NATURAL,
+            atmosphere="whimsical and inviting",
+            color_palette_suggestion="soft graphite tones",
+            emotional_weight=0.55,
+            emotional_tones=[EmotionalTone.JOY]
+        )
+
+        translation = translator.translate_style_config(
+            rich_style,
+            ImageProvider.IMAGEN4,
+            composition
+        )
+
+        # Base style modifiers should include the core Shepard instructions
+        combined_modifiers = " ".join(translation["style_modifiers"]).lower()
+        assert "pencil sketch" in combined_modifiers
+        assert "shepard" in combined_modifiers
+
+        # Provider-specific technical adjustments should merge into technical params
+        assert translation["technical_params"]["guidance_scale"] == 12
+        assert translation["technical_params"]["aspect_ratio"] == "1:1"
+
+        # Emotional adaptations should surface atmosphere guidance
+        assert any("pencil" in note or "composition" in note for note in translation["atmosphere_guidance"])
+
+        # Provider optimizations should remain accessible for prompt enhancement
+        assert translation["provider_optimizations"]["style_emphasis"].startswith("E.H. Shepard")
+
     @pytest.mark.asyncio
     async def test_context_tracking_characters(self, mock_llm):
         """Test character consistency tracking across scenes."""

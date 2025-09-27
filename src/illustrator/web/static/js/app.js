@@ -222,11 +222,24 @@ function saveApiKeys() {
         }
     }
 
+    const huggingfaceEndpointInput = document.getElementById('huggingfaceEndpointUrl');
+    let huggingfaceEndpoint = huggingfaceEndpointInput ? huggingfaceEndpointInput.value.trim() : '';
+
+    if (selectedProvider === 'huggingface' && preferredModel) {
+        const trimmedModel = preferredModel.trim();
+        if (!huggingfaceEndpoint) {
+            huggingfaceEndpoint = `https://api-inference.huggingface.co/models/${trimmedModel}`;
+            if (huggingfaceEndpointInput) {
+                huggingfaceEndpointInput.value = huggingfaceEndpoint;
+            }
+        }
+    }
+
     const credentials = {
         ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
         OPENAI_API_KEY: document.getElementById('openaiApiKey').value.trim(),
         HUGGINGFACE_API_KEY: document.getElementById('huggingfaceApiKey').value.trim(),
-        HUGGINGFACE_ENDPOINT_URL: document.getElementById('huggingfaceEndpointUrl').value.trim(),
+        HUGGINGFACE_ENDPOINT_URL: huggingfaceEndpoint,
         HUGGINGFACE_FLUX_ENDPOINT_URL: document.getElementById('huggingfaceFluxEndpointUrl').value.trim(),
         GOOGLE_APPLICATION_CREDENTIALS: document.getElementById('googleCredentials').value.trim(),
         GOOGLE_PROJECT_ID: document.getElementById('googleProjectId').value.trim(),

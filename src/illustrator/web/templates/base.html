@@ -164,8 +164,16 @@
 
                         <div class="mb-3">
                             <label for="huggingfaceEndpointUrl" class="form-label">HuggingFace Endpoint URL</label>
-                            <input type="text" class="form-control" id="huggingfaceEndpointUrl" placeholder="https://api-inference.huggingface.co/models/gpt-oss-120b">
-                            <div class="form-text">Endpoint for the gpt-oss-120b hosted model</div>
+                            <input type="text" class="form-control" id="huggingfaceEndpointUrl" list="huggingfaceEndpointOptions" placeholder="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.3-70B-Instruct">
+                            <div class="form-text">Endpoint for your hosted HuggingFace model</div>
+                            <datalist id="huggingfaceEndpointOptions">
+                                <option value="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.3-70B-Instruct">Meta Llama 3.3 70B (HF Inference)</option>
+                                <option value="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.1-405B-Instruct">Meta Llama 3.1 405B</option>
+                                <option value="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3.1-70B-Instruct">Meta Llama 3.1 70B</option>
+                                <option value="https://api-inference.huggingface.co/models/mistralai/Mistral-Large-Instruct">Mistral Large Instruct</option>
+                                <option value="https://api-inference.huggingface.co/models/nousresearch/Hermes-3-Llama-3.1-70B">Hermes 3 (Llama 3.1 70B)</option>
+                                <option value="https://api-inference.huggingface.co/models/gpt-oss-120b">gpt-oss-120b</option>
+                            </datalist>
                         </div>
 
                         <div class="mb-3">
