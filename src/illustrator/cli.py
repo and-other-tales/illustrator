@@ -36,6 +36,7 @@ _WEB_DEPENDENCIES: dict[str, str] = {
     "websockets": "websockets",
     "httpx": "httpx",
     "multipart": "python-multipart",
+    "illustrator.generate_scene_illustrations": "illustrator",
 }
 
 
