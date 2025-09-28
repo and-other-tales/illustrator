@@ -294,7 +294,10 @@ class TestGenerateIllustrations:
         """Test generate_illustrations without Anthropic API key."""
         context = ManuscriptContext(
             user_id="test_user",
-            anthropic_api_key=None
+            llm_provider=LLMProvider.ANTHROPIC,
+            anthropic_api_key=None,
+            image_provider=ImageProvider.DALLE,
+            openai_api_key="test_openai_key"  # Provide OpenAI key for DALLE
         )
         runtime = MagicMock()
         runtime.context = context
