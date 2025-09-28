@@ -27,7 +27,10 @@ def _install_cli_import_stubs():
     ctx = types.ModuleType('illustrator.context')
     class ManuscriptContext:  # minimal placeholder
         pass
+    def get_default_context():
+        return ManuscriptContext()
     ctx.ManuscriptContext = ManuscriptContext
+    ctx.get_default_context = get_default_context
     sys.modules['illustrator.context'] = ctx
 
     # Stub illustrator.models
