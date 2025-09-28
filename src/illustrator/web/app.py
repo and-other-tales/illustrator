@@ -322,6 +322,7 @@ from fastapi import BackgroundTasks
 import uuid
 from datetime import datetime
 import asyncio
+import base64
 
 @app.get("/api/process/status/{manuscript_id}")
 async def get_processing_status(manuscript_id: str):
