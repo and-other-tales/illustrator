@@ -1133,7 +1133,7 @@ async def export_manuscript(
 
     try:
         # Create exports directory
-        exports_dir = Path("illustrator_output") / "exports"
+        exports_dir = ILLUSTRATOR_OUTPUT_DIR / "exports"
         exports_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate filename

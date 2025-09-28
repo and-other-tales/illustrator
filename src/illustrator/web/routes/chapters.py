@@ -103,7 +103,7 @@ def load_chapter_analysis(chapter_id: str) -> Optional[dict]:
     """Load saved analysis for a chapter if available."""
     try:
         # Check if analysis file exists
-        analysis_dir = Path("illustrator_output") / "analysis"
+        analysis_dir = ILLUSTRATOR_OUTPUT_DIR / "analysis"
         analysis_file = analysis_dir / f"chapter_{chapter_id}_analysis.json"
 
         if analysis_file.exists():
@@ -131,7 +131,7 @@ def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
     except Exception:
         # Fallback to filesystem counting
         try:
-            generated_images_dir = Path("illustrator_output/generated_images")
+            generated_images_dir = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
             if not generated_images_dir.exists():
                 return 0
 
@@ -694,7 +694,7 @@ async def analyze_chapter(chapter_id: str) -> dict:
 
         # Save analysis results for future loading
         try:
-            analysis_dir = Path("illustrator_output") / "analysis"
+            analysis_dir = ILLUSTRATOR_OUTPUT_DIR / "analysis"
             analysis_dir.mkdir(parents=True, exist_ok=True)
             analysis_file = analysis_dir / f"chapter_{chapter_id}_analysis.json"
 

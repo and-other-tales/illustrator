@@ -27,11 +27,13 @@ class TestNewAPIEndpointsIntegration:
         self.test_output_dir = self.temp_dir / "illustrator_output"
         self.test_analysis_dir = self.test_output_dir / "analysis"
         self.test_exports_dir = self.test_output_dir / "exports"
+        self.test_generated_images_dir = self.test_output_dir / "generated_images"
 
         # Create test directories
         self.test_manuscripts_dir.mkdir(parents=True, exist_ok=True)
         self.test_analysis_dir.mkdir(parents=True, exist_ok=True)
         self.test_exports_dir.mkdir(parents=True, exist_ok=True)
+        self.test_generated_images_dir.mkdir(parents=True, exist_ok=True)
 
         # Patch the directory paths in routes
         self.manuscripts_patcher = patch(
@@ -42,9 +44,24 @@ class TestNewAPIEndpointsIntegration:
             'illustrator.web.routes.chapters.SAVED_MANUSCRIPTS_DIR',
             self.test_manuscripts_dir
         )
+        self.chapters_output_patcher = patch(
+            'illustrator.web.routes.chapters.ILLUSTRATOR_OUTPUT_DIR',
+            self.test_output_dir
+        )
+        self.manuscripts_output_patcher = patch(
+            'illustrator.web.routes.manuscripts.ILLUSTRATOR_OUTPUT_DIR',
+            self.test_output_dir
+        )
+        self.generated_images_patcher = patch(
+            'illustrator.web.routes.manuscripts.GENERATED_IMAGES_DIR',
+            self.test_generated_images_dir
+        )
 
         self.manuscripts_patcher.start()
         self.chapters_patcher.start()
+        self.chapters_output_patcher.start()
+        self.manuscripts_output_patcher.start()
+        self.generated_images_patcher.start()
 
         # Create comprehensive test manuscript
         self.test_manuscript = SavedManuscript(
@@ -104,6 +121,9 @@ class TestNewAPIEndpointsIntegration:
         """Clean up test environment."""
         self.manuscripts_patcher.stop()
         self.chapters_patcher.stop()
+        self.chapters_output_patcher.stop()
+        self.manuscripts_output_patcher.stop()
+        self.generated_images_patcher.stop()
 
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
@@ -112,7 +132,7 @@ class TestNewAPIEndpointsIntegration:
     @patch('illustrator.web.routes.chapters.LiterarySceneDetector')
     @patch('illustrator.web.routes.chapters.NarrativeAnalyzer')
     @patch('illustrator.web.routes.chapters.ComprehensiveSceneAnalyzer')
-    @patch('illustrator.web.routes.chapters.init_chat_model')
+    @patch('illustrator.llm_factory.init_chat_model')
     def test_full_chapter_analysis_workflow(
         self,
         mock_init_chat_model,
@@ -169,6 +189,7 @@ class TestNewAPIEndpointsIntegration:
                     location="ancient chamber",
                     time_context="dawn",
                     emotional_tone="hopeful_with_foreboding",
+                    emotional_intensity=0.8,
                     text="The hero awoke to sunlight...",
                     start_position=0,
                     end_position=100
@@ -179,6 +200,7 @@ class TestNewAPIEndpointsIntegration:
                     location="ancient chamber",
                     time_context="morning",
                     emotional_tone="mysterious",
+                    emotional_intensity=0.6,
                     text="The mystical artifact glowed...",
                     start_position=100,
                     end_position=200
@@ -227,21 +249,8 @@ class TestNewAPIEndpointsIntegration:
                 return_value=mock_emotional_moments
             )
 
-            # Mock file system operations for saving analysis
-            with patch('illustrator.web.routes.chapters.Path') as mock_path:
-                mock_analysis_dir = MagicMock()
-                mock_analysis_file = MagicMock()
-                mock_path.return_value = mock_analysis_dir
-                mock_analysis_dir.mkdir = MagicMock()
-                mock_analysis_dir.__truediv__ = MagicMock(return_value=mock_analysis_file)
-
-                with patch('builtins.open', create=True) as mock_open:
-                    mock_file = MagicMock()
-                    mock_open.return_value.__enter__.return_value = mock_file
-                    mock_open.return_value.__exit__.return_value = None
-
-                    # Make the API call
-                    response = self.client.post(f"/api/chapters/{self.chapter_1_id}/analyze")
+            # Make the API call
+            response = self.client.post(f"/api/chapters/{self.chapter_1_id}/analyze")
 
             # Verify response
             assert response.status_code == 200
@@ -281,88 +290,64 @@ class TestNewAPIEndpointsIntegration:
             assert "emotional_density" in stats
 
             # Verify analysis was saved
-            mock_analysis_dir.mkdir.assert_called()
-            mock_open.assert_called()
+            analysis_file = self.test_analysis_dir / f"chapter_{self.chapter_1_id}_analysis.json"
+            assert analysis_file.exists()
 
         finally:
             # Clean up environment variable
             if 'ANTHROPIC_API_KEY' in os.environ:
                 del os.environ['ANTHROPIC_API_KEY']
 
-    def test_manuscript_export_complete_workflow(self):
+    @pytest.mark.parametrize('export_format', ['json', 'html', 'pdf', 'docx'])
+    def test_manuscript_export_complete_workflow(self, export_format):
         """Test complete manuscript export workflow for all formats."""
-        export_formats = ['json', 'html', 'pdf', 'docx']
 
-        for export_format in export_formats:
-            with self.subTest(format=export_format):
-                with patch('illustrator.web.routes.manuscripts.Path') as mock_path:
-                    # Mock exports directory
-                    mock_exports_dir = MagicMock()
-                    mock_exports_dir.mkdir = MagicMock()
-                    mock_path.return_value = mock_exports_dir
+        pdf_patch = None
+        docx_patch = None
 
-                    # Mock file path
-                    mock_file_path = MagicMock()
-                    mock_file_path.stat.return_value.st_size = 2048
-                    mock_exports_dir.__truediv__ = MagicMock(return_value=mock_file_path)
+        if export_format == 'pdf':
+            async def fake_pdf_export(manuscript, file_path):
+                file_path.write_bytes(b"%PDF-1.4\n% Dummy PDF content\n")
 
-                    # Mock file operations based on format
-                    if export_format == 'json':
-                        with patch('builtins.open', create=True) as mock_open:
-                            mock_file = MagicMock()
-                            mock_open.return_value.__enter__.return_value = mock_file
+            pdf_patch = patch(
+                'illustrator.web.routes.manuscripts.generate_pdf_export',
+                new=fake_pdf_export
+            )
+            pdf_patch.start()
 
-                            response = self.client.post(
-                                f"/api/manuscripts/{self.manuscript_id}/export?export_format={export_format}"
-                            )
+        if export_format == 'docx':
+            def fake_docx_export(manuscript, file_path):
+                file_path.write_bytes(b"PK\x03\x04dummy docx")
 
-                    elif export_format == 'html':
-                        with patch('builtins.open', create=True) as mock_open:
-                            mock_file = MagicMock()
-                            mock_open.return_value.__enter__.return_value = mock_file
+            docx_patch = patch(
+                'illustrator.web.routes.manuscripts.generate_docx_export',
+                new=fake_docx_export
+            )
+            docx_patch.start()
 
-                            response = self.client.post(
-                                f"/api/manuscripts/{self.manuscript_id}/export?export_format={export_format}"
-                            )
+        try:
+            response = self.client.post(
+                f"/api/manuscripts/{self.manuscript_id}/export?export_format={export_format}"
+            )
 
-                    elif export_format == 'pdf':
-                        with patch('illustrator.web.routes.manuscripts.SimpleDocTemplate') as mock_doc:
-                            mock_doc_instance = MagicMock()
-                            mock_doc.return_value = mock_doc_instance
+            assert response.status_code == 200, f"Failed for format {export_format}: {response.text}"
+            data = response.json()
 
-                            with patch('illustrator.web.routes.manuscripts.getSampleStyleSheet') as mock_styles:
-                                mock_styles.return_value = {
-                                    'Heading1': MagicMock(),
-                                    'Normal': MagicMock()
-                                }
+            assert data["success"] is True
+            assert data["export_format"] == export_format.upper()
+            assert data["manuscript_title"] == "Epic Fantasy Novel"
+            assert "filename" in data
+            assert "download_url" in data
+            assert "file_size" in data
 
-                                response = self.client.post(
-                                    f"/api/manuscripts/{self.manuscript_id}/export?export_format={export_format}"
-                                )
-
-                    elif export_format == 'docx':
-                        with patch('illustrator.web.routes.manuscripts.Document') as mock_doc_class:
-                            mock_doc = MagicMock()
-                            mock_doc_class.return_value = mock_doc
-                            mock_para = MagicMock()
-                            mock_doc.add_paragraph.return_value = mock_para
-                            mock_run = MagicMock()
-                            mock_para.add_run.return_value = mock_run
-
-                            response = self.client.post(
-                                f"/api/manuscripts/{self.manuscript_id}/export?export_format={export_format}"
-                            )
-
-                    # Verify response
-                    assert response.status_code == 200, f"Failed for format {export_format}: {response.text}"
-                    data = response.json()
-
-                    assert data["success"] is True
-                    assert data["export_format"] == export_format.upper()
-                    assert data["manuscript_title"] == "Epic Fantasy Novel"
-                    assert "filename" in data
-                    assert "download_url" in data
-                    assert "file_size" in data
+            export_file = self.test_exports_dir / data["filename"]
+            assert export_file.exists()
+            assert export_file.stat().st_size > 0
+        finally:
+            if pdf_patch:
+                pdf_patch.stop()
+            if docx_patch:
+                docx_patch.stop()
 
     def test_chapter_analysis_error_scenarios(self):
         """Test chapter analysis error handling scenarios."""

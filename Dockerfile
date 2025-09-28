@@ -34,6 +34,7 @@ RUN mkdir -p /app/saved_manuscripts /app/illustrator_output
 ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV PYTHONPATH=/app/src
+ENV PYTHONUNBUFFERED=1
 
 # Expose port 8080 for Cloud Run
 EXPOSE 8080
