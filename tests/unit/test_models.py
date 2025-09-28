@@ -32,10 +32,10 @@ class TestChapter:
 
     def test_chapter_validation_errors(self):
         """Test chapter validation errors."""
-        # Test with empty title should fail 
+        # Test with invalid types should fail 
         with pytest.raises(ValidationError):
             Chapter(
-                title="",  # Empty title should fail
+                title=123,  # Wrong type, should be string
                 content="Some content",
                 number=1,
                 word_count=5

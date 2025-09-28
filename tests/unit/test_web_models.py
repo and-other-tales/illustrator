@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from illustrator.models import (
     Chapter, ManuscriptMetadata, SavedManuscript,
-    IllustrationPrompt, ImageProvider, EmotionalTone
+    IllustrationPrompt, ImageProvider, EmotionalTone, EmotionalMoment
 )
 from illustrator.web.models.web_models import (
     ManuscriptCreateRequest,
@@ -364,7 +364,6 @@ class TestModelFieldValidation:
 
     def test_emotional_tone_validation(self):
         """Test emotional tone enum validation in extended scenarios."""
-        from illustrator.models import EmotionalMoment
 
         # Test with valid emotional tones
         valid_tones = [EmotionalTone.JOY, EmotionalTone.SADNESS, EmotionalTone.MYSTERY]

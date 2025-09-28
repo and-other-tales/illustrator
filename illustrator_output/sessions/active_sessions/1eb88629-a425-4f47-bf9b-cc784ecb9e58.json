@@ -1,0 +1,29 @@
+{
+  "session_id": "1eb88629-a425-4f47-bf9b-cc784ecb9e58",
+  "manuscript_id": "e5c3309f-7052-5af3-ba3d-213d0a9a4eab",
+  "external_session_id": "test-session-123",
+  "status": "pending",
+  "progress_percent": 0,
+  "current_chapter": null,
+  "total_chapters": 1,
+  "current_task": null,
+  "style_config": {
+    "image_provider": "dalle",
+    "art_style": "digital painting",
+    "color_palette": "atmospheric tones",
+    "artistic_influences": "Gothic Victorian"
+  },
+  "max_emotional_moments": 3,
+  "last_completed_step": null,
+  "last_completed_chapter": 0,
+  "processed_chapters": [],
+  "current_prompts": [],
+  "generated_images": [],
+  "emotional_moments": [],
+  "total_images_generated": 0,
+  "error_message": null,
+  "started_at": "2025-09-28T05:51:07.848840",
+  "paused_at": null,
+  "resumed_at": null,
+  "last_heartbeat": "2025-09-28T05:51:07.848861"
+}
