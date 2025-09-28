@@ -40,6 +40,7 @@ class EmotionalTone(str, Enum):
     TENSION = "tension"
     PEACE = "peace"
     MYSTERY = "mystery"
+    CURIOSITY = "curiosity"
     ROMANCE = "romance"
     ADVENTURE = "adventure"
     # Additional emotional tones used in tests and other files
