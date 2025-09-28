@@ -7,7 +7,9 @@ from typing import Dict, Any
 from illustrator.character_tracking import (
     CharacterProfile,
     CharacterAppearance,
-    CharacterTracker
+    CharacterTracker,
+    PhysicalDescription,
+    EmotionalProfile
 )
 from illustrator.models import Chapter
 
@@ -21,23 +23,23 @@ class TestCharacterProfile:
             CharacterAppearance(
                 chapter_id="ch1",
                 scene_context="Opening scene",
-                description="Tall with dark hair"
+                physical_description=PhysicalDescription(distinguishing_features=["Tall with dark hair"])
             )
         ]
         
         profile = CharacterProfile(
             name="John Doe",
             appearances=appearances,
-            canonical_description="A tall man with dark hair and kind eyes",
+            physical_description=PhysicalDescription(distinguishing_features=["Tall with dark hair", "kind eyes"]),
             personality_traits=["kind", "intelligent"],
-            consistency_notes=["Always described as tall"]
+            illustration_notes=["Always described as tall"]
         )
         
         assert profile.name == "John Doe"
         assert len(profile.appearances) == 1
-        assert profile.appearances[0].description == "Tall with dark hair"
+        assert "Tall with dark hair" in profile.appearances[0].physical_description.distinguishing_features
         assert "kind" in profile.personality_traits
-        assert profile.canonical_description == "A tall man with dark hair and kind eyes"
+        assert "Tall with dark hair" in profile.physical_description.distinguishing_features
 
 
 class TestCharacterAppearance:
@@ -48,12 +50,12 @@ class TestCharacterAppearance:
         appearance = CharacterAppearance(
             chapter_id="chapter_1",
             scene_context="First meeting in the garden",
-            description="Wearing a blue dress with flowing hair"
+            physical_description=PhysicalDescription(distinguishing_features=["Wearing a blue dress with flowing hair"])
         )
         
         assert appearance.chapter_id == "chapter_1"
         assert appearance.scene_context == "First meeting in the garden"
-        assert appearance.description == "Wearing a blue dress with flowing hair"
+        assert "Wearing a blue dress with flowing hair" in appearance.physical_description.distinguishing_features
 
 
 class TestCharacterTracker:
@@ -156,9 +158,9 @@ class TestCharacterTracker:
         profile = CharacterProfile(
             name="Jane",
             appearances=[],
-            canonical_description="A woman",
+            physical_description=PhysicalDescription(distinguishing_features=["A woman"]),
             personality_traits=[],
-            consistency_notes=[]
+            illustration_notes=[]
         )
         self.tracker.characters["Jane"] = profile
         
@@ -179,7 +181,7 @@ class TestCharacterTracker:
         # Check that profile was updated
         updated_profile = self.tracker.characters["Jane"]
         assert len(updated_profile.appearances) == 1
-        assert updated_profile.appearances[0].description == "blonde hair, blue eyes"
+        assert "blonde hair, blue eyes" in updated_profile.appearances[0].physical_description.distinguishing_features
         assert updated_profile.appearances[0].chapter_id == "chapter_2"
         assert "cheerful" in updated_profile.personality_traits
     
@@ -190,9 +192,9 @@ class TestCharacterTracker:
         profile = CharacterProfile(
             name="Bob",
             appearances=[],
-            canonical_description="A man",
+            physical_description=PhysicalDescription(distinguishing_features=["A man"]),
             personality_traits=[],
-            consistency_notes=[]
+            illustration_notes=[]
         )
         self.tracker.characters["Bob"] = profile
         
@@ -212,9 +214,9 @@ class TestCharacterTracker:
         profile = CharacterProfile(
             name="Alice",
             appearances=[],
-            canonical_description="A woman",
+            physical_description=PhysicalDescription(distinguishing_features=["A woman"]),
             personality_traits=[],
-            consistency_notes=[]
+            illustration_notes=[]
         )
         self.tracker.characters["Alice"] = profile
         
@@ -275,19 +277,25 @@ class TestCharacterTracker:
         profile = CharacterProfile(
             name="David",
             appearances=[
-                CharacterAppearance("ch1", "intro", "tall with brown hair"),
-                CharacterAppearance("ch2", "meeting", "tall with dark hair")
+                CharacterAppearance(chapter_id="ch1", scene_context="intro", 
+                                  physical_description=PhysicalDescription(distinguishing_features=["tall with brown hair"])),
+                CharacterAppearance(chapter_id="ch2", scene_context="meeting",
+                                  physical_description=PhysicalDescription(distinguishing_features=["tall with dark hair"]))
             ],
-            canonical_description="Tall man with brown hair",
+            physical_description=PhysicalDescription(distinguishing_features=["Tall man with brown hair"]),
             personality_traits=["kind", "intelligent"],
-            consistency_notes=[]
+            illustration_notes=[]
         )
         
         self.tracker.characters["David"] = profile
         
         # Check for potential inconsistencies
         appearances = profile.appearances
-        hair_descriptions = [app.description for app in appearances if "hair" in app.description]
+        hair_descriptions = []
+        for app in appearances:
+            for feature in app.physical_description.distinguishing_features:
+                if "hair" in feature:
+                    hair_descriptions.append(feature)
         
         assert len(hair_descriptions) == 2
         assert "brown hair" in hair_descriptions[0]
