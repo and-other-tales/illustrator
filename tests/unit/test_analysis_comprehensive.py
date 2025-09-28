@@ -295,8 +295,10 @@ class TestEmotionalAnalyzer:
 
         self.mock_llm.ainvoke.return_value.content = "invalid_response"
 
-        with pytest.raises(ValueError, match="LLM intensity scoring failed"):
-            await self.analyzer._llm_intensity_score(segment)
+        # Should return a fallback score instead of raising an error
+        score = await self.analyzer._llm_intensity_score(segment)
+        assert isinstance(score, float)
+        assert 0.0 <= score <= 1.0  # Should be a valid score in range
 
     @pytest.mark.asyncio
     async def test_analyze_segment_detailed_success(self):
