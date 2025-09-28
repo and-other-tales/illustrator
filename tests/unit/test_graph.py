@@ -372,13 +372,12 @@ class TestGenerateIllustrations:
             mock_feedback_system.return_value = mock_feedback_instance
             
             # Import QualityAssessment and create proper mock
-            from illustrator.quality_feedback import QualityAssessment
-            from illustrator.models import QualityMetric
+            from illustrator.quality_feedback import QualityAssessment, QualityMetric
             
             quality_assessment = QualityAssessment()
             quality_assessment.prompt_id = "test_prompt_1"
             quality_assessment.generation_success = True
-            quality_assessment.quality_scores = {QualityMetric.ACCURACY: 0.9}
+            quality_assessment.quality_scores = {QualityMetric.VISUAL_ACCURACY: 0.9}
             quality_assessment.provider = ImageProvider.DALLE
             quality_assessment.timestamp = "2025-09-28T10:00:00"
             
