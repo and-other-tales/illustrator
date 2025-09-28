@@ -1,4 +1,80 @@
-"""Unit tests for web app WebSocket functionality and session management."""
+"""Unit tests for web app WebSocket function        self.connection_manager.sessions[session        # Cr             self.connection_manager.sessions[session_id] = ProcessingSessionData(
+            session_id=session_id,
+            manuscript_id=\"ms_123\",
+            status=ProcessingStatus(
+                session_id=session_id,
+                manuscript_id=\"ms_123\",
+                status=\"connected\",
+                progress=0,
+                total_chapters=10,
+                message=\"Connected\"
+            )
+        )Create session
+        self.connection_manager.sessions[session_id] = ProcessingSessionData(
+            session_id=session    def test_processing_sta    def test_processing_status_defaults(self):
+        \"\"\"Test ProcessingStatus default values.\"\"\"
+        status = ProcessingStatus(
+            session_id=\"test_session\",
+            manuscript_id=\"test_manuscript\",
+            status=\"started\",
+            progress=0,
+            total_chapters=5,
+            message=\"Started\"
+        )
+        
+        assert status.status == \"started\"
+        assert status.message == \"Started\"
+        assert status.progress == 0
+        assert status.current_chapter is None
+        assert status.error is Noneation(self):
+        \"\"\"Test creating ProcessingStatus object.\"\"\"
+        status = ProcessingStatus(
+            session_id=\"test_session\",
+            manuscript_id=\"test_manuscript\",
+            status=\"processing\",
+            progress=25,
+            total_chapters=10,
+            message=\"Analyzing chapter 1\"
+        )
+        
+        assert status.status == \"processing\"
+        assert status.message == \"Analyzing chapter 1\"
+        assert status.progress == 25
+        assert status.session_id == \"test_session\"
+        assert status.manuscript_id == \"test_manuscript\"
+        assert status.total_chapters == 10       manuscript_id=\"ms_123\",
+            status=ProcessingStatus(
+                session_id=session_id,
+                manuscript_id=\"ms_123\",
+                status=\"connected\",
+                progress=0,
+                total_chapters=10,
+                message=\"Connected\"
+            )
+        )ession
+        self.connection_manager.sessions[session_id] = ProcessingSessionData(
+            session_id=session_id,
+            manuscript_id=\"ms_123\",
+            status=ProcessingStatus(
+                session_id=session_id,
+                manuscript_id=\"ms_123\",
+                status=\"connected\",
+                progress=0,
+                total_chapters=10,
+                message=\"Connected\"
+            )
+        ) ProcessingSessionData(
+            session_id=session_id,
+            manuscript_id=\"ms_123\",
+            status=ProcessingStatus(
+                session_id=session_id,
+                manuscript_id=\"ms_123\",
+                status=\"connected\",
+                progress=0,
+                total_chapters=10,
+                message=\"Connected\"
+            )
+        ) and session management."""
 
 import json
 import pytest
@@ -156,7 +232,14 @@ class TestConnectionManager:
         self.connection_manager.sessions[session_id] = ProcessingSessionData(
             session_id=session_id,
             manuscript_id="ms_123",
-            status=ProcessingStatus(status="disconnected", message="Disconnected")
+            status=ProcessingStatus(
+            session_id="test_session_2",
+            manuscript_id="test_manuscript_2",
+            status="disconnected",
+            progress=50,
+            total_chapters=10,
+            message="Disconnected"
+        )
         )
         
         message = "Test message"
