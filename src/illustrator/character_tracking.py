@@ -864,15 +864,12 @@ class CharacterTracker:
 
         if not character_mentions:
             return CharacterAppearance(
-                chapter_number=chapter_number,
-                scene_position=0,
-                text_excerpt="",
-                emotional_state=[],
-                physical_details={},
-                clothing_details={},
-                action_context="",
-                interaction_partners=[],
-                confidence_score=0.0
+                chapter_id=f"chapter_{chapter_number}",
+                scene_context="No mentions found",
+                physical_description=PhysicalDescription(),
+                emotional_state="",
+                actions=[],
+                dialogue_tone=""
             )
 
         # Get the most detailed mention
@@ -888,15 +885,14 @@ class CharacterTracker:
         appearance_details = await self._analyze_appearance_context(character_name, context)
 
         return CharacterAppearance(
-            chapter_number=chapter_number,
-            scene_position=position,
-            text_excerpt=context,
-            emotional_state=appearance_details.get('emotions', []),
-            physical_details=appearance_details.get('physical', {}),
-            clothing_details=appearance_details.get('clothing', {}),
-            action_context=appearance_details.get('action', ''),
-            interaction_partners=appearance_details.get('interactions', []),
-            confidence_score=float(appearance_details.get('confidence', 0.5))
+            chapter_id=f"chapter_{chapter_number}",
+            scene_context=context,
+            physical_description=PhysicalDescription(
+                distinguishing_features=appearance_details.get('physical', {}).get('features', [])
+            ),
+            emotional_state=appearance_details.get('emotions', ['neutral'])[0] if appearance_details.get('emotions') else 'neutral',
+            actions=appearance_details.get('actions', []),
+            dialogue_tone=appearance_details.get('dialogue_tone', '')
         )
 
     def _find_character_mentions(self, character_name: str, text: str) -> List[str]:
