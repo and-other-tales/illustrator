@@ -391,9 +391,16 @@ Analyze if there's a scene boundary between these paragraphs.""")
             end = boundaries[i + 1].position
             scene_text = text[start:end].strip()
 
-            if len(scene_text) >= min_scene_length:
+            # For very short texts, always create at least one scene
+            # For normal texts, apply min_scene_length filter
+            if len(scene_text) >= min_scene_length or (len(text) < 100 and len(scene_text) > 0):
                 scene = await self._analyze_scene(scene_text, start, end)
                 scenes.append(scene)
+
+        # Ensure we always return at least one scene for any non-empty content
+        if not scenes and text.strip():
+            scene = await self._analyze_scene(text.strip(), 0, len(text))
+            scenes.append(scene)
 
         return scenes
 

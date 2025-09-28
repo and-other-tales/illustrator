@@ -105,9 +105,11 @@ class TestAnalyzeChapter:
 
         state = {"current_chapter": sample_chapter}
 
-        with patch('illustrator.graph.split_model_and_provider'), \
-             patch('illustrator.graph.init_chat_model'), \
+        with patch('illustrator.graph.create_chat_model_from_context') as mock_create_chat_model, \
              patch('illustrator.graph.EmotionalAnalyzer') as mock_analyzer:
+
+            # Mock the LLM creation to raise an error when API key is missing
+            mock_create_chat_model.side_effect = ValueError("Anthropic API key is required when using the Anthropic provider")
 
             mock_analyzer_instance = AsyncMock()
             mock_analyzer.return_value = mock_analyzer_instance
@@ -132,15 +134,13 @@ class TestAnalyzeChapter:
             context="This is emotional content"
         )
 
-        with patch('illustrator.graph.split_model_and_provider') as mock_split, \
-             patch('illustrator.graph.init_chat_model') as mock_init_chat, \
+        with patch('illustrator.graph.create_chat_model_from_context') as mock_create_chat_model, \
              patch('illustrator.graph.EmotionalAnalyzer') as mock_analyzer, \
              patch('illustrator.graph.ProviderFactory') as mock_provider_factory:
 
             # Setup mocks
-            mock_split.return_value = {'model': 'test_model'}
             mock_llm = AsyncMock()
-            mock_init_chat.return_value = mock_llm
+            mock_create_chat_model.return_value = mock_llm
 
             mock_analyzer_instance = AsyncMock()
             mock_analyzer.return_value = mock_analyzer_instance
@@ -182,8 +182,7 @@ class TestAnalyzeChapter:
             context="This is emotional content"
         )
 
-        with patch('illustrator.graph.split_model_and_provider'), \
-             patch('illustrator.graph.init_chat_model'), \
+        with patch('illustrator.graph.create_chat_model_from_context'), \
              patch('illustrator.graph.EmotionalAnalyzer') as mock_analyzer, \
              patch('illustrator.graph.ProviderFactory'):
 
@@ -204,13 +203,12 @@ class TestAnalyzeChapter:
         """Test chapter analysis with JSON parse error."""
         state = {"current_chapter": sample_chapter}
 
-        with patch('illustrator.graph.split_model_and_provider'), \
-             patch('illustrator.graph.init_chat_model') as mock_init_chat, \
+        with patch('illustrator.graph.create_chat_model_from_context') as mock_create_chat_model, \
              patch('illustrator.graph.EmotionalAnalyzer') as mock_analyzer, \
              patch('illustrator.graph.ProviderFactory'):
 
             mock_llm = AsyncMock()
-            mock_init_chat.return_value = mock_llm
+            mock_create_chat_model.return_value = mock_llm
 
             mock_analyzer_instance = AsyncMock()
             mock_analyzer.return_value = mock_analyzer_instance
@@ -234,7 +232,7 @@ class TestAnalyzeChapter:
         """Test chapter analysis exception handling."""
         state = {"current_chapter": sample_chapter}
 
-        with patch('illustrator.graph.split_model_and_provider', side_effect=Exception("Test error")):
+        with patch('illustrator.graph.create_chat_model_from_context', side_effect=Exception("Test error")):
             result = await analyze_chapter(state, mock_runtime)
 
         assert "error_message" in result
@@ -761,16 +759,15 @@ class TestAsyncConcurrency:
             for i in range(5)  # More moments than concurrency limit
         ]
 
-        with patch('illustrator.graph.split_model_and_provider'), \
-             patch('illustrator.graph.init_chat_model') as mock_init_chat_model, \
+        with patch('illustrator.graph.create_chat_model_from_context') as mock_create_chat_model, \
              patch('illustrator.graph.EmotionalAnalyzer') as mock_analyzer, \
              patch('illustrator.graph.ProviderFactory') as mock_provider_factory, \
              patch('asyncio.Semaphore') as mock_semaphore:
 
-            # Mock the LLM that is returned by init_chat_model
+            # Mock the LLM that is returned by create_chat_model_from_context
             mock_llm = AsyncMock()
             mock_llm.ainvoke.return_value.content = '{"dominant_themes": ["test theme"], "setting_description": "test setting", "character_emotions": {}}'
-            mock_init_chat_model.return_value = mock_llm
+            mock_create_chat_model.return_value = mock_llm
 
             mock_analyzer_instance = AsyncMock()
             mock_analyzer.return_value = mock_analyzer_instance
