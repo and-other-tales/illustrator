@@ -26,7 +26,7 @@ from illustrator.utils import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_LLM_TIMEOUT = 12.0
+_DEFAULT_LLM_TIMEOUT = 45.0
 
 
 async def _coerce_to_ai_message(response: Any) -> AIMessage:

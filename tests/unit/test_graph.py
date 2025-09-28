@@ -26,6 +26,7 @@ from illustrator.models import (
     EmotionalTone,
     ImageProvider,
     IllustrationPrompt,
+    LLMProvider,
     ManuscriptMetadata
 )
 
@@ -359,11 +360,11 @@ class TestGenerateIllustrations:
 
             mock_provider = AsyncMock()
             mock_provider_factory.create_provider.return_value = mock_provider
-            mock_provider.generate_image.return_value = {
+            mock_provider.generate_image = AsyncMock(return_value={
                 "success": True,
                 "image_data": "test_image_data",
                 "metadata": {"test": "metadata"}
-            }
+            })
 
             result = await generate_illustrations(state, runtime)
 
