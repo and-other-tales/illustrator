@@ -235,7 +235,7 @@ class HuggingFaceEndpointChatWrapper:
                     # Check if endpoint is paused
                     if is_endpoint_paused_error(error_message):
                         logger.warning("HuggingFace endpoint is paused, waiting for restart")
-                        await wait_for_endpoint_restart(self._session_id, countdown_seconds=120)
+                        asyncio.run(wait_for_endpoint_restart(self._session_id, countdown_seconds=120))
                         
                         # Retry once after waiting
                         try:
@@ -289,7 +289,7 @@ class HuggingFaceEndpointChatWrapper:
                 # Check if endpoint is paused and retry
                 if is_endpoint_paused_error(error_message):
                     logger.warning("HuggingFace endpoint is paused during text_generation, waiting for restart")
-                    await wait_for_endpoint_restart(self._session_id, countdown_seconds=120)
+                    asyncio.run(wait_for_endpoint_restart(self._session_id, countdown_seconds=120))
                     
                     # Retry once after waiting
                     try:
@@ -582,8 +582,12 @@ class EndpointPausedError(Exception):
         super().__init__(self.message)
 
 
-def is_endpoint_paused_error(error_message: str) -> bool:
+def is_endpoint_paused_error(error_message: str | Exception) -> bool:
     """Check if error message indicates endpoint is paused."""
+    # Convert exception to string if needed
+    if isinstance(error_message, Exception):
+        error_message = str(error_message)
+    
     if not error_message:
         return False
     
