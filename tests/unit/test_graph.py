@@ -154,7 +154,11 @@ class TestAnalyzeChapter:
             # Mock provider
             mock_provider = AsyncMock()
             mock_provider_factory.create_provider.return_value = mock_provider
-            mock_provider.generate_prompt.return_value = "test prompt"
+            mock_provider.generate_prompt.return_value = IllustrationPrompt(
+                provider=ImageProvider.DALLE,
+                prompt="test prompt",
+                style_modifiers=["test style"]
+            )
 
             # Mock store
             mock_runtime.store = AsyncMock()
@@ -775,7 +779,11 @@ class TestAsyncConcurrency:
 
             mock_provider = AsyncMock()
             mock_provider_factory.create_provider.return_value = mock_provider
-            mock_provider.generate_prompt.return_value = "test prompt"
+            mock_provider.generate_prompt.return_value = IllustrationPrompt(
+                provider=ImageProvider.DALLE,
+                prompt="test prompt",
+                style_modifiers=["test style"]
+            )
 
             mock_store = AsyncMock()
             mock_store.aput = AsyncMock()

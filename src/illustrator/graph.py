@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, Dict, List, cast
 
 from illustrator.llm_factory import create_chat_model_from_context
+from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 from langgraph.runtime import Runtime
@@ -199,7 +200,6 @@ Return your analysis in JSON format with these fields:
             if hasattr(runtime, 'store') and runtime.store:
                 try:
                     # Try to get previous chapter analyses for context
-                    from langgraph.store.base import BaseStore
                     store = cast(BaseStore, runtime.store)
 
                     # Get analyses from previous chapters
