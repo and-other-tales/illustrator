@@ -1,5 +1,6 @@
 """Advanced prompt engineering system for optimal text-to-image generation."""
 
+import asyncio
 import json
 import re
 import logging
@@ -19,10 +20,38 @@ class ElementType(Enum):
     LIGHTING = auto()
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from illustrator.utils import parse_llm_json
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_LLM_TIMEOUT = 12.0
+
+
+async def _safe_llm_invoke(
+    llm: Optional[BaseChatModel],
+    messages: List[Any],
+    *,
+    operation: str,
+    timeout: float = _DEFAULT_LLM_TIMEOUT,
+) -> AIMessage:
+    """Invoke an LLM with a timeout and graceful degradation."""
+
+    if llm is None:
+        return AIMessage(content="{}")
+
+    try:
+        return await asyncio.wait_for(llm.ainvoke(messages), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "LLM call timed out after %.1fs during %s; proceeding with fallback data.",
+            timeout,
+            operation,
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging path
+        logger.warning("LLM call failed during %s: %s", operation, exc)
+
+    return AIMessage(content="{}")
 
 from illustrator.models import (
     EmotionalMoment,
@@ -267,7 +296,11 @@ Chapter setting: Chapter {chapter.number} - {chapter.title}
 Extract the most important visual elements for illustration.""")
             ]
 
-            response = await self.llm.ainvoke(messages)
+            response = await _safe_llm_invoke(
+                self.llm,
+                messages,
+                operation="visual element extraction",
+            )
 
             try:
                 elements_data = parse_llm_json(response.content)

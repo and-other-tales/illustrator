@@ -459,6 +459,41 @@ class CharacterTracker:
 
         return names
 
+    def _extract_json_block(self, text: str) -> Optional[str]:
+        """Return the first JSON object found in the text, if any."""
+        depth = 0
+        start_index = None
+
+        for index, char in enumerate(text):
+            if char == '{':
+                if depth == 0:
+                    start_index = index
+                depth += 1
+            elif char == '}':
+                if depth:
+                    depth -= 1
+                    if depth == 0 and start_index is not None:
+                        return text[start_index:index + 1]
+        return None
+
+    def _parse_llm_characters_response(self, raw_response: Any) -> Dict[str, Any]:
+        """Parse the LLM response into JSON, tolerating leading/trailing text."""
+        content = (raw_response or "")
+        if not isinstance(content, str):
+            content = str(content)
+        content = content.strip()
+
+        if not content:
+            raise ValueError("Empty character extraction response")
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            json_block = self._extract_json_block(content)
+            if json_block:
+                return json.loads(json_block)
+            raise
+
     async def _extract_characters_llm(self, text: str, chapter_number: int) -> Dict[str, Dict]:
         """Use LLM to extract characters with detailed information."""
 
@@ -512,8 +547,8 @@ class CharacterTracker:
                     self.llm.ainvoke(messages),
                     timeout=30.0
                 )
-                
-                character_data = json.loads(response.content.strip())
+
+                character_data = self._parse_llm_characters_response(response.content)
 
                 characters = {}
                 for char_info in character_data.get('characters', []):

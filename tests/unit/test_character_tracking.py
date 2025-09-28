@@ -282,6 +282,24 @@ class TestCharacterTracker:
         assert error_result == {}
 
     @pytest.mark.asyncio
+    async def test_extract_characters_llm_handles_wrapped_json(self):
+        """Ensure wrapped JSON responses are parsed correctly."""
+        self.mock_llm.ainvoke.return_value.content = """Answer:
+        ```json
+        {"characters": []}
+        ```
+        Thanks!"""
+
+        result = await self.tracker._extract_characters_llm("Sample text", 2)
+
+        assert result == {}
+
+        # Empty response should be handled gracefully
+        self.mock_llm.ainvoke.return_value.content = ""
+        empty_result = await self.tracker._extract_characters_llm("Sample text", 3)
+        assert empty_result == {}
+
+    @pytest.mark.asyncio
     async def test_analyze_character_mentions_failure(self):
         """Test character mention analysis with LLM failure."""
         self.mock_llm.ainvoke.side_effect = Exception("API Error")
