@@ -503,18 +503,35 @@ class CharacterTracker:
                 HumanMessage(content=f"Chapter {chapter_number} text:\n\n{text[:2000]}...")
             ]
 
-            response = await self.llm.ainvoke(messages)
-            character_data = json.loads(response.content.strip())
+            # Add timeout to prevent stalling
+            # Use asyncio.wait_for to enforce a timeout on the LLM call
+            try:
+                import asyncio
+                # Set a 30-second timeout for character extraction
+                response = await asyncio.wait_for(
+                    self.llm.ainvoke(messages),
+                    timeout=30.0
+                )
+                
+                character_data = json.loads(response.content.strip())
 
-            characters = {}
-            for char_info in character_data.get('characters', []):
-                name = char_info.get('name', '').strip()
-                if name and len(name) > 1:
-                    characters[name] = char_info
+                characters = {}
+                for char_info in character_data.get('characters', []):
+                    name = char_info.get('name', '').strip()
+                    if name and len(name) > 1:
+                        characters[name] = char_info
 
-            return characters
+                return characters
+                
+            except asyncio.TimeoutError:
+                # If timeout occurs, log it and return an empty result to avoid stalling
+                import logging
+                logging.warning(f"Character extraction timed out for Chapter {chapter_number}")
+                return {}
 
         except Exception as e:
+            import logging
+            logging.warning(f"Error extracting characters from Chapter {chapter_number}: {str(e)}")
             return {}
 
     def _combine_character_names(
