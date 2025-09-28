@@ -127,6 +127,13 @@ def _format_style_modifiers(style_modifiers: List[Any] | None) -> str:
     return ", ".join(formatted)
 
 
+def _credential_error(provider: ImageProvider | str, message: str) -> ValueError:
+    """Log and return a ValueError for missing/invalid credentials."""
+    provider_name = provider.value if isinstance(provider, ImageProvider) else str(provider)
+    logger.error("Cannot initialize %s provider: %s", provider_name, message)
+    return ValueError(message)
+
+
 class ImageGenerationProvider(ABC):
     """Abstract base class for image generation providers."""
 
@@ -1216,12 +1223,14 @@ class ProviderFactory:
             llm_provider = LLMProvider(llm_provider_value)
 
         if llm_provider == LLMProvider.ANTHROPIC and not anthropic_key:
-            raise ValueError(
-                "Anthropic API key is required when using the Anthropic provider for prompt engineering"
+            raise _credential_error(
+                provider_type,
+                "Anthropic API key is required when using the Anthropic provider for prompt engineering",
             )
         if llm_provider == LLMProvider.HUGGINGFACE and not credentials.get('huggingface_api_key'):
-            raise ValueError(
-                "HuggingFace API key is required when using the HuggingFace provider for prompt engineering"
+            raise _credential_error(
+                provider_type,
+                "HuggingFace API key is required when using the HuggingFace provider for prompt engineering",
             )
 
         replicate_token = credentials.get('replicate_api_token')
@@ -1255,7 +1264,7 @@ class ProviderFactory:
         if provider_type == ImageProvider.DALLE:
             api_key = credentials.get('openai_api_key')
             if not api_key:
-                raise ValueError("OpenAI API key required for DALL-E provider")
+                raise _credential_error(provider_type, "OpenAI API key required for DALL-E provider")
             return DalleProvider(api_key, **common_llm_kwargs)
 
         elif provider_type == ImageProvider.IMAGEN4:
@@ -1281,7 +1290,10 @@ class ProviderFactory:
             credentials_path = credentials.get('google_credentials')
             project_id = credentials.get('google_project_id')
             if not credentials_path or not project_id:
-                raise ValueError("Google credentials and project ID required for Imagen4")
+                raise _credential_error(
+                    provider_type,
+                    "Google credentials and project ID required for Imagen4",
+                )
             return Imagen4Provider(
                 credentials_path,
                 project_id,
@@ -1307,7 +1319,7 @@ class ProviderFactory:
 
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
-                raise ValueError("HuggingFace API key required for Flux provider")
+                raise _credential_error(provider_type, "HuggingFace API key required for Flux provider")
             return FluxProvider(
                 api_key,
                 flux_endpoint_url=credentials.get('huggingface_flux_endpoint_url'),
@@ -1317,12 +1329,16 @@ class ProviderFactory:
         elif provider_type == ImageProvider.HUGGINGFACE:
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
-                raise ValueError("HuggingFace API key required for the HuggingFace image provider")
+                raise _credential_error(
+                    provider_type,
+                    "HuggingFace API key required for the HuggingFace image provider",
+                )
 
             model_id = credentials.get('huggingface_image_model')
             if not model_id:
-                raise ValueError(
-                    "HuggingFace image provider requires a model identifier (e.g. 'stabilityai/stable-diffusion-2-1')"
+                raise _credential_error(
+                    provider_type,
+                    "HuggingFace image provider requires a model identifier (e.g. 'stabilityai/stable-diffusion-2-1')",
                 )
 
             return HuggingFaceImageProvider(
@@ -1335,7 +1351,7 @@ class ProviderFactory:
 
         elif provider_type == ImageProvider.SEEDREAM:
             if not replicate_token:
-                raise ValueError("Replicate API token required for Seedream provider")
+                raise _credential_error(provider_type, "Replicate API token required for Seedream provider")
 
             return SeedreamProvider(
                 replicate_token,
@@ -1343,7 +1359,7 @@ class ProviderFactory:
             )
 
         else:
-            raise ValueError(f"Unsupported provider type: {provider_type}")
+            raise _credential_error(provider_type, f"Unsupported provider type: {provider_type}")
 
     @staticmethod
     def get_available_providers(**credentials) -> List[ImageProvider]:
