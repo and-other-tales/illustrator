@@ -32,11 +32,13 @@ class TestChapter:
 
     def test_chapter_validation_errors(self):
         """Test chapter validation errors."""
+        # Test with empty title should fail 
         with pytest.raises(ValidationError):
             Chapter(
-                # Missing required fields should fail
-                title="Test"
-                # Missing content, number, word_count
+                title="",  # Empty title should fail
+                content="Some content",
+                number=1,
+                word_count=5
             )
 
 
