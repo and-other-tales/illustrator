@@ -289,7 +289,7 @@ class HuggingFaceEndpointChatWrapper:
                 # Check if endpoint is paused and retry
                 if is_endpoint_paused_error(error_message):
                     logger.warning("HuggingFace endpoint is paused during text_generation, waiting for restart")
-                    await wait_for_endpoint_restart(self._session_id, countdown_seconds=120)
+                    asyncio.run(wait_for_endpoint_restart(self._session_id, countdown_seconds=120))
                     
                     # Retry once after waiting
                     try:
