@@ -847,8 +847,6 @@ class CharacterTracker:
         
         profile.appearances.append(appearance)
         self.characters[name] = profile
-        # Just a placeholder for async version - we've moved the actual implementation
-        pass
 
         # Update consistency score
         profile.consistency_score = self._calculate_consistency_score(profile)

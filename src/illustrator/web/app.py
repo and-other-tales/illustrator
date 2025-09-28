@@ -1503,7 +1503,7 @@ class WebSocketIllustrationGenerator:
         # Initialize the advanced prompt engineering system
         try:
             if create_chat_model_from_context:
-                self.llm = create_chat_model_from_context(context)
+                self.llm = create_chat_model_from_context(context, session_id=session_id)
             else:
                 self.llm = None
         except Exception as exc:  # pragma: no cover - surfaced in UI logs

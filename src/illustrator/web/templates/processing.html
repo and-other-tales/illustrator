@@ -156,6 +156,27 @@
     </div>
 </div>
 
+<!-- Endpoint Pause Notification -->
+<div class="row mb-4" id="endpointPauseAlert" style="display: none;">
+    <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
+        <div class="alert alert-warning alert-dismissible" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
+                <div class="flex-grow-1">
+                    <h5 class="alert-heading mb-1">AI Endpoint Temporarily Paused</h5>
+                    <p class="mb-2" id="endpointPauseMessage">The AI service endpoint is currently paused. Waiting for it to restart automatically...</p>
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm text-warning me-2" role="status">
+                            <span class="visually-hidden">Waiting...</span>
+                        </div>
+                        <strong id="countdownTimer">Retrying in 120 seconds...</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Processing Log -->
 <div class="row mb-4">
     <div class="col-lg-10 offset-lg-1 col-xl-8 offset-xl-2">
@@ -559,6 +580,10 @@ function handleProcessingUpdate(data) {
         handleProcessingComplete(data);
     } else if (data.type === 'log') {
         addLogMessage(data.level, data.message);
+    } else if (data.type === 'endpoint_paused') {
+        showEndpointPauseAlert(data.message, data.countdown_seconds);
+    } else if (data.type === 'endpoint_countdown') {
+        updateCountdownTimer(data.countdown_seconds, data.message);
     }
 }
 
@@ -868,6 +893,55 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Endpoint pause handling
+function showEndpointPauseAlert(message, countdownSeconds) {
+    const alertElement = document.getElementById('endpointPauseAlert');
+    const messageElement = document.getElementById('endpointPauseMessage');
+    const timerElement = document.getElementById('countdownTimer');
+    
+    // Show the alert
+    alertElement.style.display = 'block';
+    messageElement.textContent = message || 'The AI service endpoint is currently paused. Waiting for it to restart automatically...';
+    timerElement.textContent = `Retrying in ${countdownSeconds} seconds...`;
+    
+    // Add log message
+    addLogMessage('warning', `AI endpoint paused - waiting ${countdownSeconds} seconds for restart`);
+    
+    // Update processing status
+    updateProcessingStatus('paused', 'Endpoint Paused');
+}
+
+function updateCountdownTimer(remainingSeconds, message) {
+    const timerElement = document.getElementById('countdownTimer');
+    const messageElement = document.getElementById('endpointPauseMessage');
+    
+    if (remainingSeconds <= 0) {
+        // Hide the alert when countdown is done
+        const alertElement = document.getElementById('endpointPauseAlert');
+        alertElement.style.display = 'none';
+        
+        // Update processing status
+        updateProcessingStatus('processing', 'Retrying...');
+        addLogMessage('info', 'Endpoint wait period completed - attempting to resume processing');
+    } else {
+        // Update countdown display
+        timerElement.textContent = `Retrying in ${remainingSeconds} seconds...`;
+        if (message) {
+            messageElement.textContent = message;
+        }
+        
+        // Log countdown updates at 30-second intervals to avoid spam
+        if (remainingSeconds % 30 === 0) {
+            addLogMessage('info', `Still waiting for endpoint restart - ${remainingSeconds} seconds remaining`);
+        }
+    }
+}
+
+function hideEndpointPauseAlert() {
+    const alertElement = document.getElementById('endpointPauseAlert');
+    alertElement.style.display = 'none';
 }
 
 // Cleanup on page unload

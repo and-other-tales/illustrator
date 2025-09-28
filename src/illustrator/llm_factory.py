@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from dataclasses import dataclass
 import inspect
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Iterable, Sequence
@@ -40,8 +41,10 @@ class HuggingFaceEndpointChatWrapper:
         generation_kwargs: dict[str, Any],
         *,
         stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
+        session_id: str | None = None,
     ) -> None:
         self._client = client
+        self._session_id = session_id
         # Separate generation kwargs for text_generation and chat_completion
         self._generation_kwargs = {
             k: v for k, v in generation_kwargs.items()
@@ -227,10 +230,51 @@ class HuggingFaceEndpointChatWrapper:
                     if generated_text:
                         return AIMessage(content=generated_text.strip())
                 except Exception as e:  # pragma: no cover - fallback for unsupported chat endpoints
-                    logger.warning(
-                        "HuggingFace chat_completion failed with %s: %s; falling back to text_generation",
-                        type(e).__name__, str(e)
-                    )
+                    error_message = str(e)
+                    
+                    # Check if endpoint is paused
+                    if is_endpoint_paused_error(error_message):
+                        logger.warning("HuggingFace endpoint is paused, waiting for restart")
+                        await wait_for_endpoint_restart(self._session_id, countdown_seconds=120)
+                        
+                        # Retry once after waiting
+                        try:
+                            if use_stream:
+                                aggregated_tokens: list[str] = []
+
+                                for chunk in self._client.chat_completion(
+                                    messages=chat_payload,
+                                    **chat_kwargs,
+                                ):
+                                    if self._is_harmony:
+                                        chunk_text = _extract_harmony_token(chunk)
+                                    else:
+                                        chunk_text = _extract_chat_chunk(chunk)
+                                    if chunk_text:
+                                        aggregated_tokens.append(chunk_text)
+                                        _schedule_stream_callback(chunk_text)
+
+                                generated_text = "".join(aggregated_tokens)
+                            else:
+                                completion = self._client.chat_completion(
+                                    messages=chat_payload,
+                                    **chat_kwargs,
+                                )
+
+                                generated_text = _extract_chat_completion_text(completion)
+
+                            if generated_text:
+                                return AIMessage(content=generated_text.strip())
+                        except Exception as retry_e:
+                            logger.warning(
+                                "HuggingFace chat_completion retry failed with %s: %s; falling back to text_generation",
+                                type(retry_e).__name__, str(retry_e)
+                            )
+                    else:
+                        logger.warning(
+                            "HuggingFace chat_completion failed with %s: %s; falling back to text_generation",
+                            type(e).__name__, str(e)
+                        )
 
             # Fallback to text-generation style invocation
             logger.debug("Using text_generation with parameters: %s", self._generation_kwargs)
@@ -240,11 +284,31 @@ class HuggingFaceEndpointChatWrapper:
                     **self._generation_kwargs,
                 )
             except Exception as e:
-                logger.error(
-                    "HuggingFace text_generation failed with %s: %s",
-                    type(e).__name__, str(e)
-                )
-                return AIMessage(content="")
+                error_message = str(e)
+                
+                # Check if endpoint is paused and retry
+                if is_endpoint_paused_error(error_message):
+                    logger.warning("HuggingFace endpoint is paused during text_generation, waiting for restart")
+                    await wait_for_endpoint_restart(self._session_id, countdown_seconds=120)
+                    
+                    # Retry once after waiting
+                    try:
+                        raw_output = self._client.text_generation(
+                            prompt,
+                            **self._generation_kwargs,
+                        )
+                    except Exception as retry_e:
+                        logger.error(
+                            "HuggingFace text_generation retry failed with %s: %s",
+                            type(retry_e).__name__, str(retry_e)
+                        )
+                        return AIMessage(content="")
+                else:
+                    logger.error(
+                        "HuggingFace text_generation failed with %s: %s",
+                        type(e).__name__, str(e)
+                    )
+                    return AIMessage(content="")
 
             if use_stream:
                 aggregated_tokens = []
@@ -399,6 +463,7 @@ def create_chat_model(
     huggingface_api_key: str | None,
     huggingface_config: HuggingFaceConfig | None = None,
     stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
+    session_id: str | None = None,
 ) -> Any:
     """Instantiate a chat-capable model for the requested provider."""
 
@@ -478,6 +543,7 @@ def create_chat_model(
         client,
         generation_kwargs,
         stream_callback=stream_callback,
+        session_id=session_id,
     )
 
 
@@ -493,7 +559,7 @@ def huggingface_config_from_context(context: ManuscriptContext) -> HuggingFaceCo
     )
 
 
-def create_chat_model_from_context(context: ManuscriptContext) -> Any:
+def create_chat_model_from_context(context: ManuscriptContext, session_id: str | None = None) -> Any:
     """Convenience helper to create a chat model using context configuration."""
 
     return create_chat_model(
@@ -503,8 +569,74 @@ def create_chat_model_from_context(context: ManuscriptContext) -> Any:
         huggingface_api_key=getattr(context, "huggingface_api_key", None),
         huggingface_config=huggingface_config_from_context(context),
         stream_callback=getattr(context, "huggingface_stream_callback", None),
+        session_id=session_id,
     )
 logger = logging.getLogger(__name__)
+
+
+class EndpointPausedError(Exception):
+    """Exception raised when HuggingFace endpoint is paused."""
+    
+    def __init__(self, message="The endpoint is paused, ask a maintainer to restart it"):
+        self.message = message
+        super().__init__(self.message)
+
+
+def is_endpoint_paused_error(error_message: str) -> bool:
+    """Check if error message indicates endpoint is paused."""
+    if not error_message:
+        return False
+    
+    error_lower = error_message.lower()
+    return (
+        "endpoint is paused" in error_lower or
+        "ask a maintainer to restart" in error_lower
+    )
+
+
+async def wait_for_endpoint_restart(session_id: str = None, countdown_seconds: int = 120):
+    """Wait for endpoint to restart with countdown notifications."""
+    logger.info(f"Endpoint paused, waiting {countdown_seconds} seconds for restart")
+    
+    # Notify WebSocket clients about the pause and countdown
+    try:
+        from illustrator.web.app import connection_manager
+        if session_id and session_id in connection_manager.active_connections:
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "endpoint_paused",
+                    "message": "AI endpoint is paused. Waiting for restart...",
+                    "countdown_seconds": countdown_seconds,
+                    "status": "waiting"
+                }),
+                session_id
+            )
+    except Exception as e:
+        logger.debug(f"Could not send WebSocket notification: {e}")
+    
+    # Count down in 10-second intervals
+    remaining = countdown_seconds
+    while remaining > 0:
+        await asyncio.sleep(10)
+        remaining -= 10
+        
+        # Send countdown updates
+        try:
+            from illustrator.web.app import connection_manager
+            if session_id and session_id in connection_manager.active_connections:
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "endpoint_countdown",
+                        "message": f"Retrying in {remaining} seconds...",
+                        "countdown_seconds": remaining,
+                        "status": "waiting"
+                    }),
+                    session_id
+                )
+        except Exception as e:
+            logger.debug(f"Could not send countdown update: {e}")
+    
+    logger.info("Endpoint wait period completed, attempting retry")
 
 
 def _allow_offline_fallback() -> bool:
