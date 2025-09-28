@@ -346,6 +346,7 @@ class TestGenerateIllustrations:
             user_id="test_user",
             anthropic_api_key="test_key",
             openai_api_key="test_openai_key",  # Add OpenAI key
+            image_provider=ImageProvider.DALLE,
             image_concurrency=1
         )
         runtime = MagicMock()
@@ -356,7 +357,7 @@ class TestGenerateIllustrations:
 
         with patch('illustrator.graph.ProviderFactory') as mock_provider_factory, \
              patch('illustrator.graph.init_chat_model'), \
-             patch('illustrator.graph.FeedbackSystem'):
+             patch('illustrator.graph.FeedbackSystem') as mock_feedback_system:
 
             mock_provider = AsyncMock()
             mock_provider_factory.create_provider.return_value = mock_provider
@@ -364,6 +365,27 @@ class TestGenerateIllustrations:
                 "success": True,
                 "image_data": "test_image_data",
                 "metadata": {"test": "metadata"}
+            })
+
+            # Mock the FeedbackSystem
+            mock_feedback_instance = AsyncMock()
+            mock_feedback_system.return_value = mock_feedback_instance
+            
+            # Import QualityAssessment and create proper mock
+            from illustrator.quality_feedback import QualityAssessment
+            from illustrator.models import QualityMetric
+            
+            quality_assessment = QualityAssessment()
+            quality_assessment.prompt_id = "test_prompt_1"
+            quality_assessment.generation_success = True
+            quality_assessment.quality_scores = {QualityMetric.ACCURACY: 0.9}
+            quality_assessment.provider = ImageProvider.DALLE
+            quality_assessment.timestamp = "2025-09-28T10:00:00"
+            
+            mock_feedback_instance.process_generation_feedback = AsyncMock(return_value={
+                'quality_assessment': quality_assessment,
+                'improved_prompt': None,
+                'feedback_applied': False
             })
 
             result = await generate_illustrations(state, runtime)
