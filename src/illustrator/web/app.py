@@ -2011,6 +2011,8 @@ def create_web_client_app() -> FastAPI:
 
     # Templates
     web_templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    # Add global functions to templates
+    web_templates.env.globals["app_version"] = _current_app_version
 
     # Create HTTP client for API requests
     async def get_api_client():

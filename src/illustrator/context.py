@@ -218,7 +218,7 @@ def get_default_context() -> IllustratorContext:
         llm_provider=provider,
         model=default_model,
         openai_api_key=os.getenv('OPENAI_API_KEY'),
-        anthropic_api_key=anthropic_key if provider == LLMProvider.ANTHROPIC else None,
+        anthropic_api_key=anthropic_key,  # Keep API key regardless of active provider
         google_credentials=os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
         google_project_id=os.getenv('GOOGLE_PROJECT_ID'),
         huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),

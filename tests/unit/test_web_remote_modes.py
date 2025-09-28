@@ -110,8 +110,14 @@ async def test_web_client_websocket_proxy_bridges_messages(monkeypatch):
 
     fake_remote = FakeRemoteWS()
 
-    async def fake_connect(url: str):  # returns async context manager
-        return fake_remote
+    class FakeAsyncContextManager:
+        async def __aenter__(self):
+            return fake_remote
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+    def fake_connect(url: str):  # returns async context manager
+        return FakeAsyncContextManager()
 
     with patch('src.illustrator.web.app.websockets.connect', new=fake_connect):
         app = create_web_client_app()
