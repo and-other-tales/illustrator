@@ -640,7 +640,11 @@ Intensity: {emotional_moment.intensity_score}
 Recommend the optimal composition for maximum visual and emotional impact.""")
             ]
 
-            response = await self.llm.ainvoke(messages)
+            response = await _safe_llm_invoke(
+                self.llm,
+                messages,
+                operation="scene composition analysis",
+            )
             composition_data = parse_llm_json(response.content)
 
             return SceneComposition(
@@ -846,7 +850,11 @@ class StyleTranslator:
                     HumanMessage(content=f"Analyze this chapter and propose up to 4 header options with title, description, visual_focus, artistic_style, composition_notes and a short prompt. Chapter:\n{chapter.content}")
                 ]
 
-                response = await self.llm.ainvoke(messages)
+                response = await _safe_llm_invoke(
+                    self.llm,
+                    messages,
+                    operation="chapter header analysis",
+                )
                 parsed = parse_llm_json(response.content)
 
                 options = []
@@ -1427,7 +1435,11 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 HumanMessage(content=f"Scene: {emotional_moment.text_excerpt}\nContext: {emotional_moment.context}")
             ]
 
-            response = await self.llm.ainvoke(messages)
+            response = await _safe_llm_invoke(
+                self.llm,
+                messages,
+                operation="character context extraction",
+            )
             character_data = json.loads(response.content.strip())
 
             # Update character profiles
