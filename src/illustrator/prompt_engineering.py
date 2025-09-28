@@ -1691,10 +1691,14 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         """
 
         try:
-            response = await self.llm.ainvoke([
-                SystemMessage(content="You are an expert visual artist and literary analyst who creates detailed illustration concepts based on deep textual analysis."),
-                HumanMessage(content=analysis_prompt)
-            ])
+            response = await _safe_llm_invoke(
+                self.llm,
+                [
+                    SystemMessage(content="You are an expert visual artist and literary analyst who creates detailed illustration concepts based on deep textual analysis."),
+                    HumanMessage(content=analysis_prompt)
+                ],
+                operation="chapter header deep analysis",
+            )
 
             analysis_data = parse_llm_json(response.content)
             header_options = []
@@ -1911,10 +1915,14 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 "Original text (for example: 'top step', 'steps', 'Victorian terrace house', 'chipped mug', 'steam'). If you must paraphrase, keep core nouns unchanged."
             )
 
-            response = await self.llm.ainvoke([
-                SystemMessage(content=system_guard),
-                HumanMessage(content=enhancement_prompt)
-            ])
+            response = await _safe_llm_invoke(
+                self.llm,
+                [
+                    SystemMessage(content=system_guard),
+                    HumanMessage(content=enhancement_prompt)
+                ],
+                operation="scene description enhancement",
+            )
 
             raw_content = getattr(response, "content", response)
 
