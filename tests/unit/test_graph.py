@@ -323,7 +323,9 @@ class TestGenerateIllustrations:
 
         context = ManuscriptContext(
             user_id="test_user",
+            llm_provider=LLMProvider.ANTHROPIC,
             anthropic_api_key="test_key",
+            image_provider=ImageProvider.DALLE,
             openai_api_key="test_openai_key"  # Add OpenAI key to avoid initialization error
         )
         runtime = MagicMock()
