@@ -1,6 +1,7 @@
 """Advanced prompt engineering system for optimal text-to-image generation."""
 
 import asyncio
+import inspect
 import json
 import re
 import logging
@@ -28,6 +29,46 @@ logger = logging.getLogger(__name__)
 _DEFAULT_LLM_TIMEOUT = 12.0
 
 
+async def _coerce_to_ai_message(response: Any) -> AIMessage:
+    """Normalize different response shapes into an `AIMessage`."""
+
+    if isinstance(response, AIMessage):
+        return response
+
+    content = response
+    if hasattr(response, "content"):
+        try:
+            content = response.content
+        except Exception:
+            content = getattr(response, "content", "")
+
+    if callable(content):
+        try:
+            content = content()
+        except Exception:
+            pass
+
+    if inspect.isawaitable(content):
+        try:
+            content = await content  # type: ignore[arg-type]
+        except Exception:
+            content = ""
+
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="ignore")
+
+    if content is None:
+        content = ""
+
+    if not isinstance(content, str):
+        try:
+            content = json.dumps(content)
+        except Exception:
+            content = str(content)
+
+    return AIMessage(content=content)
+
+
 async def _safe_llm_invoke(
     llm: Optional[BaseChatModel],
     messages: List[Any],
@@ -41,7 +82,8 @@ async def _safe_llm_invoke(
         return AIMessage(content="{}")
 
     try:
-        return await asyncio.wait_for(llm.ainvoke(messages), timeout=timeout)
+        response = await asyncio.wait_for(llm.ainvoke(messages), timeout=timeout)
+        return await _coerce_to_ai_message(response)
     except asyncio.TimeoutError:
         logger.warning(
             "LLM call timed out after %.1fs during %s; proceeding with fallback data.",
@@ -1773,7 +1815,7 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         }
 
         styles = ["symbolic watercolor", "character portrait", "atmospheric landscape", "dramatic scene"]
-        focuses = ["symbolic", "character-driven", "environmental", "dramatic"]
+        focuses = ["symbolic", "character", "environmental", "dramatic"]
 
         header_options = []
         for i in range(4):
