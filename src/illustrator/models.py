@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from enum import Enum
 from typing import Any, Dict, List
 
@@ -58,6 +59,24 @@ class Chapter(BaseModel):
     number: int = Field(default=0, description="Chapter number")
     word_count: int = Field(default=0, description="Number of words in chapter")
     emotional_moments: list = Field(default_factory=list, description="Optional emotional moments in chapter")
+    
+    @model_validator(mode='before')
+    @classmethod
+    def ensure_required_fields(cls, data: Dict) -> Dict:
+        """Ensure required fields are present."""
+        if isinstance(data, dict):
+            # Handle missing or None ID
+            if 'id' not in data or data.get('id') is None:
+                # Generate a deterministic ID based on title and number
+                title = data.get('title', '')
+                number = data.get('number', 0)
+                data['id'] = f"ch-{uuid.uuid5(uuid.NAMESPACE_DNS, f'{title}-{number}')}"
+            
+            # Handle missing or None summary
+            if 'summary' not in data or data.get('summary') is None:
+                data['summary'] = f"Summary for {data.get('title', 'Untitled Chapter')}"
+                
+        return data
 
 
 class EmotionalMoment(BaseModel):
