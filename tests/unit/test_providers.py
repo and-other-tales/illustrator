@@ -164,7 +164,7 @@ class TestProviderFactory:
         monkeypatch.delenv("ILLUSTRATOR_ENFORCE_REMOTE", raising=False)
         monkeypatch.setenv("ILLUSTRATOR_OFFLINE_MODE", "1")
 
-        with pytest.raises(ValueError, match="OpenAI API key required"):
+        with pytest.raises(ValueError, match="HuggingFace API key is required"):
             ProviderFactory.create_provider(ImageProvider.DALLE)
 
     def test_create_provider_missing_credentials(self):
