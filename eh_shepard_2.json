@@ -1,0 +1,122 @@
+{
+  "style_name": "Advanced E.H. Shepard Style",
+  "description": "Comprehensive style configuration for generating illustrations in the style of E.H. Shepard, famous for Winnie-the-Pooh illustrations",
+  "base_prompt_modifiers": [
+    "hand-drawn pencil sketch",
+    "in the style of E.H. Shepard",
+    "classic children's book illustration",
+    "delicate line work with cross-hatching",
+    "expressive character faces",
+    "gentle pencil shading",
+    "whimsical yet detailed illustration",
+    "soft graphite textures",
+    "traditional book illustration aesthetic"
+  ],
+  "negative_prompt": [
+    "photorealistic",
+    "digital painting",
+    "color",
+    "modern art style",
+    "abstract",
+    "low quality",
+    "blurry",
+    "distorted",
+    "amateur",
+    "text",
+    "watermarks"
+  ],
+  "technical_params": {
+    "style": "artistic",
+    "quality": "high",
+    "artistic_technique": "pencil sketch",
+    "line_quality": "delicate and expressive",
+    "shading_style": "cross-hatching and soft gradients"
+  },
+  "emotional_adaptations": {
+    "joy": {
+      "style_modifiers": [
+        "bright expressive eyes",
+        "gentle smiles",
+        "light cross-hatching",
+        "uplifting character poses"
+      ],
+      "atmosphere_adjustments": "lighter pencil strokes, more open composition"
+    },
+    "sadness": {
+      "style_modifiers": [
+        "downcast expressions",
+        "heavier shading",
+        "melancholic character poses",
+        "gentle emotional depth"
+      ],
+      "atmosphere_adjustments": "deeper shadows with soft edges"
+    },
+    "fear": {
+      "style_modifiers": [
+        "wide eyes",
+        "tense body language",
+        "dramatic shadows",
+        "unsettling atmosphere while maintaining classic style"
+      ],
+      "atmosphere_adjustments": "strategic use of dark areas and contrast"
+    },
+    "mystery": {
+      "style_modifiers": [
+        "atmospheric shadows",
+        "subtle environmental details",
+        "intriguing character expressions",
+        "mysterious background elements"
+      ],
+      "atmosphere_adjustments": "selective shading to create intrigue"
+    },
+    "adventure": {
+      "style_modifiers": [
+        "dynamic character poses",
+        "detailed environmental elements",
+        "sense of movement in line work",
+        "expressive action"
+      ],
+      "atmosphere_adjustments": "energetic line work and composition"
+    }
+  },
+  "provider_optimizations": {
+    "dalle": {
+      "style_emphasis": "E.H. Shepard pencil sketch style",
+      "quality_modifiers": [
+        "detailed line work",
+        "classic book illustration",
+        "artistic pencil drawing"
+      ],
+      "technical_adjustments": {
+        "style": "vivid",
+        "size": "1024x1024"
+      }
+    },
+    "imagen4": {
+      "style_emphasis": "E.H. Shepard classic illustration technique",
+      "quality_modifiers": [
+        "masterful pencil technique",
+        "professional book illustration",
+        "detailed crosshatching",
+        "expressive character art"
+      ],
+      "technical_adjustments": {
+        "guidance_scale": 12,
+        "aspect_ratio": "1:1"
+      }
+    },
+    "flux": {
+      "style_emphasis": "Traditional E.H. Shepard pencil illustration",
+      "quality_modifiers": [
+        "detailed artistic technique",
+        "classic illustration mastery",
+        "expressive pencil work",
+        "children's book art excellence"
+      ],
+      "technical_adjustments": {
+        "guidance_scale": 7.5,
+        "num_inference_steps": 30
+      }
+    }
+  }
+}

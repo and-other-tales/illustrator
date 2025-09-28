@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from illustrator.web.routes import manuscripts, chapters
 from illustrator.db_config import create_tables
 from illustrator.web.models.web_models import ConnectionManager
-from illustrator.models import EmotionalTone, IllustrationPrompt
+from illustrator.models import EmotionalTone, IllustrationPrompt, ImageProvider
 
 # Re-export commonly patched symbols for tests: make sure tests that patch
 # `src.illustrator.web.app.get_saved_manuscripts` or `IllustrationGenerator`
@@ -1522,6 +1522,8 @@ class WebSocketIllustrationGenerator:
 
     async def create_advanced_prompt(self, emotional_moment, provider, style_config, chapter):
         """Create an advanced AI-analyzed prompt for image generation."""
+        illustration_prompt = None
+
         try:
             # Use the advanced prompt engineering system
             illustration_prompt = await self.prompt_engineer.engineer_prompt(
@@ -1562,7 +1564,8 @@ class WebSocketIllustrationGenerator:
                     self.session_id
                 )
 
-            return illustration_prompt.prompt
+            prompt_text = self._add_flux_style_tags(illustration_prompt.prompt, provider)
+            return prompt_text
 
         except Exception as e:
             # Fallback to simple prompt generation
@@ -1575,10 +1578,13 @@ class WebSocketIllustrationGenerator:
                 self.session_id
             )
 
-            return self._create_fallback_prompt(emotional_moment.text_excerpt,
-                                              emotional_moment.emotional_tones[0] if emotional_moment.emotional_tones else EmotionalTone.NEUTRAL,
-                                              chapter.title,
-                                              style_config.get("art_style", "digital painting"))
+            fallback_prompt = self._create_fallback_prompt(
+                emotional_moment.text_excerpt,
+                emotional_moment.emotional_tones[0] if emotional_moment.emotional_tones else EmotionalTone.NEUTRAL,
+                chapter.title,
+                style_config.get("art_style", "digital painting")
+            )
+            return self._add_flux_style_tags(fallback_prompt, provider)
 
     def _create_fallback_prompt(self, text_excerpt, emotional_tone, chapter_title, art_style):
         """Create an instructive, high-quality fallback prompt (string).
@@ -1683,6 +1689,25 @@ class WebSocketIllustrationGenerator:
 
         return " ".join(parts)
 
+    def _add_flux_style_tags(self, prompt_text: str | None, provider: ImageProvider) -> str | None:
+        """Boost Flux prompts with explicit line-art tags for stronger style anchoring."""
+        if not prompt_text or provider != ImageProvider.FLUX:
+            return prompt_text
+
+        updated = prompt_text.strip()
+
+        prefix = "Line drawing, pen-and-ink illustration in the style of E.H. Shepard."
+        if prefix.lower() not in updated.lower():
+            updated = f"{prefix} {updated}" if updated else prefix
+
+        suffix = "Detailed line art, vintage children's book illustration style, monochrome."
+        if suffix.lower() not in updated.lower():
+            if updated and not updated.strip().endswith(tuple(".!?")):
+                updated = updated.rstrip() + "."
+            updated = f"{updated} {suffix}" if updated else suffix
+
+        return updated
+
     async def generate_images(self, prompts, chapter):
         """Generate images with WebSocket progress updates."""
         generated_images = []
@@ -1740,6 +1765,25 @@ class WebSocketIllustrationGenerator:
                         image_data = base64.b64decode(result['base64_image'])
                         with open(file_path, 'wb') as f:
                             f.write(image_data)
+                    elif 'image_data' in result:
+                        try:
+                            image_data = result['image_data']
+                            if isinstance(image_data, str):
+                                image_bytes = base64.b64decode(image_data)
+                            else:
+                                image_bytes = image_data
+                            with open(file_path, 'wb') as f:
+                                f.write(image_bytes)
+                        except Exception as decode_error:
+                            await self.connection_manager.send_personal_message(
+                                json.dumps({
+                                    "type": "log",
+                                    "level": "warning",
+                                    "message": f"⚠️ Failed to decode Imagen data for image {i+1}: {decode_error}"
+                                }),
+                                self.session_id
+                            )
+                            file_path = None
                     elif 'url' in result:
                         # Download the image from URL
                         try:
