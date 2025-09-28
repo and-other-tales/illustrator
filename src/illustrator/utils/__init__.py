@@ -1,6 +1,6 @@
 """Utility functions for the illustrator application."""
 
-# Import and re-export from validation_helpers
+# Import from validation_helpers
 from .validation_helpers import (
     ensure_chapter_required_fields,
     validate_manuscript_before_save,
@@ -8,29 +8,39 @@ from .validation_helpers import (
     extract_json_from_text
 )
 
-# Import from parent module to avoid circular imports
+# Import directly from the parent module's utils.py file
+# We need to use a relative import to avoid circular dependencies
+import os
 import sys
-import importlib
-parent_utils = importlib.import_module('illustrator.utils')
-sys.modules[__name__].split_model_and_provider = parent_utils.split_model_and_provider
-sys.modules[__name__].save_image_from_base64 = parent_utils.save_image_from_base64
-sys.modules[__name__].get_output_directory = parent_utils.get_output_directory
-sys.modules[__name__].count_tokens_estimate = parent_utils.count_tokens_estimate
-sys.modules[__name__].truncate_text = parent_utils.truncate_text
-sys.modules[__name__].validate_api_keys = parent_utils.validate_api_keys
-sys.modules[__name__].format_file_size = parent_utils.format_file_size
-sys.modules[__name__].load_config = parent_utils.load_config
-sys.modules[__name__].save_config = parent_utils.save_config
-sys.modules[__name__].create_prompt_variations = parent_utils.create_prompt_variations
+import importlib.util
 
-# Define which symbols should be exported
+# Get the path to the parent module's utils.py file
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+utils_path = os.path.join(parent_dir, 'utils.py')
+
+# Load the utils.py module directly
+spec = importlib.util.spec_from_file_location('utils_direct', utils_path)
+utils_direct = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(utils_direct)
+
+# Export functions from utils.py
+split_model_and_provider = utils_direct.split_model_and_provider
+save_image_from_base64 = utils_direct.save_image_from_base64
+get_output_directory = utils_direct.get_output_directory
+count_tokens_estimate = utils_direct.count_tokens_estimate
+truncate_text = utils_direct.truncate_text
+validate_api_keys = utils_direct.validate_api_keys
+format_file_size = utils_direct.format_file_size
+load_config = utils_direct.load_config
+save_config = utils_direct.save_config
+create_prompt_variations = utils_direct.create_prompt_variations
+
+# Define __all__ to specify what gets exported
 __all__ = [
-    # From validation_helpers
     'ensure_chapter_required_fields',
     'validate_manuscript_before_save',
     'parse_llm_json',
     'extract_json_from_text',
-    # From utils.py
     'split_model_and_provider',
     'save_image_from_base64',
     'get_output_directory',
