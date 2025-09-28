@@ -22,7 +22,6 @@ from illustrator.providers import (
     FluxProvider,
     HuggingFaceImageProvider,
     Imagen4Provider,
-    LocalStubImageProvider,
     ProviderFactory,
     ReplicateFluxProvider,
     ReplicateImagenProvider,
@@ -160,14 +159,13 @@ class TestProviderFactory:
 
         assert isinstance(provider, SeedreamProvider)
 
-    def test_offline_stub_provider_fallback(self, monkeypatch: pytest.MonkeyPatch):
-        """Provider factory should return a stub when credentials are missing in offline mode."""
+    def test_offline_mode_requires_credentials(self, monkeypatch: pytest.MonkeyPatch):
+        """Even in offline mode the factory must not fall back to stubs."""
         monkeypatch.delenv("ILLUSTRATOR_ENFORCE_REMOTE", raising=False)
         monkeypatch.setenv("ILLUSTRATOR_OFFLINE_MODE", "1")
 
-        provider = ProviderFactory.create_provider(ImageProvider.DALLE)
-
-        assert isinstance(provider, LocalStubImageProvider)
+        with pytest.raises(ValueError, match="OpenAI API key required"):
+            ProviderFactory.create_provider(ImageProvider.DALLE)
 
     def test_create_provider_missing_credentials(self):
         """Test error handling for missing credentials."""
