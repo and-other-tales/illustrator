@@ -1,9 +1,9 @@
 {
-  "image_provider": "flux",
+  "image_provider": "imagen4",
   "art_style": "pencil sketch",
   "color_palette": "Black and White",
   "artistic_influences": null,
-  "style_config_path": "advanced_eh_shepard_config.json",
+  "style_config_path": "eh_shepard_2.json",
   "huggingface_model_id": null,
   "huggingface_provider": null
 }

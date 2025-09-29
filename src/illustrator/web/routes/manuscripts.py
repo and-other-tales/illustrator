@@ -758,6 +758,8 @@ async def preview_style_image(
                 preview_filename = f"{manuscript_id}_style_preview_{uuid.uuid4().hex}.png"
                 preview_path = PREVIEW_IMAGES_DIR / preview_filename
 
+                preview_path.parent.mkdir(parents=True, exist_ok=True)
+
                 with open(preview_path, 'wb') as preview_file:
                     preview_file.write(image_bytes)
 

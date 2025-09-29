@@ -1,11 +1,12 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+illustrated_output/
 *.py[codz]
 *$py.class
-
+test*
 # C extensions
 *.so
-
+vertex.json
 # Distribution / packaging
 .Python
 build/
@@ -205,3 +206,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+# Local vertex configuration
+vertex.json

@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import io
+import json
 import logging
 import os
 import re
@@ -13,6 +14,9 @@ import aiohttp
 from langchain.chat_models import init_chat_model
 from langchain_huggingface.llms.huggingface_endpoint import HuggingFaceEndpoint
 from huggingface_hub import InferenceClient
+
+from google.auth.credentials import Credentials
+from google.oauth2 import service_account
 
 from illustrator.models import (
     Chapter,
@@ -355,6 +359,7 @@ class Imagen4Provider(ImageGenerationProvider):
         )
         self.credentials_path = credentials_path
         self.project_id = project_id
+        self._cached_credentials: Credentials | None = None
         # Note: In production, you'd use the Google Cloud AI Platform client library
 
     def get_provider_type(self) -> ImageProvider:
@@ -381,7 +386,8 @@ class Imagen4Provider(ImageGenerationProvider):
             from vertexai.preview.vision_models import ImageGenerationModel
 
             # Initialize Vertex AI
-            vertexai.init(project=self.project_id)
+            credentials = self._get_google_credentials()
+            vertexai.init(project=self.project_id, credentials=credentials)
 
             # Get the model (Imagen 3 family)
             model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")
@@ -459,6 +465,39 @@ class Imagen4Provider(ImageGenerationProvider):
                 'error': f"Imagen4 generation failed: {str(e)}",
                 'status_code': 500
             }
+
+    def _get_google_credentials(self) -> Credentials:
+        """Load Google Cloud service account credentials from the provided path or JSON."""
+        if self._cached_credentials is not None:
+            return self._cached_credentials
+
+        path_or_json = self.credentials_path.strip()
+
+        # Expand environment variables and tilde for filesystem paths
+        expanded_path = os.path.expanduser(os.path.expandvars(path_or_json))
+        if os.path.exists(expanded_path):
+            credentials = service_account.Credentials.from_service_account_file(
+                expanded_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            self._cached_credentials = credentials
+            return credentials
+
+        # Fall back to interpreting the string as raw JSON credentials
+        try:
+            service_account_info = json.loads(path_or_json)
+        except json.JSONDecodeError as exc:
+            raise FileNotFoundError(
+                "Google credentials file not found and value is not valid JSON. "
+                "Set GOOGLE_APPLICATION_CREDENTIALS to the path or JSON content of a service account key."
+            ) from exc
+
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"],
+        )
+        self._cached_credentials = credentials
+        return credentials
 
 
 class FluxProvider(ImageGenerationProvider):

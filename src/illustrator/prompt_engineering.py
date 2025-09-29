@@ -2059,78 +2059,109 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
         concrete nouns if they're not supported by the original text.
         """
         try:
-            orig = (original_text or "").lower()
+            original = original_text or ""
+            orig_lower = original.lower()
             out = enhanced_description
 
             # Identify explicit phrases to preserve. Start with some well-known phrase patterns,
             # then extract multi-word source fragments from the preservation source to ensure
             # the LLM does not drop them.
-            explicit_phrases = set()
-            # Known phrase patterns to prefer preserving
-            phrase_patterns = [r"top step", r"step of his", r"terrace house", r"victorian", r"chipped mug", r"mug", r"steam"]
+            explicit_phrases: List[str] = []
+            phrase_patterns = [
+                r"top step",
+                r"step of his",
+                r"terrace house",
+                r"victorian",
+                r"chipped mug",
+                r"mug",
+                r"steam",
+            ]
             for pat in phrase_patterns:
-                if re.search(pat, orig):
-                    explicit_phrases.add(pat)
+                if re.search(pat, orig_lower):
+                    explicit_phrases.append(pat)
 
-            # Heuristic: split the preservation source on punctuation and gather 2-4 word fragments
-            fragments = [frag.strip() for frag in re.split(r'[\.;:,\n]+', orig) if frag.strip()]
+            fragments = [frag.strip() for frag in re.split(r"[\.;:,\n]+", original) if frag.strip()]
             for frag in fragments:
-                words = frag.split()
-                if 1 < len(words) <= 4:
-                    # Keep fragments that look like descriptive phrases
-                    explicit_phrases.add(frag)
+                word_count = len(frag.split())
+                if 3 <= word_count <= 12 and frag.lower() not in (p.lower() for p in explicit_phrases):
+                    explicit_phrases.append(frag)
 
-            # Additionally, extract simple n-grams (2-4 words) from the preservation source to capture
-            # short descriptive phrases the LLM might have dropped (e.g., 'rippling shadow').
-            tokens = re.findall(r"\b\w+\b", orig)
-            max_ngrams = 10
-            ngrams_added = 0
-            for n in (2, 3, 4):
-                if ngrams_added >= max_ngrams:
-                    break
-                for i in range(len(tokens) - n + 1):
-                    gram = " ".join(tokens[i:i+n])
-                    # skip trivial grams that are just stopwords
-                    if len(gram) > 2 and gram not in explicit_phrases:
-                        explicit_phrases.add(gram)
-                        ngrams_added += 1
-                        if ngrams_added >= max_ngrams:
-                            break
+            # Helper to retrieve the original sentence containing a phrase so we can append the full context.
+            sentence_candidates = [
+                s.strip()
+                for s in re.split(r"(?<=[.!?])\s+", original)
+                if s.strip()
+            ]
 
-            # Ensure each explicit phrase is present in the output (case-insensitive).
-            # Prefer embedding short preserved phrases into the main descriptive body rather
-            # than only appending them as separate Note clauses which break substring checks.
+            def find_sentence_for_phrase(phrase: str) -> str | None:
+                phrase_lower = phrase.lower().strip()
+                if not phrase_lower:
+                    return None
+                for sentence in sentence_candidates:
+                    if phrase_lower in sentence.lower():
+                        return sentence.strip()
+                return None
+
+            stopwords = {
+                "the",
+                "a",
+                "an",
+                "of",
+                "in",
+                "on",
+                "at",
+                "and",
+                "to",
+                "for",
+                "with",
+                "up",
+                "upon",
+                "over",
+                "above",
+                "about",
+                "from",
+            }
+
             notes_added = 0
-            embedded_phrases: List[str] = []
+            seen_phrases: Set[str] = set()
             for phrase in explicit_phrases:
                 if notes_added >= 5:
                     break
-                phrase_norm = phrase.lower()
-                if phrase_norm and phrase_norm not in out.lower():
-                    # For short phrases (<=4 words), embed as a short natural sentence;
-                    # otherwise append a concise note as a fallback.
-                    word_count = len(phrase.split())
-                    safe_phrase = phrase.strip()
-                    if 1 < word_count <= 4:
-                        # Insert a short sentence near the end of the description using exact tokens.
-                        insertion = f" The scene shows {safe_phrase}."
-                        out = out.rstrip('.') + '.' + insertion
-                        embedded_phrases.append(safe_phrase)
-                    else:
-                        out += f". Note: the scene includes the original detail '{safe_phrase}'."
-                    notes_added += 1
+                phrase_lower = phrase.lower().strip()
+                if not phrase_lower or phrase_lower in seen_phrases:
+                    continue
+                seen_phrases.add(phrase_lower)
 
-            # Conservative removal of invented objects: find simple furniture/object nouns the LLM may invent
+                if phrase_lower in out.lower():
+                    continue
+
+                words = [w for w in phrase.split() if w]
+                significant_words = [w for w in words if w.lower() not in stopwords and len(w) > 3]
+                if len(words) < 3 and not significant_words:
+                    continue
+
+                sentence_match = find_sentence_for_phrase(phrase)
+                if sentence_match and sentence_match.lower() in out.lower():
+                    continue
+
+                if sentence_match:
+                    # Append the full sentence from the manuscript to keep the language natural
+                    normalized_sentence = sentence_match.strip().rstrip('.') + '.'
+                    separator = '' if out.endswith(' ') else ' '
+                    out = out.rstrip() + separator + normalized_sentence
+                else:
+                    # Fall back to a descriptive clause that feels like part of the illustration brief
+                    descriptive_phrase = phrase.strip().rstrip('.')
+                    separator = '' if out.endswith(' ') else ' '
+                    out = out.rstrip('.') + '.' + separator + f"The illustration specifically features {descriptive_phrase}."
+                notes_added += 1
+
             invented_candidates = ["bench", "chair", "table", "lamp", "streetlamp", "carriage"]
             for cand in invented_candidates:
-                if cand in out.lower() and cand not in orig:
-                    # Remove occurrences of the invented candidate (word boundaries) to avoid altering original facts
+                if cand in out.lower() and cand not in orig_lower:
                     out = re.sub(rf"\b{re.escape(cand)}s?\b", "", out, flags=re.IGNORECASE)
 
-            # Cleanup extra whitespace from removals
             out = re.sub(r"\s{2,}", " ", out).strip()
-
-            # Normalize spacing around embedded sentences
             out = re.sub(r"\s+\.", ".", out)
 
             return out
