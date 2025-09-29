@@ -3,7 +3,7 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, StaticPool
 
 from .db_models import Base
 
@@ -30,21 +30,40 @@ except Exception:
     # Never allow environment probing to break imports
     pass
 
+def _build_engine_kwargs(url: str) -> dict:
+    """Construct engine kwargs appropriate for the target database URL."""
+
+    kwargs = {
+        "echo": os.getenv("DB_ECHO", "false").lower() == "true",
+    }
+
+    if url.startswith("sqlite"):
+        is_memory_db = ":memory:" in url or "mode=memory" in url
+        kwargs["poolclass"] = StaticPool if is_memory_db else NullPool
+        kwargs["connect_args"] = {"check_same_thread": False}
+    else:
+        kwargs["poolclass"] = NullPool
+
+    return kwargs
+
+
+# Engine keyword arguments shared across creation paths
+engine_kwargs = _build_engine_kwargs(effective_url)
+
 # Create engine
 try:
     engine = create_engine(
         effective_url,
-        poolclass=NullPool,
-        echo=os.getenv("DB_ECHO", "false").lower() == "true",
+        **engine_kwargs,
     )
 except ModuleNotFoundError as e:
     # If the PostgreSQL driver is missing in environments that default to Postgres,
     # fall back to in-memory SQLite to allow local/test execution.
     if "psycopg2" in str(e):
+        fallback_url = "sqlite:///:memory:"
         engine = create_engine(
-            "sqlite:///:memory:",
-            poolclass=NullPool,
-            echo=os.getenv("DB_ECHO", "false").lower() == "true",
+            fallback_url,
+            **_build_engine_kwargs(fallback_url),
         )
     else:
         raise

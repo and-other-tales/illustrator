@@ -80,6 +80,12 @@
                             <button class="btn btn-outline-primary" onclick="configureStyle()">
                                 <i class="bi bi-palette me-2"></i>Configure Style
                             </button>
+                            <button class="btn btn-outline-secondary position-relative" id="viewGalleryBtn" onclick="viewGallery()" style="display: none;">
+                                <i class="bi bi-images me-2"></i>View Gallery
+                                <span class="badge bg-secondary-subtle text-secondary border position-absolute top-50 translate-middle-y" id="galleryImageCountBadge" style="right: 16px; display: none;">
+                                    0
+                                </span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -154,6 +160,9 @@
                     </div>
                     <div class="col-md-4">
                         <div class="d-flex gap-1 justify-content-end align-items-center">
+                            <button class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center view-images-btn" onclick="viewChapterImages(this)" title="View Images" style="width: 32px; height: 32px; display: none;">
+                                <i class="bi bi-images"></i>
+                            </button>
                             <button class="btn btn-sm btn-light border d-flex align-items-center justify-content-center" onclick="generateChapterHeaders(this)" title="Chapter Headers" style="width: 32px; height: 32px;">
                                 <i class="bi bi-palette"></i>
                             </button>
@@ -394,7 +403,10 @@ function updateManuscriptHeader() {
 
     document.getElementById('totalChapters').textContent = chapters.length;
     document.getElementById('totalWords').textContent = manuscriptData.chapters.reduce((total, ch) => total + (ch.word_count || 0), 0).toLocaleString();
-    document.getElementById('totalImages').textContent = manuscriptData.total_images || 0;
+
+    const totalImages = manuscriptData.total_images || 0;
+    document.getElementById('totalImages').textContent = totalImages;
+    updateGalleryButton(totalImages);
 }
 
 function displayChapters() {
@@ -426,9 +438,82 @@ function displayChapters() {
         // Store chapter ID for actions
         const card = chapterElement.querySelector('.chapter-card');
         card.setAttribute('data-chapter-id', chapterResponse.id);
+        card.setAttribute('data-chapter-number', chapter.number);
+
+        // Reveal image controls when available
+        const viewImagesButton = chapterElement.querySelector('.view-images-btn');
+        if (viewImagesButton) {
+            if (chapterResponse.images_generated && chapterResponse.images_generated > 0) {
+                viewImagesButton.style.display = 'flex';
+                viewImagesButton.setAttribute('data-images-count', chapterResponse.images_generated);
+                viewImagesButton.setAttribute('title', `View ${chapterResponse.images_generated} generated ${chapterResponse.images_generated === 1 ? 'image' : 'images'}`);
+                viewImagesButton.setAttribute('aria-label', `View ${chapterResponse.images_generated} images`);
+            } else {
+                viewImagesButton.style.display = 'none';
+                viewImagesButton.removeAttribute('data-images-count');
+                viewImagesButton.removeAttribute('title');
+                viewImagesButton.removeAttribute('aria-label');
+            }
+        }
 
         container.appendChild(chapterElement);
     });
+}
+
+function updateGalleryButton(totalImages) {
+    const button = document.getElementById('viewGalleryBtn');
+    const badge = document.getElementById('galleryImageCountBadge');
+
+    if (!button) {
+        return;
+    }
+
+    button.style.display = 'block';
+    button.setAttribute('data-images-count', totalImages);
+    button.title = totalImages > 0
+        ? `Open gallery with ${totalImages} generated ${totalImages === 1 ? 'image' : 'images'}`
+        : 'Open gallery (no images yet)';
+
+    if (badge) {
+        if (totalImages > 0) {
+            badge.textContent = totalImages;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+}
+
+function viewGallery() {
+    if (!currentManuscriptId) {
+        return;
+    }
+    window.location.href = `/manuscript/${currentManuscriptId}/gallery`;
+}
+
+function viewChapterImages(button) {
+    const card = button.closest('.chapter-card');
+    if (!card) {
+        viewGallery();
+        return;
+    }
+
+    const chapterNumber = card.getAttribute('data-chapter-number');
+    if (!chapterNumber) {
+        viewGallery();
+        return;
+    }
+
+    const galleryUrl = new URL(window.location.origin + `/manuscript/${currentManuscriptId}/gallery`);
+    const chapterLabel = `Chapter ${chapterNumber}`;
+    galleryUrl.searchParams.set('chapter', chapterLabel);
+
+    const imagesCount = button.getAttribute('data-images-count');
+    if (imagesCount) {
+        galleryUrl.searchParams.set('images', imagesCount);
+    }
+
+    window.location.href = galleryUrl.pathname + galleryUrl.search;
 }
 
 function addNewChapter() {
