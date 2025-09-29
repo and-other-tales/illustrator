@@ -207,14 +207,16 @@ class TestHuggingFaceEndpointChatWrapper:
         
         messages = [HumanMessage(content="Hi")]
         
-        # Mock the internal methods to avoid complex response parsing
-        with patch.object(wrapper, '_run_endpoint') as mock_run:
-            mock_run.return_value = AIMessage(content="Hello world")
+        # Mock client methods with proper chat completion structure
+        mock_response = {
+            "choices": [{"message": {"content": "Hello world"}}]
+        }
+        mock_client.chat_completion.return_value = mock_response
             
-            result = await wrapper.ainvoke(messages)
-            
-            assert isinstance(result, AIMessage)
-            assert result.content == "Hello world"
+        result = await wrapper.ainvoke(messages)
+        
+        assert isinstance(result, AIMessage)
+        assert result.content == "Hello world"
     
     @pytest.mark.asyncio 
     async def test_ainvoke_endpoint_pause_handling(self):
@@ -237,21 +239,23 @@ class TestHuggingFaceEndpointChatWrapper:
         messages = [HumanMessage(content="Test")]
         
         with patch('illustrator.llm_factory.wait_for_endpoint_restart', new_callable=AsyncMock) as mock_wait:
-            with patch.object(wrapper, '_run_endpoint') as mock_run:
-                # First call raises pause error, second succeeds
-                mock_run.side_effect = [
-                    pause_error,
-                    AIMessage(content="Success after restart")
-                ]
-                
-                result = await wrapper.ainvoke(messages)
-                
-                # Should have called wait_for_endpoint_restart
-                mock_wait.assert_called_once_with("test_session", countdown_seconds=120)
-                
-                # Should return success result after retry
-                assert isinstance(result, AIMessage)
-                assert result.content == "Success after restart"
+            # Mock client method to raise pause error first, then succeed
+            success_response = {
+                "choices": [{"message": {"content": "Success after restart"}}]
+            }
+            mock_client.chat_completion.side_effect = [
+                pause_error,
+                success_response
+            ]
+            
+            result = await wrapper.ainvoke(messages)
+            
+            # Should have called wait_for_endpoint_restart
+            mock_wait.assert_called_once_with("test_session", countdown_seconds=120)
+            
+            # Should return success result after retry
+            assert isinstance(result, AIMessage)
+            assert result.content == "Success after restart"
 
 
 class TestMessageConversion:
