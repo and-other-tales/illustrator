@@ -256,6 +256,31 @@ class TestHuggingFaceEndpointChatWrapper:
             # Should return success result after retry
             assert isinstance(result, AIMessage)
             assert result.content == "Success after restart"
+    
+    @pytest.mark.asyncio
+    async def test_ainvoke_chunked_encoding_error_handling(self):
+        """Test ainvoke handling of ChunkedEncodingError."""
+        from requests.exceptions import ChunkedEncodingError
+        
+        mock_client = Mock()
+        
+        # Mock ChunkedEncodingError on chat_completion, should fall back to text_generation
+        chunked_error = ChunkedEncodingError("Response ended prematurely")
+        mock_client.chat_completion.side_effect = chunked_error
+        mock_client.text_generation.return_value = "Fallback response"
+        
+        wrapper = HuggingFaceEndpointChatWrapper(
+            client=mock_client,
+            generation_kwargs={"temperature": 0.7}
+        )
+        
+        messages = [HumanMessage(content="Test")]
+        
+        result = await wrapper.ainvoke(messages)
+        
+        # Should fall back to text_generation and return result
+        assert isinstance(result, AIMessage)
+        assert result.content == "Fallback response"
 
 
 class TestMessageConversion:
@@ -275,7 +300,7 @@ class TestMessageConversion:
         assert "System: You are a helpful assistant." in prompt
         assert "User: Hello!" in prompt
         assert "Assistant: Hi there!" in prompt
-        assert "Human: How are you?" in prompt
+        assert "User: How are you?" in prompt
     
     def test_messages_to_chat_messages(self):
         """Test converting messages to chat format."""
@@ -342,7 +367,8 @@ class TestCreateChatModel:
         
         assert result is mock_model
         mock_init_chat_model.assert_called_once_with(
-            "anthropic/claude-3-sonnet-20240229",
+            model="claude-3-sonnet-20240229",
+            model_provider="anthropic",
             api_key="test_key"
         )
     
@@ -431,12 +457,12 @@ class TestContextHelpers:
 class TestOfflineFallback:
     """Test offline fallback functionality."""
     
-    @patch.dict('os.environ', {'ILLUSTRATOR_ALLOW_OFFLINE': 'true'})
+    @patch.dict('os.environ', {'ILLUSTRATOR_OFFLINE_MODE': '1'})
     def test_allow_offline_fallback_enabled(self):
         """Test offline fallback when enabled."""
         assert _allow_offline_fallback() is True
     
-    @patch.dict('os.environ', {'ILLUSTRATOR_ALLOW_OFFLINE': 'false'})
+    @patch.dict('os.environ', {'ILLUSTRATOR_ENFORCE_REMOTE': '1'})
     def test_allow_offline_fallback_disabled(self):
         """Test offline fallback when disabled."""
         assert _allow_offline_fallback() is False
