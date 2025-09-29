@@ -37,6 +37,9 @@
                                 <li><a class="dropdown-item" href="#" onclick="exportManuscript()">
                                     <i class="bi bi-download me-2"></i>Export
                                 </a></li>
+                                <li><a class="dropdown-item disabled text-muted" href="#" id="resetImagesBtn" onclick="resetManuscriptImages(event)" aria-disabled="true" tabindex="-1" data-images-count="0">
+                                    <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Illustrations
+                                </a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item text-danger" href="#" onclick="deleteManuscript()">
                                     <i class="bi bi-trash me-2"></i>Delete
@@ -85,9 +88,6 @@
                                 <span class="badge bg-secondary-subtle text-secondary border position-absolute top-50 translate-middle-y" id="galleryImageCountBadge" style="right: 16px; display: none;">
                                     0
                                 </span>
-                            </button>
-                            <button class="btn btn-outline-danger" id="resetImagesBtn" onclick="resetManuscriptImages()" disabled>
-                                <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Illustrations
                             </button>
                         </div>
                     </div>
@@ -463,10 +463,28 @@ function displayChapters() {
     });
 }
 
+function setResetIllustrationsState(resetControl, hasImages, totalImages) {
+    if (!resetControl) {
+        return;
+    }
+
+    resetControl.classList.toggle('disabled', !hasImages);
+    resetControl.classList.toggle('text-danger', hasImages);
+    resetControl.classList.toggle('text-muted', !hasImages);
+    resetControl.setAttribute('aria-disabled', hasImages ? 'false' : 'true');
+    resetControl.setAttribute('data-images-count', totalImages != null ? totalImages : 0);
+
+    if (hasImages) {
+        resetControl.removeAttribute('tabindex');
+    } else {
+        resetControl.setAttribute('tabindex', '-1');
+    }
+}
+
 function updateGalleryButton(totalImages) {
     const button = document.getElementById('viewGalleryBtn');
     const badge = document.getElementById('galleryImageCountBadge');
-    const resetButton = document.getElementById('resetImagesBtn');
+    const resetControl = document.getElementById('resetImagesBtn');
 
     if (!button) {
         return;
@@ -487,14 +505,12 @@ function updateGalleryButton(totalImages) {
         }
     }
 
-    if (resetButton) {
-        resetButton.disabled = totalImages === 0;
-        resetButton.setAttribute('aria-disabled', totalImages === 0 ? 'true' : 'false');
-        resetButton.setAttribute('data-images-count', totalImages);
-        resetButton.title = totalImages > 0
+    if (resetControl) {
+        setResetIllustrationsState(resetControl, totalImages > 0, totalImages);
+
+        resetControl.title = totalImages > 0
             ? `Delete all ${totalImages} generated ${totalImages === 1 ? 'image' : 'images'}`
             : 'No generated images to remove yet';
-        resetButton.style.display = 'block';
     }
 }
 
@@ -505,13 +521,24 @@ function viewGallery() {
     window.location.href = `/manuscript/${currentManuscriptId}/gallery`;
 }
 
-async function resetManuscriptImages() {
+async function resetManuscriptImages(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
     if (!currentManuscriptId) {
         return;
     }
 
-    const resetButton = document.getElementById('resetImagesBtn');
-    const totalImages = resetButton ? parseInt(resetButton.getAttribute('data-images-count') || '0', 10) : 0;
+    const resetControl = document.getElementById('resetImagesBtn');
+    const isDisabled = resetControl ? resetControl.classList.contains('disabled') : true;
+    const totalImages = resetControl ? parseInt(resetControl.getAttribute('data-images-count') || '0', 10) : 0;
+
+    if (isDisabled) {
+        return;
+    }
+
     const confirmationMessage = totalImages > 0
         ? `This will permanently delete all ${totalImages} generated ${totalImages === 1 ? 'image' : 'images'} for this manuscript. Continue?`
         : 'This will remove any generated illustrations for this manuscript. Continue?';
@@ -521,9 +548,8 @@ async function resetManuscriptImages() {
     }
 
     try {
-        if (resetButton) {
-            resetButton.disabled = true;
-            resetButton.setAttribute('aria-disabled', 'true');
+        if (resetControl) {
+            setResetIllustrationsState(resetControl, false, totalImages);
         }
 
         showLoadingOverlay('Removing generated illustrations...');
@@ -554,11 +580,10 @@ async function resetManuscriptImages() {
         hideLoadingOverlay();
         showError('Failed to reset illustrations: ' + error.message);
 
-        if (resetButton) {
-            const remainingImages = parseInt(resetButton.getAttribute('data-images-count') || '0', 10);
+        if (resetControl) {
+            const remainingImages = parseInt(resetControl.getAttribute('data-images-count') || '0', 10);
             const hasImages = remainingImages > 0;
-            resetButton.disabled = !hasImages;
-            resetButton.setAttribute('aria-disabled', hasImages ? 'false' : 'true');
+            setResetIllustrationsState(resetControl, hasImages, remainingImages);
         }
     }
 }
