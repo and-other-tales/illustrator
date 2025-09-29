@@ -13,6 +13,12 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable, Iterable, Sequence
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from huggingface_hub import InferenceClient
+try:
+    from requests.exceptions import ChunkedEncodingError
+except ImportError:
+    # Fallback if requests is not available
+    class ChunkedEncodingError(Exception):
+        pass
 
 from illustrator.models import LLMProvider
 import json
@@ -232,8 +238,11 @@ class HuggingFaceEndpointChatWrapper:
                 except Exception as e:  # pragma: no cover - fallback for unsupported chat endpoints
                     error_message = str(e)
                     
+                    # Handle ChunkedEncodingError specifically
+                    if isinstance(e, ChunkedEncodingError):
+                        logger.warning("HuggingFace chat_completion failed with ChunkedEncodingError: %s; falling back to text_generation", str(e))
                     # Check if endpoint is paused
-                    if is_endpoint_paused_error(error_message):
+                    elif is_endpoint_paused_error(error_message):
                         logger.warning("HuggingFace endpoint is paused, waiting for restart")
                         asyncio.run(wait_for_endpoint_restart(self._session_id, countdown_seconds=120))
                         
@@ -286,8 +295,23 @@ class HuggingFaceEndpointChatWrapper:
             except Exception as e:
                 error_message = str(e)
                 
+                # Handle ChunkedEncodingError specifically
+                if isinstance(e, ChunkedEncodingError):
+                    logger.warning("HuggingFace text_generation failed with ChunkedEncodingError: %s; retrying once", str(e))
+                    # Retry once for ChunkedEncodingError
+                    try:
+                        raw_output = self._client.text_generation(
+                            prompt,
+                            **self._generation_kwargs,
+                        )
+                    except Exception as retry_e:
+                        logger.error(
+                            "HuggingFace text_generation retry after ChunkedEncodingError failed with %s: %s",
+                            type(retry_e).__name__, str(retry_e)
+                        )
+                        return AIMessage(content="")
                 # Check if endpoint is paused and retry
-                if is_endpoint_paused_error(error_message):
+                elif is_endpoint_paused_error(error_message):
                     logger.warning("HuggingFace endpoint is paused during text_generation, waiting for restart")
                     asyncio.run(wait_for_endpoint_restart(self._session_id, countdown_seconds=120))
                     
