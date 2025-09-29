@@ -450,7 +450,13 @@ def _normalize_provider(provider: LLMProvider | str | None, anthropic_key: str |
         return LLMProvider.ANTHROPIC if anthropic_key else LLMProvider.HUGGINGFACE
 
     if isinstance(provider, str):
-        return LLMProvider(provider)
+        # Handle case-insensitive conversion
+        provider_lower = provider.lower()
+        for enum_member in LLMProvider:
+            if enum_member.value == provider_lower:
+                return enum_member
+        # If no match, raise ValueError with expected message
+        raise ValueError(f"Unknown provider: {provider}")
 
     return provider
 
