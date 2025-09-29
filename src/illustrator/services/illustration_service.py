@@ -156,6 +156,76 @@ class IllustrationService:
             .first()
         )
 
+    def delete_illustration(self, illustration_id: str) -> bool:
+        """Delete a single illustration record and its underlying file.
+
+        Args:
+            illustration_id: UUID of the illustration to delete
+
+        Returns:
+            True if the illustration existed and was removed, False otherwise
+        """
+
+        illustration = self.get_illustration_by_id(illustration_id)
+        if not illustration:
+            return False
+
+        if illustration.file_path:
+            try:
+                Path(illustration.file_path).unlink(missing_ok=True)
+            except TypeError:
+                # Python versions <3.8 don't support missing_ok; fall back to manual check
+                file_path = Path(illustration.file_path)
+                if file_path.exists():
+                    file_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                # Ignore filesystem issues so database record is still removed
+                pass
+
+        self.db.delete(illustration)
+        self.db.commit()
+        return True
+
+    def delete_illustrations_for_manuscript(self, manuscript_id: str) -> int:
+        """Delete all illustrations (and their files) for a manuscript.
+
+        Args:
+            manuscript_id: UUID of the manuscript whose images should be removed
+
+        Returns:
+            Number of illustration records deleted
+        """
+
+        illustrations = (
+            self.db.query(Illustration)
+            .filter(Illustration.manuscript_id == UUID(manuscript_id))
+            .all()
+        )
+
+        deleted_count = 0
+        for illustration in illustrations:
+            if illustration.file_path:
+                try:
+                    Path(illustration.file_path).unlink(missing_ok=True)
+                except TypeError:
+                    file_path = Path(illustration.file_path)
+                    if file_path.exists():
+                        file_path.unlink()
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    pass
+
+            self.db.delete(illustration)
+            deleted_count += 1
+
+        if deleted_count:
+            self.db.commit()
+
+        return deleted_count
+
     def close(self):
         """Close the database session."""
         if self.db:

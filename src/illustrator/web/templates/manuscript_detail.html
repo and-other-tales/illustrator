@@ -77,14 +77,17 @@
                             <button class="btn btn-primary" id="processBtn" onclick="processManuscript()">
                                 <i class="bi bi-magic me-2" id="processIcon"></i><span id="processBtnText">Generate Illustrations</span>
                             </button>
-                            <button class="btn btn-outline-primary" onclick="configureStyle()">
+                            <button class="btn btn-surface-light text-primary style-action-btn" onclick="configureStyle()">
                                 <i class="bi bi-palette me-2"></i>Configure Style
                             </button>
-                            <button class="btn btn-outline-secondary position-relative" id="viewGalleryBtn" onclick="viewGallery()" style="display: none;">
+                            <button class="btn btn-surface-light text-secondary position-relative style-action-btn" id="viewGalleryBtn" onclick="viewGallery()" style="display: none;">
                                 <i class="bi bi-images me-2"></i>View Gallery
                                 <span class="badge bg-secondary-subtle text-secondary border position-absolute top-50 translate-middle-y" id="galleryImageCountBadge" style="right: 16px; display: none;">
                                     0
                                 </span>
+                            </button>
+                            <button class="btn btn-outline-danger" id="resetImagesBtn" onclick="resetManuscriptImages()" disabled>
+                                <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Illustrations
                             </button>
                         </div>
                     </div>
@@ -463,6 +466,7 @@ function displayChapters() {
 function updateGalleryButton(totalImages) {
     const button = document.getElementById('viewGalleryBtn');
     const badge = document.getElementById('galleryImageCountBadge');
+    const resetButton = document.getElementById('resetImagesBtn');
 
     if (!button) {
         return;
@@ -482,6 +486,16 @@ function updateGalleryButton(totalImages) {
             badge.style.display = 'none';
         }
     }
+
+    if (resetButton) {
+        resetButton.disabled = totalImages === 0;
+        resetButton.setAttribute('aria-disabled', totalImages === 0 ? 'true' : 'false');
+        resetButton.setAttribute('data-images-count', totalImages);
+        resetButton.title = totalImages > 0
+            ? `Delete all ${totalImages} generated ${totalImages === 1 ? 'image' : 'images'}`
+            : 'No generated images to remove yet';
+        resetButton.style.display = 'block';
+    }
 }
 
 function viewGallery() {
@@ -489,6 +503,64 @@ function viewGallery() {
         return;
     }
     window.location.href = `/manuscript/${currentManuscriptId}/gallery`;
+}
+
+async function resetManuscriptImages() {
+    if (!currentManuscriptId) {
+        return;
+    }
+
+    const resetButton = document.getElementById('resetImagesBtn');
+    const totalImages = resetButton ? parseInt(resetButton.getAttribute('data-images-count') || '0', 10) : 0;
+    const confirmationMessage = totalImages > 0
+        ? `This will permanently delete all ${totalImages} generated ${totalImages === 1 ? 'image' : 'images'} for this manuscript. Continue?`
+        : 'This will remove any generated illustrations for this manuscript. Continue?';
+
+    if (!window.confirm(confirmationMessage)) {
+        return;
+    }
+
+    try {
+        if (resetButton) {
+            resetButton.disabled = true;
+            resetButton.setAttribute('aria-disabled', 'true');
+        }
+
+        showLoadingOverlay('Removing generated illustrations...');
+
+        const response = await fetch(`/api/manuscripts/${currentManuscriptId}/images`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            let errorDetail = 'Failed to delete images';
+            try {
+                const errorBody = await response.json();
+                errorDetail = errorBody.detail || errorDetail;
+            } catch (parseError) {
+                // Ignore JSON parsing errors and use default message
+            }
+            throw new Error(errorDetail);
+        }
+
+        const result = await response.json().catch(() => ({}));
+
+        hideLoadingOverlay();
+        showSuccess(result.message || 'All generated illustrations have been removed.');
+
+        // Refresh manuscript data to update counts and buttons
+        await loadManuscriptDetails();
+    } catch (error) {
+        hideLoadingOverlay();
+        showError('Failed to reset illustrations: ' + error.message);
+
+        if (resetButton) {
+            const remainingImages = parseInt(resetButton.getAttribute('data-images-count') || '0', 10);
+            const hasImages = remainingImages > 0;
+            resetButton.disabled = !hasImages;
+            resetButton.setAttribute('aria-disabled', hasImages ? 'false' : 'true');
+        }
+    }
 }
 
 function viewChapterImages(button) {

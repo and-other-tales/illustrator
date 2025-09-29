@@ -234,23 +234,32 @@ def save_manuscript_to_disk(manuscript: SavedManuscript) -> Path:
     return file_path
 
 
-def count_generated_images(manuscript_title: str) -> int:
-    """Count generated images for a manuscript."""
-    # Images are stored directly in illustrator_output/generated_images/
-    images_dir = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
+def count_generated_images(manuscript_id: str) -> int:
+    """Count generated images for a manuscript.
 
-    if not images_dir.exists():
-        return 0
+    Attempts to use the database when available, falling back to a coarse
+    filesystem count when the database layer isn't configured.
+    """
 
-    image_count = 0
-    image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'}
+    try:
+        from illustrator.services.illustration_service import IllustrationService
 
-    # Count all image files in the generated_images directory
-    for image_file in images_dir.iterdir():
-        if image_file.is_file() and image_file.suffix.lower() in image_extensions:
-            image_count += 1
+        illustration_service = IllustrationService()
+        try:
+            return len(illustration_service.get_illustrations_by_manuscript(manuscript_id))
+        finally:
+            illustration_service.close()
+    except Exception:
+        images_dir = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
+        if not images_dir.exists():
+            return 0
 
-    return image_count
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'}
+        return sum(
+            1
+            for image_file in images_dir.iterdir()
+            if image_file.is_file() and image_file.suffix.lower() in image_extensions
+        )
 
 
 @router.get("/stats")
@@ -260,7 +269,10 @@ async def get_dashboard_stats() -> DashboardStats:
     manuscripts = get_saved_manuscripts()
 
     total_chapters = sum(len(m.chapters) for m in manuscripts)
-    total_images = sum(count_generated_images(m.metadata.title) for m in manuscripts)
+    total_images = 0
+    for manuscript in manuscripts:
+        generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path))
+        total_images += count_generated_images(generated_id)
     # Track active processing sessions by checking connection manager
     from illustrator.web.models.web_models import ConnectionManager
     try:
@@ -280,7 +292,7 @@ async def get_dashboard_stats() -> DashboardStats:
             id=generated_id,
             metadata=manuscript.metadata,
             chapters=manuscript.chapters,
-            total_images=count_generated_images(manuscript.metadata.title),
+            total_images=count_generated_images(generated_id),
             processing_status=get_manuscript_processing_status(generated_id),
             created_at=manuscript.metadata.created_at,
             updated_at=manuscript.saved_at
@@ -308,7 +320,7 @@ async def list_manuscripts() -> List[ManuscriptResponse]:
             id=generated_id,
             metadata=manuscript.metadata,
             chapters=manuscript.chapters,
-            total_images=count_generated_images(manuscript.metadata.title),
+            total_images=count_generated_images(generated_id),
             processing_status=get_manuscript_processing_status(generated_id),
             created_at=manuscript.metadata.created_at,
             updated_at=manuscript.saved_at
@@ -331,7 +343,7 @@ async def get_manuscript(manuscript_id: str) -> ManuscriptResponse:
                 id=manuscript_id,
                 metadata=manuscript.metadata,
                 chapters=manuscript.chapters,
-                total_images=count_generated_images(manuscript.metadata.title),
+                total_images=count_generated_images(manuscript_id),
                 processing_status=get_manuscript_processing_status(generated_id),
                 created_at=manuscript.metadata.created_at,
                 updated_at=manuscript.saved_at
@@ -411,7 +423,7 @@ async def update_manuscript(
                 id=manuscript_id,
                 metadata=manuscript.metadata,
                 chapters=manuscript.chapters,
-                total_images=count_generated_images(manuscript.metadata.title),
+                total_images=count_generated_images(manuscript_id),
                 processing_status="draft",
                 created_at=manuscript.metadata.created_at,
                 updated_at=manuscript.saved_at
@@ -1061,6 +1073,62 @@ async def delete_manuscript_image(manuscript_id: str, image_id: str) -> SuccessR
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error deleting image: {str(delete_error)}"
             )
+
+
+@router.delete("/{manuscript_id}/images")
+async def delete_manuscript_images(manuscript_id: str) -> SuccessResponse:
+    """Delete all images associated with a manuscript."""
+    logger.debug(
+        "API CALL: DELETE /{manuscript_id}/images (delete_manuscript_images) with manuscript_id=%s",
+        manuscript_id,
+    )
+
+    try:
+        from illustrator.services.illustration_service import IllustrationService
+
+        illustration_service = IllustrationService()
+        try:
+            removed = illustration_service.delete_illustrations_for_manuscript(manuscript_id)
+            message = "All images deleted successfully" if removed else "No images found for manuscript"
+            return SuccessResponse(
+                message=message,
+                data={"deleted_count": removed}
+            )
+        finally:
+            illustration_service.close()
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning(
+            "Database image purge failed for manuscript %s: %s. Falling back to filesystem purge.",
+            manuscript_id,
+            exc,
+        )
+
+        images_dir = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
+        if not images_dir.exists():
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No image storage directory found",
+            )
+
+        removed = 0
+        for image_file in images_dir.iterdir():
+            if image_file.is_file():
+                try:
+                    image_file.unlink()
+                    removed += 1
+                except OSError as delete_error:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Error deleting image: {delete_error}",
+                    ) from delete_error
+
+        return SuccessResponse(
+            message="All images deleted successfully",
+            data={"deleted_count": removed, "fallback": True}
+        )
 
 
 @router.delete("/{manuscript_id}")
