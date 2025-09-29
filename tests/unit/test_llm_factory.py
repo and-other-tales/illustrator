@@ -457,12 +457,12 @@ class TestContextHelpers:
 class TestOfflineFallback:
     """Test offline fallback functionality."""
     
-    @patch.dict('os.environ', {'ILLUSTRATOR_ALLOW_OFFLINE': 'true'})
+    @patch.dict('os.environ', {'ILLUSTRATOR_OFFLINE_MODE': '1'})
     def test_allow_offline_fallback_enabled(self):
         """Test offline fallback when enabled."""
         assert _allow_offline_fallback() is True
     
-    @patch.dict('os.environ', {'ILLUSTRATOR_ALLOW_OFFLINE': 'false'})
+    @patch.dict('os.environ', {'ILLUSTRATOR_ENFORCE_REMOTE': '1'})
     def test_allow_offline_fallback_disabled(self):
         """Test offline fallback when disabled."""
         assert _allow_offline_fallback() is False
