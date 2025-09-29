@@ -273,7 +273,7 @@ class TestMessageConversion:
         prompt = _messages_to_prompt(messages)
         
         assert "System: You are a helpful assistant." in prompt
-        assert "Human: Hello!" in prompt
+        assert "User: Hello!" in prompt
         assert "Assistant: Hi there!" in prompt
         assert "Human: How are you?" in prompt
     
