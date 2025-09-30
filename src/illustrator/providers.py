@@ -150,6 +150,7 @@ class ImageGenerationProvider(ABC):
         anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
     ) -> None:
         """Initialize provider, preparing prompt engineering resources as needed."""
 
@@ -179,6 +180,7 @@ class ImageGenerationProvider(ABC):
                 model=llm_model,
                 anthropic_api_key=anthropic_api_key,
                 huggingface_api_key=huggingface_api_key,
+                gcp_project_id=gcp_project_id,
                 huggingface_config=huggingface_config,
             )
         except Exception as exc:
@@ -236,6 +238,7 @@ class DalleProvider(ImageGenerationProvider):
         anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
     ) -> None:
         """Initialize DALL-E provider."""
         super().__init__(
@@ -245,6 +248,7 @@ class DalleProvider(ImageGenerationProvider):
             anthropic_api_key=anthropic_api_key,
             huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
+            gcp_project_id=gcp_project_id,
         )
         self.api_key = api_key
         self.base_url = "https://api.openai.com/v1/images/generations"
@@ -347,6 +351,7 @@ class Imagen4Provider(ImageGenerationProvider):
         llm_model: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
     ) -> None:
         """Initialize Imagen4 provider."""
         super().__init__(
@@ -356,6 +361,7 @@ class Imagen4Provider(ImageGenerationProvider):
             anthropic_api_key=anthropic_api_key,
             huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
+            gcp_project_id=gcp_project_id,
         )
         self.credentials_path = credentials_path
         self.project_id = project_id
@@ -513,6 +519,7 @@ class FluxProvider(ImageGenerationProvider):
         anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
         flux_endpoint_url: str | None = None,
     ) -> None:
         """Initialize Flux provider."""
@@ -523,6 +530,7 @@ class FluxProvider(ImageGenerationProvider):
             anthropic_api_key=anthropic_api_key,
             huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
+            gcp_project_id=gcp_project_id,
         )
         self.api_key = api_key
         if flux_endpoint_url:
@@ -1609,6 +1617,7 @@ class ProviderFactory:
             'llm_model': llm_model,
             'anthropic_api_key': anthropic_key,
             'huggingface_api_key': credentials.get('huggingface_api_key'),
+            'gcp_project_id': credentials.get('gcp_project_id'),
             'huggingface_config': huggingface_config,
         }
 
@@ -1786,6 +1795,7 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
             'huggingface_api_key': context.huggingface_api_key,
             'google_credentials': context.google_credentials,
             'google_project_id': getattr(context, 'google_project_id', None),
+            'gcp_project_id': getattr(context, 'gcp_project_id', None),
             'anthropic_api_key': context.anthropic_api_key,
             'llm_provider': getattr(context, 'llm_provider', None),
             'model': getattr(context, 'model', None),
