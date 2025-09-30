@@ -1840,6 +1840,11 @@ h5, h6 { font: var(--md-type-scale-label); }
     color: rgba(255, 255, 255, 0.8) !important;
 }
 
+/* Ensure processing card maintains its gradient in dark mode */
+[data-bs-theme="dark"] .processing-card {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%) !important;
+}
+
 /* Print styles */
 @media print {
     .navbar,
