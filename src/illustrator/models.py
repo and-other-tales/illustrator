@@ -15,7 +15,6 @@ class ImageProvider(str, Enum):
     IMAGEN4 = "imagen4"
     FLUX = "flux"
     FLUX_DEV_VERTEX = "flux_dev_vertex"
-    FLUX_SCHNELL_VERTEX = "flux_schnell_vertex"
     SEEDREAM = "seedream"
     HUGGINGFACE = "huggingface"
 

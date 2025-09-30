@@ -55,10 +55,6 @@ class ManuscriptContext(BaseModel):
         default=None,
         description="Google Vertex AI endpoint URL for Flux Dev model",
     )
-    flux_schnell_vertex_endpoint_url: str | None = Field(
-        default=None,
-        description="Google Vertex AI endpoint URL for Flux Schnell model",
-    )
     huggingface_image_model: str | None = Field(
         default=None,
         description="Default HuggingFace text-to-image model identifier",
@@ -222,7 +218,6 @@ def get_default_context() -> IllustratorContext:
         hf_flux_endpoint = "https://qj029p0ofvfmjxus.us-east-1.aws.endpoints.huggingface.cloud"
 
     flux_dev_vertex_endpoint = os.getenv('FLUX_DEV_VERTEX_ENDPOINT_URL')
-    flux_schnell_vertex_endpoint = os.getenv('FLUX_SCHNELL_VERTEX_ENDPOINT_URL')
 
     hf_image_model = os.getenv('HUGGINGFACE_IMAGE_MODEL')
     hf_image_endpoint = os.getenv('HUGGINGFACE_IMAGE_ENDPOINT_URL')
@@ -249,7 +244,6 @@ def get_default_context() -> IllustratorContext:
         huggingface_timeout=huggingface_timeout,
         huggingface_flux_endpoint_url=hf_flux_endpoint,
         flux_dev_vertex_endpoint_url=flux_dev_vertex_endpoint,
-        flux_schnell_vertex_endpoint_url=flux_schnell_vertex_endpoint,
         huggingface_image_model=hf_image_model,
         huggingface_image_endpoint_url=hf_image_endpoint,
         huggingface_image_provider=hf_image_provider,

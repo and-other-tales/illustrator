@@ -970,7 +970,7 @@ class StyleTranslator:
                 return self._translate_for_dalle(style_config, scene_composition)
             elif provider == ImageProvider.IMAGEN4:
                 return self._translate_for_imagen4(style_config, scene_composition)
-            elif provider in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.FLUX_SCHNELL_VERTEX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
+            elif provider in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
                 return self._translate_for_flux(style_config, scene_composition)
             else:
                 return self._generic_translation(style_config)
@@ -2416,7 +2416,6 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             ImageProvider.IMAGEN4: 500,
             ImageProvider.FLUX: 600,
             ImageProvider.FLUX_DEV_VERTEX: 600,
-            ImageProvider.FLUX_SCHNELL_VERTEX: 600,
             ImageProvider.SEEDREAM: 600,
             ImageProvider.HUGGINGFACE: 600,
         }.get(provider, 400)

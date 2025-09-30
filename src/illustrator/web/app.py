@@ -872,8 +872,6 @@ async def run_processing_workflow(
             provider = ImageProvider.FLUX
         elif provider_str == "flux_dev_vertex":
             provider = ImageProvider.FLUX_DEV_VERTEX
-        elif provider_str == "flux_schnell_vertex":
-            provider = ImageProvider.FLUX_SCHNELL_VERTEX
         elif provider_str == "huggingface":
             provider = ImageProvider.HUGGINGFACE
         elif provider_str in {"seedream", "seedream4"}:
@@ -1820,7 +1818,7 @@ class WebSocketIllustrationGenerator:
 
     def _add_flux_style_tags(self, prompt_text: str | None, provider: ImageProvider) -> str | None:
         """Boost Flux prompts with explicit line-art tags for stronger style anchoring."""
-        if not prompt_text or provider not in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.FLUX_SCHNELL_VERTEX):
+        if not prompt_text or provider not in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX):
             return prompt_text
 
         updated = prompt_text.strip()
