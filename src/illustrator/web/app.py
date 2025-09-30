@@ -4,6 +4,7 @@ import os
 import json
 import inspect
 import subprocess
+import asyncio
 from pathlib import Path
 from typing import Any, Dict, List
 from collections.abc import MutableMapping
@@ -1410,47 +1411,118 @@ class WebSocketComprehensiveSceneAnalyzer:
         total_segments = len(segments)
 
         for i, segment in enumerate(segments):
-            # Send progress update every few segments with details about high-scoring segments
-            if i % max(1, total_segments // 20) == 0:
-                progress = int((i / total_segments) * 100)
-                await self.connection_manager.send_personal_message(
-                    json.dumps({
-                        "type": "log",
-                        "level": "info",
-                        "message": f"⠋ Analyzing segments... {progress}% ({i}/{total_segments}) - Found {len(all_scored_moments)} promising moments so far"
-                    }),
-                    self.session_id
-                )
-
-            # Multi-criteria scoring
-            emotional_score = await self.analyzer._score_emotional_intensity(segment)
-            visual_score = await self.analyzer._score_visual_potential(segment)
-            narrative_score = await self.analyzer._score_narrative_significance(segment)
-            dialogue_score = await self.analyzer._score_dialogue_richness(segment)
-
-            # Combined score with weights for illustration potential
-            combined_score = (
-                emotional_score * 0.3 +
-                visual_score * 0.4 +
-                narrative_score * 0.2 +
-                dialogue_score * 0.1
-            )
-
-            if combined_score >= 0.4:  # Lower threshold for more candidates
-                moment = await self.analyzer._create_detailed_moment(segment, combined_score, chapter)
-                all_scored_moments.append((moment, combined_score))
-
-                # Log high-scoring moments as they're discovered (only show very high scores to avoid spam)
-                if combined_score >= 0.7:
-                    segment_preview = segment
+            try:
+                # Send progress update every few segments with details about high-scoring segments
+                if i % max(1, total_segments // 20) == 0:
+                    progress = int((i / total_segments) * 100)
                     await self.connection_manager.send_personal_message(
                         json.dumps({
                             "type": "log",
                             "level": "info",
-                            "message": f"      🌟 High-impact moment found (Score: {combined_score:.2f}): \"{segment_preview}\""
+                            "message": f"⠋ Analyzing segments... {progress}% ({i}/{total_segments}) - Found {len(all_scored_moments)} promising moments so far"
                         }),
                         self.session_id
                     )
+
+                # Add debug logging for the current segment
+                await self.connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "debug",
+                        "message": f"      Processing segment {i+1}/{total_segments}: {segment[:100]}..."
+                    }),
+                    self.session_id
+                )
+
+                # Multi-criteria scoring with timeout protection
+                try:
+                    emotional_score = await asyncio.wait_for(
+                        self.analyzer._score_emotional_intensity(segment), 
+                        timeout=30.0
+                    )
+                    visual_score = await asyncio.wait_for(
+                        self.analyzer._score_visual_potential(segment), 
+                        timeout=30.0
+                    )
+                    narrative_score = await asyncio.wait_for(
+                        self.analyzer._score_narrative_significance(segment), 
+                        timeout=30.0
+                    )
+                    dialogue_score = await asyncio.wait_for(
+                        self.analyzer._score_dialogue_richness(segment), 
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    await self.connection_manager.send_personal_message(
+                        json.dumps({
+                            "type": "log",
+                            "level": "warning",
+                            "message": f"      ⚠️ Scoring timeout for segment {i+1}, using fallback scores"
+                        }),
+                        self.session_id
+                    )
+                    # Use fallback scores
+                    emotional_score = 0.2
+                    visual_score = 0.2
+                    narrative_score = 0.2
+                    dialogue_score = 0.2
+
+                # Combined score with weights for illustration potential
+                combined_score = (
+                    emotional_score * 0.3 +
+                    visual_score * 0.4 +
+                    narrative_score * 0.2 +
+                    dialogue_score * 0.1
+                )
+
+                if combined_score >= 0.4:  # Lower threshold for more candidates
+                    try:
+                        moment = await asyncio.wait_for(
+                            self.analyzer._create_detailed_moment(segment, combined_score, chapter),
+                            timeout=15.0
+                        )
+                        all_scored_moments.append((moment, combined_score))
+
+                        # Log high-scoring moments as they're discovered (only show very high scores to avoid spam)
+                        if combined_score >= 0.7:
+                            segment_preview = segment[:100] + "..." if len(segment) > 100 else segment
+                            await self.connection_manager.send_personal_message(
+                                json.dumps({
+                                    "type": "log",
+                                    "level": "info",
+                                    "message": f"      🌟 High-impact moment found (Score: {combined_score:.2f}): \"{segment_preview}\""
+                                }),
+                                self.session_id
+                            )
+                    except asyncio.TimeoutError:
+                        await self.connection_manager.send_personal_message(
+                            json.dumps({
+                                "type": "log",
+                                "level": "warning",
+                                "message": f"      ⚠️ Moment creation timeout for segment {i+1}, skipping"
+                            }),
+                            self.session_id
+                        )
+                    except Exception as e:
+                        await self.connection_manager.send_personal_message(
+                            json.dumps({
+                                "type": "log",
+                                "level": "error",
+                                "message": f"      ❌ Error creating moment for segment {i+1}: {str(e)}"
+                            }),
+                            self.session_id
+                        )
+
+            except Exception as e:
+                await self.connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "error",
+                        "message": f"      ❌ Error processing segment {i+1}: {str(e)}"
+                    }),
+                    self.session_id
+                )
+                continue
 
         await self.connection_manager.send_personal_message(
             json.dumps({
