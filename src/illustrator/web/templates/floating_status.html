@@ -80,9 +80,25 @@
     animation: slideInUp 0.4s ease;
 }
 
+/* Enhanced dark mode for floating status */
+[data-bs-theme="dark"] .floating-status-window {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.95) 0%, rgba(59, 130, 246, 0.95) 100%);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(139, 92, 246, 0.2) inset;
+}
+
 .floating-status-window:hover {
     transform: translateY(-2px);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+[data-bs-theme="dark"] .floating-status-window:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6),
+                0 0 0 1px rgba(139, 92, 246, 0.3) inset;
+    border-color: rgba(139, 92, 246, 0.5);
 }
 
 .floating-status-header {
@@ -172,9 +188,22 @@
     animation: pulse 2s infinite;
 }
 
+[data-bs-theme="dark"] .minimized-status-indicator {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4),
+                0 0 0 1px rgba(139, 92, 246, 0.3) inset;
+    backdrop-filter: blur(10px);
+}
+
 .minimized-status-indicator:hover {
     transform: scale(1.1);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-bs-theme="dark"] .minimized-status-indicator:hover {
+    transform: scale(1.1);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(139, 92, 246, 0.4) inset;
 }
 
 .status-dot {
