@@ -241,6 +241,15 @@ templates.env.globals["app_version"] = _current_app_version
 # WebSocket connection manager
 connection_manager = ConnectionManager()
 
+async def _cleanup_completed_session_after_delay(session_id: str, delay_seconds: int):
+    """Clean up a completed session after a delay to allow frontend to see completion."""
+    await asyncio.sleep(delay_seconds)
+    if session_id in connection_manager.sessions:
+        session_status = connection_manager.sessions[session_id].status.status
+        if session_status in ['completed', 'error']:
+            console.log(f"Cleaning up completed session: {session_id}")
+            connection_manager.cleanup_session(session_id)
+
 # Ensure database tables exist on startup
 @app.on_event("startup")
 async def _ensure_tables():
@@ -347,20 +356,22 @@ import base64
 async def get_processing_status(manuscript_id: str):
     """Check if there's an active processing session for a manuscript."""
     try:
-        # Look for active sessions for this manuscript
+        # Look for active sessions for this manuscript (exclude completed/error sessions)
         active_session = None
         for session_id, session_data in connection_manager.sessions.items():
             if session_data.manuscript_id == manuscript_id:
-                active_session = {
-                    "session_id": session_id,
-                    "status": session_data.status.dict() if hasattr(session_data, 'status') else None,
-                    "is_connected": session_id in connection_manager.active_connections,
-                    "logs": [log.dict() for log in session_data.logs],
-                    "images": [image.dict() for image in session_data.images],
-                    "start_time": session_data.start_time,
-                    "step_status": session_data.step_status
-                }
-                break
+                # Only consider sessions that are not completed or errored as active
+                if session_data.status.status not in ['completed', 'error']:
+                    active_session = {
+                        "session_id": session_id,
+                        "status": session_data.status.dict() if hasattr(session_data, 'status') else None,
+                        "is_connected": session_id in connection_manager.active_connections,
+                        "logs": [log.dict() for log in session_data.logs],
+                        "images": [image.dict() for image in session_data.images],
+                        "start_time": session_data.start_time,
+                        "step_status": session_data.step_status
+                    }
+                    break
 
         if active_session:
             return {
@@ -387,9 +398,10 @@ async def start_processing(
 ):
     """Start manuscript processing and illustration generation."""
     try:
-        # Check if there's already an active session for this manuscript
+        # Check if there's already an active session for this manuscript (exclude completed/error sessions)
         for session_id, session_data in connection_manager.sessions.items():
-            if session_data.manuscript_id == request.manuscript_id:
+            if (session_data.manuscript_id == request.manuscript_id and 
+                session_data.status.status not in ['completed', 'error']):
                 return {
                     "success": True,
                     "session_id": session_id,
@@ -1277,6 +1289,10 @@ async def run_processing_workflow(
             connection_manager.sessions[session_id].status.status = "completed"
             connection_manager.sessions[session_id].status.progress = 100
             connection_manager.sessions[session_id].status.message = f"Successfully generated {total_images} illustrations!"
+            
+            # Schedule cleanup of completed session after 30 seconds to allow frontend to see completion
+            import asyncio
+            asyncio.create_task(_cleanup_completed_session_after_delay(session_id, 30))
 
     except Exception as e:
         console.print(f"[red]Processing error: {e}[/red]")
@@ -1326,6 +1342,9 @@ async def run_processing_workflow(
         if session_id in connection_manager.sessions:
             connection_manager.sessions[session_id].status.status = "error"
             connection_manager.sessions[session_id].status.error = str(e)
+            
+            # Schedule cleanup of error session after 30 seconds to allow frontend to see error
+            asyncio.create_task(_cleanup_completed_session_after_delay(session_id, 30))
 
     finally:
         # Clean up resources
