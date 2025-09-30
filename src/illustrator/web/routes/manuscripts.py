@@ -564,8 +564,26 @@ async def preview_style_image(
         if context.llm_provider == LLMProvider.ANTHROPIC_VERTEX:
             gcp_project_id = os.getenv('GOOGLE_PROJECT_ID') or os.getenv('GCP_PROJECT_ID')
             logger.debug("Environment GCP Project ID: %s", gcp_project_id)
-            if not gcp_project_id:
-                raise ValueError("GCP Project ID is required for Anthropic Vertex. Please configure it in API Configuration.")
+            
+            # Check if the GCP Project ID is a placeholder or invalid
+            is_placeholder = (
+                not gcp_project_id or 
+                gcp_project_id in ['your-google-project-id', 'your-gcp-project-id', 'placeholder'] or
+                gcp_project_id.startswith('your-') or
+                len(gcp_project_id.strip()) == 0
+            )
+            
+            if is_placeholder:
+                logger.error("GCP Project ID is missing or appears to be a placeholder: %s", gcp_project_id)
+                raise ValueError(
+                    "GCP Project ID is required for Anthropic Vertex provider. "
+                    "Please open the API Configuration popup (gear icon) and:\n"
+                    "1. Set your real GCP Project ID (not 'your-google-project-id')\n"
+                    "2. Select 'Anthropic Vertex' as LLM Provider\n"
+                    "3. Click 'Save Configuration'\n"
+                    f"Current value '{gcp_project_id}' appears to be a placeholder."
+                )
+            
             context.gcp_project_id = gcp_project_id
             logger.debug("Context GCP Project ID updated to: %s", context.gcp_project_id)
 
