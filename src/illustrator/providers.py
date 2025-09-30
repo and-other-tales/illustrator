@@ -740,14 +740,39 @@ class FluxDevVertexProvider(ImageGenerationProvider):
         # Handle different endpoint URL formats
         endpoint_url = self.endpoint_url
         
-        # According to HuggingFace documentation, deployed models use /predict route
-        if endpoint_url.endswith('.prediction.vertexai.goog') and not endpoint_url.startswith('http'):
-            # Dedicated endpoint hostname - add protocol and predict path
-            endpoint_url = f"https://{endpoint_url}/predict"
-        elif endpoint_url.endswith('.prediction.vertexai.goog') and endpoint_url.startswith('http'):
-            # Already has protocol, ensure it has the correct predict path
-            if not endpoint_url.endswith('/predict'):
-                endpoint_url = f"{endpoint_url.rstrip('/')}/predict"
+        # For dedicated endpoints (*.prediction.vertexai.goog), use the correct format
+        if endpoint_url.endswith('.prediction.vertexai.goog'):
+            # Extract components from dedicated endpoint URL
+            # Format: https://ENDPOINT_ID.LOCATION_ID-PROJECT_NUMBER.prediction.vertexai.goog
+            if endpoint_url.startswith('http'):
+                base_url = endpoint_url.replace('https://', '').replace('http://', '')
+            else:
+                base_url = endpoint_url
+                
+            # Parse: ENDPOINT_ID.LOCATION_ID-PROJECT_NUMBER.prediction.vertexai.goog
+            parts = base_url.split('.prediction.vertexai.goog')[0].split('.')
+            if len(parts) >= 2:
+                endpoint_id = parts[0]
+                location_project = parts[1]
+                
+                # Split LOCATION_ID-PROJECT_NUMBER
+                if '-' in location_project:
+                    location_parts = location_project.split('-')
+                    location = '-'.join(location_parts[:-1])  # Everything except last part
+                    project_number = location_parts[-1]      # Last part
+                    
+                    # Construct proper dedicated endpoint URL according to Google Cloud docs
+                    endpoint_url = f"https://{endpoint_id}.{location}-{project_number}.prediction.vertexai.goog/v1/projects/{project_number}/locations/{location}/endpoints/{endpoint_id}:predict"
+                else:
+                    return {
+                        'success': False,
+                        'error': f'Invalid dedicated endpoint URL format: {self.endpoint_url}. Cannot parse location and project number.'
+                    }
+            else:
+                return {
+                    'success': False,
+                    'error': f'Invalid dedicated endpoint URL format: {self.endpoint_url}. Cannot parse endpoint ID.'
+                }
         elif not endpoint_url.startswith(('https://', 'http://')):
             return {
                 'success': False,
@@ -826,22 +851,21 @@ class FluxDevVertexProvider(ImageGenerationProvider):
             # Try multiple endpoint paths for dedicated endpoints
             endpoint_paths_to_try = [endpoint_url]
             
-            # If this is a dedicated endpoint, add alternative paths to try
-            # According to documentation, the primary path should be /predict
-            if '.prediction.vertexai.goog' in endpoint_url:
-                # Extract base URL correctly
-                if '/predict' in endpoint_url:
-                    base_url = endpoint_url.rsplit('/predict', 1)[0]
-                elif '/v1/predict' in endpoint_url:
-                    base_url = endpoint_url.rsplit('/v1/predict', 1)[0]
-                else:
-                    base_url = endpoint_url.rstrip('/')
-                    
+            # For dedicated endpoints, the primary format should be the one we constructed
+            # Add a few alternative formats in case the construction is slightly off
+            if '.prediction.vertexai.goog' in endpoint_url and '/v1/projects/' in endpoint_url:
+                # Extract base URL and components for alternatives
+                base_url = endpoint_url.split('/v1/projects/')[0]
+                
+                # Extract endpoint ID from the original URL
+                original_base = self.endpoint_url.replace('https://', '').replace('http://', '')
+                endpoint_id = original_base.split('.')[0]
+                
                 alternative_paths = [
-                    f"{base_url}/predict",  # Primary path per documentation
-                    f"{base_url}/v1/predict", 
-                    f"{base_url}/v1/models/flux-dev/predict"  # Fixed: use /predict not :predict
+                    f"{base_url}/predict",  # Simple predict path
+                    f"{base_url}/v1/predict",  # v1 predict path
                 ]
+                
                 # Add alternatives that aren't already in the list
                 for path in alternative_paths:
                     if path not in endpoint_paths_to_try:
