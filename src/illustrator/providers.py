@@ -840,7 +840,7 @@ class FluxDevVertexProvider(ImageGenerationProvider):
                 alternative_paths = [
                     f"{base_url}/predict",  # Primary path per documentation
                     f"{base_url}/v1/predict", 
-                    f"{base_url}/v1/models/flux-dev:predict"
+                    f"{base_url}/v1/models/flux-dev/predict"  # Fixed: use /predict not :predict
                 ]
                 # Add alternatives that aren't already in the list
                 for path in alternative_paths:
