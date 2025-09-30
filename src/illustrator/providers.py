@@ -829,12 +829,18 @@ class FluxDevVertexProvider(ImageGenerationProvider):
             # If this is a dedicated endpoint, add alternative paths to try
             # According to documentation, the primary path should be /predict
             if '.prediction.vertexai.goog' in endpoint_url:
-                base_url = endpoint_url.rstrip('/predict').rstrip('/v1/predict')
+                # Extract base URL correctly
+                if '/predict' in endpoint_url:
+                    base_url = endpoint_url.rsplit('/predict', 1)[0]
+                elif '/v1/predict' in endpoint_url:
+                    base_url = endpoint_url.rsplit('/v1/predict', 1)[0]
+                else:
+                    base_url = endpoint_url.rstrip('/')
+                    
                 alternative_paths = [
                     f"{base_url}/predict",  # Primary path per documentation
                     f"{base_url}/v1/predict", 
-                    f"{base_url}/v1/models/flux-dev:predict",
-                    f"{base_url}:predict"
+                    f"{base_url}/v1/models/flux-dev:predict"
                 ]
                 # Add alternatives that aren't already in the list
                 for path in alternative_paths:
