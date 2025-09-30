@@ -391,7 +391,7 @@ class FloatingStatusManager {
         
         try {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/api/ws/processing/${this.currentSessionId}`;
+            const wsUrl = `${protocol}//${window.location.host}/ws/processing/${this.currentSessionId}`;
             
             this.websocket = new WebSocket(wsUrl);
             
