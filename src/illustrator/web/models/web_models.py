@@ -150,6 +150,7 @@ class ProcessingSessionData(BaseModel):
     logs: List[ProcessingLogEntry] = []
     images: List[ProcessingImageEntry] = []
     start_time: Optional[str] = None
+    started_at: Optional[str] = None  # ISO timestamp when session started
     step_status: Dict[int, str] = {}  # Track which steps are completed/in-progress
     pause_requested: bool = False  # Flag to request pausing the processing
 

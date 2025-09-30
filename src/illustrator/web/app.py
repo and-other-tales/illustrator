@@ -726,6 +726,7 @@ async def run_processing_workflow(
             websocket=None,
             status=initial_status,
             start_time=datetime.now().isoformat(),
+            started_at=datetime.now().isoformat(),
             step_status={0: "pending", 1: "pending", 2: "pending", 3: "pending"}
         )
 
@@ -2052,6 +2053,102 @@ async def gallery_websocket(websocket: WebSocket, manuscript_id: str):
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "manuscript-illustrator"}
+
+
+@app.get("/api/sessions/active")
+async def get_active_sessions():
+    """Get all active processing sessions."""
+    active_sessions = []
+    for session_id, session_data in connection_manager.sessions.items():
+        if session_data.status.status not in ['completed', 'error']:
+            active_sessions.append({
+                "session_id": session_id,
+                "manuscript_id": session_data.manuscript_id,
+                "status": session_data.status.status,
+                "progress": session_data.status.progress,
+                "message": session_data.status.message,
+                "started_at": getattr(session_data, 'started_at', None)
+            })
+    return active_sessions
+
+
+@app.get("/api/sessions/{session_id}/status")
+async def get_session_status(session_id: str):
+    """Get detailed status for a specific session."""
+    if session_id not in connection_manager.sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session_data = connection_manager.sessions[session_id]
+    return {
+        "session_id": session_id,
+        "manuscript_id": session_data.manuscript_id,
+        "status": session_data.status.status,
+        "progress": session_data.status.progress,
+        "message": session_data.status.message,
+        "current_chapter": session_data.status.current_chapter,
+        "total_chapters": session_data.status.total_chapters,
+        "step_status": getattr(session_data, 'step_status', {}),
+        "logs": [{
+            "level": log.level,
+            "message": log.message,
+            "timestamp": log.timestamp
+        } for log in session_data.logs[-20:]],  # Last 20 logs
+        "images": [{
+            "url": img.url,
+            "prompt": img.prompt,
+            "chapter_number": img.chapter_number,
+            "scene_number": img.scene_number,
+            "timestamp": img.timestamp
+        } for img in session_data.images],
+        "pause_requested": getattr(session_data, 'pause_requested', False)
+    }
+
+
+@app.post("/api/sessions/{session_id}/attach")
+async def attach_to_session(session_id: str):
+    """Attach to an existing session for monitoring."""
+    if session_id not in connection_manager.sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session_data = connection_manager.sessions[session_id]
+    return {
+        "success": True,
+        "session_id": session_id,
+        "manuscript_id": session_data.manuscript_id,
+        "message": "Successfully attached to session"
+    }
+
+
+@app.delete("/api/sessions/{session_id}")
+async def terminate_session(session_id: str):
+    """Terminate a processing session."""
+    if session_id not in connection_manager.sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Mark session for termination
+    session_data = connection_manager.sessions[session_id]
+    session_data.pause_requested = True
+    session_data.status.status = "terminated"
+    session_data.status.message = "Session terminated by user"
+    
+    # Send termination message
+    await connection_manager.send_personal_message(
+        json.dumps({
+            "type": "log",
+            "level": "warning",
+            "message": "Session terminated by user request"
+        }),
+        session_id
+    )
+    
+    # Clean up after a delay to allow message delivery
+    async def cleanup_session():
+        await asyncio.sleep(2)
+        connection_manager.cleanup_session(session_id)
+    
+    asyncio.create_task(cleanup_session())
+    
+    return {"success": True, "message": "Session terminated"}
 
 
 @app.get("/api/manuscripts/{manuscript_id}/download/{filename}")

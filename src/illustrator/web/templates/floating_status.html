@@ -1,0 +1,657 @@
+<!-- Floating Status Window for Active Sessions -->
+<div id="floatingStatusWindow" class="floating-status-window" style="display: none;">
+    <div class="floating-status-header">
+        <div class="status-title">
+            <span class="material-icons-outlined me-2">assignment</span>
+            <span id="statusWindowTitle">Processing Session</span>
+        </div>
+        <div class="status-controls">
+            <button class="btn btn-sm btn-outline-light me-2" id="openFullSession" title="Open Full Session">
+                <span class="material-icons-outlined">open_in_new</span>
+            </button>
+            <button class="btn btn-sm btn-outline-light" id="minimizeStatus" title="Minimize">
+                <span class="material-icons-outlined">remove</span>
+            </button>
+        </div>
+    </div>
+    
+    <div class="floating-status-body" id="statusWindowBody">
+        <div class="status-progress-section">
+            <div class="progress-info mb-2">
+                <small id="statusProgress">0%</small>
+                <small id="statusMessage" class="text-muted">Starting...</small>
+            </div>
+            <div class="progress" style="height: 4px;">
+                <div class="progress-bar bg-gradient" id="statusProgressBar" role="progressbar" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <div class="status-logs-section mt-3">
+            <div class="logs-header d-flex justify-content-between align-items-center mb-2">
+                <small class="text-muted fw-semibold">Recent Activity</small>
+                <span class="badge bg-secondary" id="statusLogsCount">0</span>
+            </div>
+            <div class="status-logs" id="statusLogs">
+                <!-- Real-time logs will appear here -->
+            </div>
+        </div>
+        
+        <div class="status-actions mt-3">
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-warning flex-fill" id="pauseSessionBtn" style="display: none;">
+                    <span class="material-icons-outlined me-1">pause</span>
+                    Pause
+                </button>
+                <button class="btn btn-sm btn-success flex-fill" id="resumeSessionBtn" style="display: none;">
+                    <span class="material-icons-outlined me-1">play_arrow</span>
+                    Resume
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Minimized Status Indicator -->
+<div id="minimizedStatusIndicator" class="minimized-status-indicator" style="display: none;">
+    <div class="status-dot" id="statusDot"></div>
+    <div class="status-mini-info">
+        <div class="status-mini-title" id="miniStatusTitle">Processing...</div>
+        <div class="status-mini-progress">
+            <div class="mini-progress-bar" id="miniProgressBar" style="width: 0%"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+.floating-status-window {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 350px;
+    max-width: 90vw;
+    background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 100%);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    color: white;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+    animation: slideInUp 0.4s ease;
+}
+
+.floating-status-window:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.floating-status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px 12px 0 0;
+}
+
+.status-title {
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.status-controls {
+    display: flex;
+    align-items: center;
+}
+
+.floating-status-body {
+    padding: 16px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.status-logs {
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.log-entry {
+    padding: 4px 8px;
+    margin: 2px 0;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 3px solid transparent;
+    transition: background-color 0.2s ease;
+}
+
+.log-entry.info {
+    border-left-color: #3b82f6;
+}
+
+.log-entry.success {
+    border-left-color: #10b981;
+}
+
+.log-entry.warning {
+    border-left-color: #f59e0b;
+}
+
+.log-entry.error {
+    border-left-color: #ef4444;
+}
+
+.log-entry:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.progress-bar.bg-gradient {
+    background: linear-gradient(90deg, #10b981 0%, #3b82f6 100%);
+}
+
+.minimized-status-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 100%);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    z-index: 9998;
+    transition: all 0.3s ease;
+    animation: pulse 2s infinite;
+}
+
+.minimized-status-indicator:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    margin-bottom: 2px;
+    animation: pulse 1.5s infinite;
+}
+
+.status-mini-info {
+    text-align: center;
+    color: white;
+    font-size: 8px;
+    line-height: 1;
+}
+
+.status-mini-title {
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.status-mini-progress {
+    width: 30px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 1px;
+    overflow: hidden;
+}
+
+.mini-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981 0%, #3b82f6 100%);
+    transition: width 0.3s ease;
+}
+
+@keyframes slideInUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Custom scrollbar for logs */
+.status-logs::-webkit-scrollbar {
+    width: 4px;
+}
+
+.status-logs::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+}
+
+.status-logs::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+}
+
+.status-logs::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Responsive design */
+@media (max-width: 480px) {
+    .floating-status-window {
+        width: calc(100vw - 40px);
+        right: 20px;
+        left: 20px;
+    }
+    
+    .minimized-status-indicator {
+        width: 50px;
+        height: 50px;
+    }
+}
+</style>
+
+<script>
+class FloatingStatusManager {
+    constructor() {
+        this.isMinimized = false;
+        this.currentSessionId = null;
+        this.currentManuscriptId = null;
+        this.websocket = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 1000;
+        this.logBuffer = [];
+        this.maxLogEntries = 50;
+        
+        this.initializeElements();
+        this.setupEventListeners();
+        this.checkForActiveSession();
+    }
+    
+    initializeElements() {
+        this.statusWindow = document.getElementById('floatingStatusWindow');
+        this.minimizedIndicator = document.getElementById('minimizedStatusIndicator');
+        this.statusTitle = document.getElementById('statusWindowTitle');
+        this.statusProgress = document.getElementById('statusProgress');
+        this.statusMessage = document.getElementById('statusMessage');
+        this.statusProgressBar = document.getElementById('statusProgressBar');
+        this.statusLogs = document.getElementById('statusLogs');
+        this.statusLogsCount = document.getElementById('statusLogsCount');
+        this.miniStatusTitle = document.getElementById('miniStatusTitle');
+        this.miniProgressBar = document.getElementById('miniProgressBar');
+        this.statusDot = document.getElementById('statusDot');
+        this.pauseBtn = document.getElementById('pauseSessionBtn');
+        this.resumeBtn = document.getElementById('resumeSessionBtn');
+        this.openFullBtn = document.getElementById('openFullSession');
+        this.minimizeBtn = document.getElementById('minimizeStatus');
+    }
+    
+    setupEventListeners() {
+        // Minimize/maximize functionality
+        this.minimizeBtn?.addEventListener('click', () => this.minimize());
+        this.minimizedIndicator?.addEventListener('click', () => this.maximize());
+        
+        // Session control
+        this.pauseBtn?.addEventListener('click', () => this.pauseSession());
+        this.resumeBtn?.addEventListener('click', () => this.resumeSession());
+        this.openFullBtn?.addEventListener('click', () => this.openFullSession());
+        
+        // Prevent window from closing on click
+        this.statusWindow?.addEventListener('click', (e) => e.stopPropagation());
+        
+        // Auto-hide on page navigation (but maintain session)
+        window.addEventListener('beforeunload', () => this.handlePageNavigation());
+        
+        // Handle visibility change (tab switching)
+        document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
+    }
+    
+    async checkForActiveSession() {
+        try {
+            const response = await fetch('/api/sessions/active');
+            if (response.ok) {
+                const sessions = await response.json();
+                if (sessions.length > 0) {
+                    const activeSession = sessions[0]; // Use the first active session
+                    this.attachToSession(activeSession.session_id, activeSession.manuscript_id);
+                }
+            }
+        } catch (error) {
+            console.log('No active sessions found or error checking:', error);
+        }
+    }
+    
+    attachToSession(sessionId, manuscriptId, manuscriptTitle = null) {
+        this.currentSessionId = sessionId;
+        this.currentManuscriptId = manuscriptId;
+        
+        // Update title
+        if (manuscriptTitle) {
+            this.statusTitle.textContent = manuscriptTitle;
+            this.miniStatusTitle.textContent = manuscriptTitle;
+        }
+        
+        // Show the status window
+        this.show();
+        
+        // Connect to WebSocket
+        this.connectWebSocket();
+        
+        // Store session info for persistence
+        this.storeSessionInfo();
+    }
+    
+    connectWebSocket() {
+        if (!this.currentSessionId) return;
+        
+        try {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/api/ws/processing/${this.currentSessionId}`;
+            
+            this.websocket = new WebSocket(wsUrl);
+            
+            this.websocket.onopen = () => {
+                console.log('Floating status WebSocket connected');
+                this.reconnectAttempts = 0;
+                this.updateConnectionStatus(true);
+            };
+            
+            this.websocket.onmessage = (event) => {
+                this.handleWebSocketMessage(event);
+            };
+            
+            this.websocket.onclose = () => {
+                console.log('Floating status WebSocket disconnected');
+                this.updateConnectionStatus(false);
+                this.attemptReconnect();
+            };
+            
+            this.websocket.onerror = (error) => {
+                console.error('Floating status WebSocket error:', error);
+                this.updateConnectionStatus(false);
+            };
+            
+        } catch (error) {
+            console.error('Error connecting to WebSocket:', error);
+            this.attemptReconnect();
+        }
+    }
+    
+    handleWebSocketMessage(event) {
+        try {
+            const data = JSON.parse(event.data);
+            
+            switch (data.type) {
+                case 'progress':
+                    this.updateProgress(data.progress, data.message);
+                    break;
+                case 'log':
+                    this.addLogEntry(data.level, data.message);
+                    break;
+                case 'status':
+                    this.updateStatus(data.status);
+                    break;
+                case 'completed':
+                    this.handleSessionCompleted(data);
+                    break;
+                case 'error':
+                    this.handleSessionError(data);
+                    break;
+                case 'image':
+                    this.handleImageGenerated(data);
+                    break;
+            }
+        } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+        }
+    }
+    
+    updateProgress(progress, message) {
+        this.statusProgress.textContent = `${progress}%`;
+        this.statusMessage.textContent = message || 'Processing...';
+        this.statusProgressBar.style.width = `${progress}%`;
+        this.miniProgressBar.style.width = `${progress}%`;
+        
+        // Update status dot color based on progress
+        if (progress === 100) {
+            this.statusDot.style.background = '#10b981'; // Green for completed
+        } else if (progress > 0) {
+            this.statusDot.style.background = '#3b82f6'; // Blue for processing
+        } else {
+            this.statusDot.style.background = '#f59e0b'; // Yellow for starting
+        }
+    }
+    
+    addLogEntry(level, message) {
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry ${level}`;
+        logEntry.innerHTML = `
+            <div class="d-flex justify-content-between">
+                <span>${message}</span>
+                <small class="text-muted ms-2">${new Date().toLocaleTimeString()}</small>
+            </div>
+        `;
+        
+        this.statusLogs.insertBefore(logEntry, this.statusLogs.firstChild);
+        
+        // Limit number of log entries
+        this.logBuffer.unshift({ level, message, timestamp: new Date() });
+        if (this.logBuffer.length > this.maxLogEntries) {
+            this.logBuffer = this.logBuffer.slice(0, this.maxLogEntries);
+            const extraEntries = this.statusLogs.children.length - this.maxLogEntries;
+            for (let i = 0; i < extraEntries; i++) {
+                this.statusLogs.removeChild(this.statusLogs.lastChild);
+            }
+        }
+        
+        // Update log count
+        this.statusLogsCount.textContent = this.logBuffer.length;
+        
+        // Auto-scroll to top for new entries
+        this.statusLogs.scrollTop = 0;
+    }
+    
+    updateStatus(status) {
+        switch (status) {
+            case 'paused':
+                this.showPauseResumeButtons(false, true);
+                this.statusDot.style.background = '#f59e0b';
+                break;
+            case 'processing':
+                this.showPauseResumeButtons(true, false);
+                this.statusDot.style.background = '#3b82f6';
+                break;
+            case 'completed':
+                this.showPauseResumeButtons(false, false);
+                this.statusDot.style.background = '#10b981';
+                break;
+            case 'error':
+                this.showPauseResumeButtons(false, false);
+                this.statusDot.style.background = '#ef4444';
+                break;
+        }
+    }
+    
+    showPauseResumeButtons(showPause, showResume) {
+        this.pauseBtn.style.display = showPause ? 'block' : 'none';
+        this.resumeBtn.style.display = showResume ? 'block' : 'none';
+    }
+    
+    handleSessionCompleted(data) {
+        this.addLogEntry('success', 'Processing completed successfully!');
+        this.updateProgress(100, 'Completed');
+        this.updateStatus('completed');
+        
+        // Auto-hide after delay
+        setTimeout(() => {
+            this.hide();
+        }, 10000);
+    }
+    
+    handleSessionError(data) {
+        this.addLogEntry('error', data.message || 'An error occurred');
+        this.updateStatus('error');
+    }
+    
+    handleImageGenerated(data) {
+        this.addLogEntry('success', `Generated image for Chapter ${data.chapter_number}`);
+    }
+    
+    async pauseSession() {
+        if (!this.currentSessionId) return;
+        
+        try {
+            const response = await fetch(`/api/process/${this.currentSessionId}/pause`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                this.addLogEntry('warning', 'Session paused');
+                this.updateStatus('paused');
+            }
+        } catch (error) {
+            console.error('Error pausing session:', error);
+            this.addLogEntry('error', 'Failed to pause session');
+        }
+    }
+    
+    async resumeSession() {
+        if (!this.currentSessionId) return;
+        
+        try {
+            const response = await fetch(`/api/process/${this.currentSessionId}/resume`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                this.addLogEntry('info', 'Session resumed');
+                this.updateStatus('processing');
+            }
+        } catch (error) {
+            console.error('Error resuming session:', error);
+            this.addLogEntry('error', 'Failed to resume session');
+        }
+    }
+    
+    openFullSession() {
+        if (this.currentManuscriptId) {
+            window.location.href = `/processing/${this.currentManuscriptId}?session_id=${this.currentSessionId}`;
+        }
+    }
+    
+    show() {
+        this.statusWindow.style.display = 'block';
+        this.minimizedIndicator.style.display = 'none';
+        this.isMinimized = false;
+    }
+    
+    hide() {
+        this.statusWindow.style.display = 'none';
+        this.minimizedIndicator.style.display = 'none';
+        this.cleanup();
+    }
+    
+    minimize() {
+        this.statusWindow.style.display = 'none';
+        this.minimizedIndicator.style.display = 'flex';
+        this.isMinimized = true;
+    }
+    
+    maximize() {
+        this.statusWindow.style.display = 'block';
+        this.minimizedIndicator.style.display = 'none';
+        this.isMinimized = false;
+    }
+    
+    updateConnectionStatus(connected) {
+        if (connected) {
+            this.statusDot.style.animation = 'pulse 1.5s infinite';
+        } else {
+            this.statusDot.style.animation = 'none';
+            this.statusDot.style.background = '#ef4444';
+        }
+    }
+    
+    attemptReconnect() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            this.addLogEntry('error', 'Connection lost. Please refresh the page.');
+            return;
+        }
+        
+        this.reconnectAttempts++;
+        const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+        
+        this.addLogEntry('warning', `Reconnecting... (attempt ${this.reconnectAttempts})`);
+        
+        setTimeout(() => {
+            this.connectWebSocket();
+        }, delay);
+    }
+    
+    storeSessionInfo() {
+        sessionStorage.setItem('activeSession', JSON.stringify({
+            sessionId: this.currentSessionId,
+            manuscriptId: this.currentManuscriptId,
+            timestamp: Date.now()
+        }));
+    }
+    
+    handlePageNavigation() {
+        // Keep session info for recovery on new page
+        if (this.currentSessionId) {
+            this.storeSessionInfo();
+        }
+    }
+    
+    handleVisibilityChange() {
+        if (document.hidden) {
+            // Page hidden - maintain connection but reduce activity
+        } else {
+            // Page visible - ensure connection is active
+            if (this.websocket && this.websocket.readyState !== WebSocket.OPEN) {
+                this.connectWebSocket();
+            }
+        }
+    }
+    
+    cleanup() {
+        if (this.websocket) {
+            this.websocket.close();
+            this.websocket = null;
+        }
+        
+        this.currentSessionId = null;
+        this.currentManuscriptId = null;
+        
+        sessionStorage.removeItem('activeSession');
+    }
+}
+
+// Initialize the floating status manager when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    window.floatingStatusManager = new FloatingStatusManager();
+});
+
+// Expose global function for other pages to attach to sessions
+window.attachToProcessingSession = function(sessionId, manuscriptId, manuscriptTitle) {
+    if (window.floatingStatusManager) {
+        window.floatingStatusManager.attachToSession(sessionId, manuscriptId, manuscriptTitle);
+    }
+};
+</script>

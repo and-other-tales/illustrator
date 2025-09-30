@@ -459,6 +459,68 @@ async function deleteManuscriptFromDashboard(manuscriptId) {
         alert('Network error: ' + error.message);
     }
 }
+
+// Check for background processing sessions on page load
+document.addEventListener('DOMContentLoaded', function() {
+    checkForBackgroundSessions();
+});
+
+async function checkForBackgroundSessions() {
+    // Check sessionStorage for stored session info
+    const storedSession = sessionStorage.getItem('processingSession');
+    if (storedSession) {
+        try {
+            const sessionInfo = JSON.parse(storedSession);
+            
+            // Verify session is still active
+            const response = await fetch(`/api/sessions/${sessionInfo.sessionId}/status`);
+            if (response.ok) {
+                const sessionData = await response.json();
+                
+                // Only attach if session is still processing
+                if (sessionData.status !== 'completed' && sessionData.status !== 'error') {
+                    if (window.attachToProcessingSession) {
+                        window.attachToProcessingSession(
+                            sessionInfo.sessionId,
+                            sessionInfo.manuscriptId,
+                            sessionInfo.manuscriptTitle
+                        );
+                    }
+                } else {
+                    // Session completed, remove from storage
+                    sessionStorage.removeItem('processingSession');
+                }
+            } else {
+                // Session not found, remove from storage
+                sessionStorage.removeItem('processingSession');
+            }
+        } catch (error) {
+            console.error('Error checking background session:', error);
+            sessionStorage.removeItem('processingSession');
+        }
+    }
+    
+    // Also check for any active sessions via API
+    try {
+        const response = await fetch('/api/sessions/active');
+        if (response.ok) {
+            const activeSessions = await response.json();
+            if (activeSessions.length > 0 && !storedSession) {
+                // Found active session but no stored info - attach to first one
+                const session = activeSessions[0];
+                if (window.attachToProcessingSession) {
+                    window.attachToProcessingSession(
+                        session.session_id,
+                        session.manuscript_id,
+                        `Processing Session`
+                    );
+                }
+            }
+        }
+    } catch (error) {
+        console.log('No active sessions or error checking:', error);
+    }
+}
 </script>
 
 <!-- Include client setup overlay if in remote mode -->

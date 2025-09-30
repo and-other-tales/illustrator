@@ -290,6 +290,9 @@
     <!-- Custom JS -->
     <script src="{{ url_for('static', path='/js/app.js') }}"></script>
 
+    <!-- Floating Status Window for Background Sessions -->
+    {% include 'floating_status.html' %}
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -9,10 +9,13 @@
     <button type="button" class="btn btn-outline-secondary" onclick="pauseProcessing()" id="pauseBtn" disabled>
         <i class="bi bi-pause"></i> Pause
     </button>
+    <button type="button" class="btn btn-outline-info" onclick="continueInBackground()" id="backgroundBtn">
+        <i class="bi bi-arrow-up-right-square"></i> Continue in Background
+    </button>
     <button type="button" class="btn btn-outline-danger" onclick="cancelProcessing()" id="cancelBtn" disabled>
         <i class="bi bi-stop"></i> Cancel
     </button>
-    <a href="/manuscript/{{ manuscript_id }}" class="btn btn-outline-primary">
+    <a href="/manuscript/{{ manuscript_id }}" class="btn btn-outline-primary" onclick="enableBackgroundProcessing()">
         <i class="bi bi-arrow-left"></i> Back to Manuscript
     </a>
 </div>
@@ -949,6 +952,19 @@ async function resumeProcessing() {
     }
 }
 
+function continueInBackground() {
+    // Show confirmation dialog
+    if (confirm('This will allow processing to continue in the background while you navigate to other pages. You can monitor progress via the floating status window. Continue?')) {
+        addLogMessage('info', 'Enabling background processing...');
+        enableBackgroundProcessing();
+        
+        // Navigate to dashboard after a short delay
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 1000);
+    }
+}
+
 function cancelProcessing() {
     if (confirm('Are you sure you want to cancel processing? This action cannot be undone.')) {
         if (websocket) {
@@ -1047,13 +1063,67 @@ function hideEndpointPauseAlert() {
     alertElement.style.display = 'none';
 }
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', function() {
+// Handle page navigation - enable background processing
+window.addEventListener('beforeunload', function(e) {
+    // Don't prevent navigation but enable background mode
+    enableBackgroundProcessing();
+});
+
+function enableBackgroundProcessing() {
+    if (currentSessionId && currentManuscriptId) {
+        // Store session info for floating status window
+        sessionStorage.setItem('processingSession', JSON.stringify({
+            sessionId: currentSessionId,
+            manuscriptId: currentManuscriptId,
+            manuscriptTitle: '{{ manuscript_metadata.title if manuscript_metadata else "Unknown" }}',
+            timestamp: Date.now()
+        }));
+        
+        // Notify floating status manager
+        if (window.attachToProcessingSession) {
+            window.attachToProcessingSession(
+                currentSessionId, 
+                currentManuscriptId, 
+                '{{ manuscript_metadata.title if manuscript_metadata else "Processing Session" }}'
+            );
+        }
+        
+        // Add background processing notification
+        addLogMessage('info', 'Processing will continue in background. You can monitor progress from the floating status window.');
+    }
+    
+    // Close WebSocket gracefully but don't terminate the session
     if (websocket) {
         websocket.close();
     }
     if (processingInterval) {
         clearInterval(processingInterval);
+    }
+}
+
+// Add navigation helper
+function navigateToPage(url) {
+    enableBackgroundProcessing();
+    window.location.href = url;
+}
+
+// Override default back button behavior
+document.addEventListener('DOMContentLoaded', function() {
+    // Update back button to enable background processing
+    const backButton = document.querySelector('a[href^="/manuscript/"]');
+    if (backButton) {
+        backButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            navigateToPage(this.href);
+        });
+    }
+    
+    // Check if this is a reconnection to an existing session
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    if (sessionId) {
+        // Clear floating status since we're now on the full page
+        sessionStorage.removeItem('processingSession');
     }
 });
 </script>
