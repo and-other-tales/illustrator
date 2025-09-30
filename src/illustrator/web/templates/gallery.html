@@ -30,10 +30,10 @@
                         </div>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
-                        <button class="btn btn-light btn-sm gallery-action-btn" onclick="refreshGallery()">
+                        <button class="btn btn-outline-light btn-sm gallery-action-btn" onclick="refreshGallery()" title="Manual refresh (auto-refresh is active)">
                             <i class="bi bi-arrow-clockwise me-2"></i>Refresh
                         </button>
-                        <a href="/manuscript/{{ manuscript_id }}" class="btn btn-outline-light btn-sm gallery-action-btn">
+                        <a href="/manuscript/{{ manuscript_id }}" class="btn btn-light btn-sm gallery-action-btn">
                             <i class="bi bi-arrow-left me-2"></i>Back to Manuscript
                         </a>
                     </div>
@@ -600,7 +600,8 @@ function downloadImage(imageUrl, filename) {
 }
 
 function refreshGallery() {
-    loadGallery();
+    showMessage('Refreshing gallery...', 'info');
+    loadGallery(true); // Show loading message for manual refresh
 }
 
 // Global variable to store current modal image data
@@ -820,7 +821,7 @@ function handleGalleryUpdate(data) {
         // A new image was generated - refresh the gallery
         console.log('New image generated, refreshing gallery');
         showMessage('New illustration generated!', 'success');
-        loadGallery();
+        setTimeout(() => loadGallery(), 500); // Small delay to ensure image is fully saved
     } else if (data.type === 'image_deleted') {
         // An image was deleted - refresh the gallery
         console.log('Image deleted, refreshing gallery');
@@ -830,7 +831,16 @@ function handleGalleryUpdate(data) {
         // Processing completed - refresh to show all new images
         console.log('Processing completed, refreshing gallery');
         showMessage('Illustration generation completed!', 'success');
-        loadGallery();
+        setTimeout(() => loadGallery(), 1000); // Longer delay for processing completion
+    } else if (data.type === 'processing_progress') {
+        // Show progress updates in gallery
+        if (data.images_generated !== undefined) {
+            showMessage(`Progress: ${data.images_generated} images generated`, 'info');
+            loadGallery(); // Refresh to show new images
+        }
+    } else if (data.type === 'session_started') {
+        // New processing session started
+        showMessage('New illustration session started', 'info');
     }
 }
 
