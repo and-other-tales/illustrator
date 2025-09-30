@@ -741,12 +741,13 @@ class FluxDevVertexProvider(ImageGenerationProvider):
         endpoint_url = self.endpoint_url
         
         # If the URL is just the dedicated endpoint hostname, construct the full URL
-        if endpoint_url.endswith('.prediction.vertexai.goog'):
-            # Extract endpoint ID from hostname
-            hostname_parts = endpoint_url.split('.')
-            if len(hostname_parts) >= 3:
-                endpoint_id = hostname_parts[0]
-                endpoint_url = f"https://{endpoint_url}/v1/endpoints/{endpoint_id}:predict"
+        if endpoint_url.endswith('.prediction.vertexai.goog') and not endpoint_url.startswith('http'):
+            # For dedicated endpoints, try the direct prediction URL format
+            endpoint_url = f"https://{endpoint_url}/predict"
+        elif endpoint_url.endswith('.prediction.vertexai.goog') and endpoint_url.startswith('http'):
+            # Already has protocol, check if it needs /predict suffix
+            if not endpoint_url.endswith('/predict'):
+                endpoint_url = f"{endpoint_url}/predict"
         elif not endpoint_url.startswith(('https://', 'http://')):
             return {
                 'success': False,
