@@ -829,7 +829,7 @@ async def run_processing_workflow(
                     checkpoint_manager.create_session_start_checkpoint(
                         session_id=db_session_id_for_persistence,
                         manuscript_id=manuscript_id,
-                        manuscript_title=manuscript.title,
+                        manuscript_title=manuscript.title if hasattr(manuscript, 'title') else manuscript.metadata.title,
                         total_chapters=len(chapters),
                         style_config=style_config,
                         max_emotional_moments=max_emotional_moments
