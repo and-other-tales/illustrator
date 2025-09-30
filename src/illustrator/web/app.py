@@ -135,6 +135,23 @@ except Exception:
 
 console = Console()
 
+
+def _get_valid_api_keys():
+    """Get list of valid API keys from environment variables."""
+    api_keys = []
+    
+    # Check for comma-separated API keys
+    keys_env = os.getenv('ILLUSTRATOR_API_KEYS', '')
+    if keys_env:
+        api_keys.extend([key.strip() for key in keys_env.split(',') if key.strip()])
+    
+    # Check for single API key (backward compatibility)
+    single_key = os.getenv('ILLUSTRATOR_API_KEY', '')
+    if single_key and single_key not in api_keys:
+        api_keys.append(single_key)
+    
+    return api_keys
+
 # Load environment variables from .env file in the project root
 # Find the project root directory (where the .env file is located)
 project_root = Path(__file__).parent.parent.parent.parent
@@ -1983,6 +2000,21 @@ async def processing_websocket(websocket: WebSocket, session_id: str):
         connection_manager.disconnect(session_id)
 
 
+@app.websocket("/ws/gallery/{manuscript_id}")
+async def gallery_websocket(websocket: WebSocket, manuscript_id: str):
+    """WebSocket endpoint for real-time gallery updates."""
+    await connection_manager.connect(websocket, f"gallery_{manuscript_id}")
+    try:
+        while True:
+            # Keep connection alive
+            data = await websocket.receive_text()
+            # Handle gallery-specific messages if needed
+            if data == "ping":
+                await connection_manager.send_personal_message("pong", f"gallery_{manuscript_id}")
+    except WebSocketDisconnect:
+        connection_manager.disconnect(f"gallery_{manuscript_id}")
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -2045,8 +2077,8 @@ def create_api_only_app() -> FastAPI:
     )
 
     # Add API key authentication middleware if configured
-    api_key = os.getenv('ILLUSTRATOR_API_KEY')
-    if api_key:
+    api_keys = _get_valid_api_keys()
+    if api_keys:
         @api_app.middleware("http")
         async def authenticate_api_key(request: Request, call_next):
             # Skip authentication for health check and docs
@@ -2057,7 +2089,7 @@ def create_api_only_app() -> FastAPI:
             # Check for API key in header
             provided_key = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").replace("Bearer ", "")
 
-            if not provided_key or provided_key != api_key:
+            if not provided_key or provided_key not in api_keys:
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Invalid or missing API key"}
@@ -2125,6 +2157,54 @@ def create_web_client_app() -> FastAPI:
         if api_key:
             headers["X-API-Key"] = api_key
         return httpx.AsyncClient(base_url=remote_api_url, headers=headers, timeout=30.0)
+
+    # Client setup endpoint for saving configuration
+    @web_app.post("/api/client-setup")
+    async def save_client_setup(request: Request):
+        try:
+            data = await request.json()
+            server_url = data.get('server_url', '').strip()
+            new_api_key = data.get('api_key', '').strip()
+            
+            if not server_url:
+                raise HTTPException(status_code=400, detail="Server URL is required")
+            
+            if not server_url.startswith(('http://', 'https://')):
+                raise HTTPException(status_code=400, detail="Server URL must start with http:// or https://")
+            
+            # Find or create .env file
+            from dotenv import find_dotenv, set_key, unset_key
+            env_file = find_dotenv()
+            if not env_file:
+                env_file = Path.cwd() / '.env'
+            
+            # Update configuration
+            set_key(env_file, 'ILLUSTRATOR_REMOTE_API_URL', server_url)
+            if new_api_key:
+                set_key(env_file, 'ILLUSTRATOR_API_KEY', new_api_key)
+            else:
+                unset_key(env_file, 'ILLUSTRATOR_API_KEY')
+            
+            return {"success": True, "message": "Configuration saved successfully"}
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # Check if client needs setup
+    def needs_client_setup():
+        # Check if no remote API URL is configured or it's the default localhost
+        if not remote_api_url or remote_api_url in ['http://127.0.0.1:8000', 'http://localhost:8000']:
+            return True
+        
+        # Additional check: try to reach the remote API quickly
+        try:
+            import httpx
+            with httpx.Client(timeout=2.0) as client:
+                response = client.get(f"{remote_api_url}/health")
+                return response.status_code != 200
+        except Exception:
+            # If we can't reach it, assume setup is needed
+            return True
 
     # Proxy API requests to remote server
     @web_app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
@@ -2211,13 +2291,61 @@ def create_web_client_app() -> FastAPI:
         finally:
             await websocket.close()
 
+    # WebSocket proxy for gallery updates
+    @web_app.websocket("/ws/gallery/{manuscript_id}")
+    async def gallery_websocket_proxy(websocket: WebSocket, manuscript_id: str):
+        await websocket.accept()
+
+        try:
+            # Try to connect to remote WebSocket
+            import websockets
+            remote_ws_url = remote_api_url.replace('http://', 'ws://').replace('https://', 'wss://')
+            remote_ws_url += f"/ws/gallery/{manuscript_id}"
+
+            async with websockets.connect(remote_ws_url) as remote_ws:
+                # Forward messages between client and remote server
+                async def forward_from_remote():
+                    try:
+                        async for message in remote_ws:
+                            await websocket.send_text(message)
+                    except websockets.exceptions.ConnectionClosed:
+                        pass
+
+                async def forward_to_remote():
+                    try:
+                        while True:
+                            message = await websocket.receive_text()
+                            await remote_ws.send(message)
+                    except Exception:
+                        pass
+
+                # Run both forwarding tasks concurrently
+                import asyncio
+                await asyncio.gather(
+                    forward_from_remote(),
+                    forward_to_remote(),
+                    return_exceptions=True
+                )
+        except Exception as e:
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "error": f"WebSocket connection to remote server failed: {str(e)}"
+            }))
+        finally:
+            await websocket.close()
+
     # Serve HTML pages (same as main app)
     @web_app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
         return web_templates.TemplateResponse(
             request,
             "index.html",
-            {"title": "Dashboard", "remote_mode": True, "remote_api_url": remote_api_url}
+            {
+                "title": "Dashboard", 
+                "remote_mode": True, 
+                "remote_api_url": remote_api_url,
+                "needs_setup": needs_client_setup()
+            }
         )
 
     @web_app.get("/manuscript/new", response_class=HTMLResponse)

@@ -1,0 +1,108 @@
+<!-- Client Setup Overlay Modal -->
+<div class="modal fade" id="clientSetupModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="clientSetupModalLabel" aria-hidden="true" data-needs-setup="{{ 'true' if needs_setup else 'false' }}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);">
+                <h5 class="modal-title text-white fw-bold" id="clientSetupModalLabel">
+                    <span class="material-icons-outlined me-2 align-middle">settings</span>
+                    Client Setup
+                </h5>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-info border-0 mb-4" style="background: linear-gradient(135deg, #e0f2fe 0%, #f3e5f5 100%);">
+                    <div class="d-flex align-items-center">
+                        <span class="material-icons-outlined me-2 text-info">info</span>
+                        <div>
+                            <strong>First-time Setup</strong><br>
+                            <small class="text-muted">Configure your connection to the remote API server.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <form id="clientSetupForm">
+                    <div class="mb-4">
+                        <label for="serverUrl" class="form-label fw-semibold">
+                            <span class="material-icons-outlined me-2 align-middle fs-6">dns</span>
+                            Server URL
+                        </label>
+                        <input type="url" class="form-control form-control-lg" id="serverUrl" name="serverUrl" 
+                               placeholder="http://192.168.1.100:8000" value="http://127.0.0.1:8000" required>
+                        <div class="form-text">Enter the full URL of your API server (e.g., http://192.168.1.100:8000)</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="apiKey" class="form-label fw-semibold">
+                            <span class="material-icons-outlined me-2 align-middle fs-6">key</span>
+                            API Key
+                            <span class="badge bg-secondary ms-2">Optional</span>
+                        </label>
+                        <input type="password" class="form-control form-control-lg" id="apiKey" name="apiKey" 
+                               placeholder="Enter your API key if required">
+                        <div class="form-text">Leave empty if your server doesn't require authentication</div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-lg btn-primary fw-semibold" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border: none;">
+                            <span class="material-icons-outlined me-2 align-middle">save</span>
+                            Save Configuration
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if we need to show the setup modal
+    const modal = document.getElementById('clientSetupModal');
+    const needsSetup = modal.getAttribute('data-needs-setup') === 'true';
+    
+    if (needsSetup) {
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+    }
+    
+    // Handle form submission
+    document.getElementById('clientSetupForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        
+        // Show loading state
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+        submitBtn.disabled = true;
+        
+        try {
+            const formData = new FormData(e.target);
+            const response = await fetch('/api/client-setup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    server_url: formData.get('serverUrl'),
+                    api_key: formData.get('apiKey') || null
+                })
+            });
+            
+            if (response.ok) {
+                // Success - reload the page to apply new configuration
+                window.location.reload();
+            } else {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to save configuration');
+            }
+        } catch (error) {
+            console.error('Setup error:', error);
+            alert('Failed to save configuration: ' + error.message);
+            
+            // Reset button
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    });
+});
+</script>

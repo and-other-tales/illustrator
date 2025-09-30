@@ -258,6 +258,10 @@ let sessionId = null;
 let startTime = null;
 let autoScroll = true;
 let processingInterval = null;
+let reconnectAttempts = 0;
+let maxReconnectAttempts = 10;
+let reconnectInterval = null;
+let initialProgressFetched = false;
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeProcessing();
@@ -523,15 +527,31 @@ function connectWebSocket() {
         return;
     }
 
+    // Clear any existing reconnect interval
+    if (reconnectInterval) {
+        clearInterval(reconnectInterval);
+        reconnectInterval = null;
+    }
+
     const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/processing/${sessionId}`;
 
     websocket = new WebSocket(wsUrl);
 
     websocket.onopen = function(event) {
         console.log('WebSocket connection established');
+        reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         document.getElementById('connectionStatus').textContent = 'Connected';
         document.getElementById('connectionStatus').className = 'badge bg-success';
         addLogMessage('info', 'Connected to processing server');
+        
+        // Stop polling since WebSocket is now active
+        stopProgressPolling();
+        
+        // Immediately fetch current progress when connected
+        fetchCurrentProgress();
+        
+        // Fetch progress again in 2 seconds to catch any immediate updates
+        setTimeout(fetchCurrentProgress, 2000);
     };
 
     websocket.onmessage = function(event) {
@@ -540,12 +560,20 @@ function connectWebSocket() {
     };
 
     websocket.onclose = function(event) {
-        console.log('WebSocket connection closed');
-        document.getElementById('connectionStatus').textContent = 'Disconnected';
-        document.getElementById('connectionStatus').className = 'badge bg-warning';
-
-        if (event.code !== 1000) {
-            addLogMessage('warning', 'Connection to processing server lost');
+        console.log('WebSocket connection closed', event.code, event.reason);
+        
+        if (event.code !== 1000) { // Not a normal closure
+            document.getElementById('connectionStatus').textContent = 'Reconnecting...';
+            document.getElementById('connectionStatus').className = 'badge bg-warning';
+            addLogMessage('warning', 'Connection to processing server lost, attempting to reconnect...');
+            
+            // Start polling as fallback while reconnecting
+            startProgressPolling();
+            attemptReconnection();
+        } else {
+            document.getElementById('connectionStatus').textContent = 'Disconnected';
+            document.getElementById('connectionStatus').className = 'badge bg-secondary';
+            stopProgressPolling();
         }
     };
 
@@ -555,6 +583,81 @@ function connectWebSocket() {
         document.getElementById('connectionStatus').className = 'badge bg-danger';
         addLogMessage('error', 'Connection error with processing server');
     };
+}
+
+function attemptReconnection() {
+    if (reconnectAttempts >= maxReconnectAttempts) {
+        addLogMessage('error', 'Maximum reconnection attempts reached. Please refresh the page.');
+        document.getElementById('connectionStatus').textContent = 'Failed';
+        document.getElementById('connectionStatus').className = 'badge bg-danger';
+        return;
+    }
+
+    reconnectAttempts++;
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff, max 30s
+    
+    addLogMessage('info', `Reconnection attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${delay/1000} seconds...`);
+    
+    reconnectInterval = setTimeout(() => {
+        console.log(`Attempting WebSocket reconnection ${reconnectAttempts}/${maxReconnectAttempts}`);
+        connectWebSocket();
+    }, delay);
+}
+
+// Function to immediately fetch current progress
+async function fetchCurrentProgress() {
+    try {
+        addLogMessage('info', 'Fetching current progress...');
+        const response = await fetch(`/api/process/status/{{ manuscript_id }}`);
+        if (response.ok) {
+            const statusData = await response.json();
+            if (statusData.active_session && statusData.active_session.session_id === sessionId) {
+                const session = statusData.active_session;
+                if (session.status) {
+                    updateProgress(session.status.progress || 0, session.status.message || 'Processing...');
+                    addLogMessage('success', `Current progress: ${session.status.progress || 0}%`);
+                    
+                    // Update other metrics if available
+                    if (session.status.current_chapter !== undefined) {
+                        document.getElementById('chaptersProcessed').textContent = session.status.current_chapter;
+                    }
+                    if (session.status.images_generated !== undefined) {
+                        document.getElementById('imagesGenerated').textContent = session.status.images_generated;
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching current progress:', error);
+        addLogMessage('warning', 'Could not fetch current progress');
+    }
+}
+
+// Function to start continuous progress polling as fallback
+function startProgressPolling() {
+    // Clear any existing polling
+    if (processingInterval) {
+        clearInterval(processingInterval);
+    }
+    
+    // Poll every 3 seconds when WebSocket is not working
+    processingInterval = setInterval(async () => {
+        if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+            addLogMessage('info', 'WebSocket disconnected, polling for progress...');
+            await fetchCurrentProgress();
+        }
+    }, 3000);
+    
+    addLogMessage('info', 'Started progress polling fallback (every 3 seconds)');
+}
+
+// Function to stop progress polling
+function stopProgressPolling() {
+    if (processingInterval) {
+        clearInterval(processingInterval);
+        processingInterval = null;
+        addLogMessage('info', 'Stopped progress polling');
+    }
 }
 
 function handleProcessingUpdate(data) {

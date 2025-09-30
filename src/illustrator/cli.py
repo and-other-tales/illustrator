@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, List
 
 import click
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv, find_dotenv, set_key, unset_key
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -1089,8 +1089,175 @@ def analyze(interactive: bool, config_file: str | None, style_config: str | None
     default=True,
     help='Automatically open browser (default: True)'
 )
-def start(host: str, port: int, reload: bool, open_browser: bool):
-    """Start the full web interface with both UI and API."""
+@click.option(
+    '--client-only',
+    is_flag=True,
+    help='Run only the web app (connects to remote API server)'
+)
+@click.option(
+    '--server-only',
+    is_flag=True,
+    help='Run only the API server (no web interface, listens on 0.0.0.0)'
+)
+def start(host: str, port: int, reload: bool, open_browser: bool, client_only: bool, server_only: bool):
+    """Start the manuscript illustrator application."""
+    
+    # Validate mutually exclusive flags
+    if client_only and server_only:
+        console.print("[red]❌ Cannot use --client-only and --server-only together.[/red]")
+        raise click.ClickException("Conflicting flags: --client-only and --server-only")
+    
+    # Handle client-only mode
+    if client_only:
+        return _start_client_only(host, port, open_browser)
+    
+    # Handle server-only mode 
+    if server_only:
+        return _start_server_only(port, reload)
+    
+    # Default: start full web interface with both UI and API
+    return _start_full_interface(host, port, reload, open_browser)
+
+
+def _start_client_only(host: str, port: int, open_browser: bool):
+    """Start client-only mode (web UI that connects to remote API)."""
+    try:
+        ensure_web_dependencies()
+        global create_web_client_app, uvicorn
+        
+        if create_web_client_app is None:
+            from illustrator.web.app import create_web_client_app as _create_web_client_app
+            create_web_client_app = _create_web_client_app
+            
+        if uvicorn is None:
+            import uvicorn as _uvicorn
+            uvicorn = _uvicorn
+
+        import webbrowser
+        import threading
+        import time
+
+        # Check if configuration exists, if not show setup dialog
+        remote_api_url = os.getenv('ILLUSTRATOR_REMOTE_API_URL')
+        api_key = os.getenv('ILLUSTRATOR_API_KEY')
+        
+        if not remote_api_url:
+            console.print("[yellow]⚠️  First-time setup required for client-only mode.[/yellow]")
+            _setup_client_configuration()
+            # Reload environment after setup
+            load_dotenv(find_dotenv(), override=True)
+
+        remote_api_url = os.getenv('ILLUSTRATOR_REMOTE_API_URL', 'http://127.0.0.1:8000')
+
+        console.print(Panel.fit(
+            f"[bold cyan]🚀 Starting Web Client (Client-Only Mode)[/bold cyan]\n\n"
+            f"[green]• Client: http://{host}:{port}[/green]\n"
+            f"[green]• Remote API: {remote_api_url}[/green]\n"
+            f"[green]• Mode: Client Only[/green]",
+            title="Web Client",
+            border_style="cyan"
+        ))
+
+        # Open browser in a separate thread after a short delay
+        if open_browser:
+            def open_browser_delayed():
+                time.sleep(2)  # Give client time to start
+                try:
+                    webbrowser.open(f"http://{host}:{port}")
+                    console.print(f"[green]🌐 Opened browser at http://{host}:{port}[/green]")
+                except Exception:
+                    console.print(f"[yellow]Could not open browser automatically. Please visit: http://{host}:{port}[/yellow]")
+
+            threading.Thread(target=open_browser_delayed, daemon=True).start()
+
+        # Create web client app
+        app = create_web_client_app()
+
+        # Start the client
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            log_level="info"
+        )
+
+    except ImportError as e:
+        console.print("[red]❌ Required dependencies not installed. Please install with:[/red]")
+        console.print("[yellow]pip install 'illustrator[web]' requests[/yellow]")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]🛑 Web client stopped.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]❌ Failed to start web client: {e}[/red]")
+        sys.exit(1)
+
+
+def _start_server_only(port: int, reload: bool):
+    """Start server-only mode (API server with no web interface)."""
+    try:
+        ensure_web_dependencies()
+        global create_api_only_app, uvicorn
+        
+        if create_api_only_app is None:
+            from illustrator.web.app import create_api_only_app as _create_api_only_app
+            create_api_only_app = _create_api_only_app
+            
+        if uvicorn is None:
+            import uvicorn as _uvicorn
+            uvicorn = _uvicorn
+
+        # Handle comma-separated API keys from environment
+        api_keys = _get_api_keys_from_env()
+        
+        # Set the API keys for the application
+        if api_keys:
+            os.environ['ILLUSTRATOR_API_KEYS'] = ','.join(api_keys)
+            console.print(f"[green]• Authentication: Enabled ({len(api_keys)} key(s))[/green]")
+        else:
+            console.print("[yellow]• Authentication: Disabled (no API keys configured)[/yellow]")
+
+        # Server listens on 0.0.0.0 for external access
+        host = '0.0.0.0'
+
+        console.print(Panel.fit(
+            f"[bold green]🚀 Starting API Server (Server-Only Mode)[/bold green]\n\n"
+            f"[cyan]• Server: http://{host}:{port}[/cyan]\n"
+            f"[cyan]• Mode: API Only[/cyan]\n"
+            f"[cyan]• Authentication: {'Enabled' if api_keys else 'Disabled'}[/cyan]\n"
+            f"[cyan]• Auto-reload: {'Enabled' if reload else 'Disabled'}[/cyan]\n\n"
+            f"[yellow]Access API docs at: http://{host}:{port}/docs[/yellow]",
+            title="API Server",
+            border_style="green"
+        ))
+
+        # Create API-only app
+        app = create_api_only_app()
+
+        # Start the server
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            reload=reload,
+            log_level="info"
+        )
+
+    except click.ClickException as exc:
+        raise exc
+    except ImportError as exc:
+        console.print("[red]❌ Failed to import web server dependencies.[/red]")
+        console.print(f"[yellow]{exc}[/yellow]")
+        console.print("[yellow]Try reinstalling with: pip install 'illustrator[web]'[/yellow]")
+        raise click.ClickException("Missing required web dependencies") from exc
+    except KeyboardInterrupt:
+        console.print("\n[yellow]🛑 API server stopped.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]❌ Failed to start API server: {e}[/red]")
+        sys.exit(1)
+
+
+def _start_full_interface(host: str, port: int, reload: bool, open_browser: bool):
+    """Start the full web interface with both UI and API (default behavior)."""
     try:
         ensure_web_dependencies()
         run_server = _import_run_server()
@@ -1135,6 +1302,66 @@ def start(host: str, port: int, reload: bool, open_browser: bool):
     except Exception as e:
         console.print(f"[red]❌ Failed to start web server: {e}[/red]")
         sys.exit(1)
+
+
+def _setup_client_configuration():
+    """Interactive setup for client-only mode configuration."""
+    console.print("\n[bold cyan]📝 Client-Only Mode Setup[/bold cyan]")
+    console.print("Please configure your remote API server connection:")
+    
+    # Get server URL
+    while True:
+        server_url = Prompt.ask(
+            "\n[cyan]Enter server URL (e.g., http://192.168.1.100:8000)[/cyan]",
+            default="http://127.0.0.1:8000"
+        )
+        
+        # Validate URL format
+        if server_url.startswith(('http://', 'https://')):
+            break
+        else:
+            console.print("[red]❌ URL must start with http:// or https://[/red]")
+    
+    # Get API key (optional)
+    api_key = Prompt.ask(
+        "\n[cyan]Enter API key (optional, leave empty if server doesn't require authentication)[/cyan]",
+        default="",
+        show_default=False
+    )
+    
+    # Save configuration to .env file
+    env_file = find_dotenv()
+    if not env_file:
+        env_file = Path.cwd() / '.env'
+    
+    # Update .env file
+    set_key(env_file, 'ILLUSTRATOR_REMOTE_API_URL', server_url)
+    if api_key:
+        set_key(env_file, 'ILLUSTRATOR_API_KEY', api_key)
+    else:
+        # Remove API key if empty
+        unset_key(env_file, 'ILLUSTRATOR_API_KEY')
+    
+    console.print(f"\n[green]✅ Configuration saved to {env_file}[/green]")
+    console.print(f"[green]• Remote API URL: {server_url}[/green]")
+    console.print(f"[green]• API Key: {'Set' if api_key else 'Not set'}[/green]")
+
+
+def _get_api_keys_from_env() -> List[str]:
+    """Get API keys from environment, supporting comma-separated values."""
+    api_keys = []
+    
+    # Check for comma-separated API keys
+    keys_env = os.getenv('ILLUSTRATOR_API_KEYS', '')
+    if keys_env:
+        api_keys.extend([key.strip() for key in keys_env.split(',') if key.strip()])
+    
+    # Check for single API key (backward compatibility)
+    single_key = os.getenv('ILLUSTRATOR_API_KEY', '')
+    if single_key and single_key not in api_keys:
+        api_keys.append(single_key)
+    
+    return api_keys
 
 
 @cli.command()

@@ -460,4 +460,10 @@ async function deleteManuscriptFromDashboard(manuscriptId) {
     }
 }
 </script>
+
+<!-- Include client setup overlay if in remote mode -->
+{% if remote_mode and needs_setup %}
+{% include "client_setup_overlay.html" %}
+{% endif %}
+
 {% endblock %}

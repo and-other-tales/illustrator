@@ -737,6 +737,85 @@ function showMessage(message, type = 'info') {
         }
     }, 5000);
 }
+
+// WebSocket connection for real-time gallery updates
+let galleryWebSocket = null;
+let galleryReconnectAttempts = 0;
+const maxGalleryReconnectAttempts = 5;
+
+function connectGalleryWebSocket() {
+    // Don't connect if we're already connected
+    if (galleryWebSocket && galleryWebSocket.readyState === WebSocket.OPEN) {
+        return;
+    }
+
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/gallery/${manuscriptId}`;
+    
+    try {
+        galleryWebSocket = new WebSocket(wsUrl);
+
+        galleryWebSocket.onopen = function(event) {
+            console.log('Gallery WebSocket connected');
+            galleryReconnectAttempts = 0;
+            showMessage('Connected to live updates', 'success');
+        };
+
+        galleryWebSocket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            handleGalleryUpdate(data);
+        };
+
+        galleryWebSocket.onclose = function(event) {
+            console.log('Gallery WebSocket disconnected');
+            
+            // Attempt reconnection unless it's a normal close
+            if (event.code !== 1000 && galleryReconnectAttempts < maxGalleryReconnectAttempts) {
+                galleryReconnectAttempts++;
+                const delay = Math.min(2000 * galleryReconnectAttempts, 10000);
+                console.log(`Gallery WebSocket reconnecting in ${delay}ms (attempt ${galleryReconnectAttempts})`);
+                setTimeout(connectGalleryWebSocket, delay);
+            }
+        };
+
+        galleryWebSocket.onerror = function(error) {
+            console.error('Gallery WebSocket error:', error);
+        };
+    } catch (error) {
+        console.error('Failed to create Gallery WebSocket:', error);
+    }
+}
+
+function handleGalleryUpdate(data) {
+    if (data.type === 'new_image') {
+        // A new image was generated - refresh the gallery
+        console.log('New image generated, refreshing gallery');
+        showMessage('New illustration generated!', 'success');
+        loadGallery();
+    } else if (data.type === 'image_deleted') {
+        // An image was deleted - refresh the gallery
+        console.log('Image deleted, refreshing gallery');
+        showMessage('Image deleted', 'info');
+        loadGallery();
+    } else if (data.type === 'processing_complete') {
+        // Processing completed - refresh to show all new images
+        console.log('Processing completed, refreshing gallery');
+        showMessage('Illustration generation completed!', 'success');
+        loadGallery();
+    }
+}
+
+// Connect to WebSocket when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Small delay to ensure page is fully loaded
+    setTimeout(connectGalleryWebSocket, 1000);
+});
+
+// Cleanup WebSocket on page unload
+window.addEventListener('beforeunload', function() {
+    if (galleryWebSocket) {
+        galleryWebSocket.close(1000, 'Page unloading');
+    }
+});
 </script>
 
 {% block extra_css %}
