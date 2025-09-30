@@ -5,6 +5,7 @@ import json
 import inspect
 import subprocess
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 from collections.abc import MutableMapping
@@ -24,6 +25,9 @@ from illustrator.web.routes import manuscripts, chapters
 from illustrator.db_config import create_tables
 from illustrator.web.models.web_models import ConnectionManager
 from illustrator.models import EmotionalTone, IllustrationPrompt, ImageProvider
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 # Re-export commonly patched symbols for tests: make sure tests that patch
 # `src.illustrator.web.app.get_saved_manuscripts` or `IllustrationGenerator`
@@ -356,6 +360,13 @@ import base64
 async def get_processing_status(manuscript_id: str):
     """Check if there's an active processing session for a manuscript."""
     try:
+        logger.debug(f"Checking processing status for manuscript {manuscript_id}")
+        logger.debug(f"Total sessions in connection manager: {len(connection_manager.sessions)}")
+        
+        # Log all sessions for debugging
+        for sid, sdata in connection_manager.sessions.items():
+            logger.debug(f"Session {sid}: manuscript_id={sdata.manuscript_id}, status={sdata.status.status}")
+        
         # Look for active sessions for this manuscript (exclude completed/error sessions)
         active_session = None
         for session_id, session_data in connection_manager.sessions.items():
@@ -371,6 +382,7 @@ async def get_processing_status(manuscript_id: str):
                         "start_time": session_data.start_time,
                         "step_status": session_data.step_status
                     }
+                    logger.debug(f"Found active session {session_id} for manuscript {manuscript_id}")
                     break
 
         if active_session:
@@ -380,6 +392,7 @@ async def get_processing_status(manuscript_id: str):
                 "message": "Active session found"
             }
         else:
+            logger.warning(f"No active session found for manuscript {manuscript_id}")
             return {
                 "success": True,
                 "active_session": None,
@@ -412,6 +425,35 @@ async def start_processing(
 
         # Generate a session ID for tracking
         session_id = str(uuid.uuid4())
+
+        # Create session data immediately to avoid race conditions
+        from illustrator.web.models.web_models import ProcessingSessionData, ProcessingStatus
+        
+        initial_status = ProcessingStatus(
+            session_id=session_id,
+            manuscript_id=request.manuscript_id,
+            status="initializing",
+            progress=0,
+            total_chapters=0,
+            message="Initializing processing session...",
+            current_chapter=None,
+            error=None
+        )
+
+        session_data = ProcessingSessionData(
+            session_id=session_id,
+            manuscript_id=request.manuscript_id,
+            websocket=None,
+            status=initial_status,
+            start_time=datetime.now().isoformat(),
+            started_at=datetime.now().isoformat(),
+            step_status={0: "pending", 1: "pending", 2: "pending", 3: "pending"}
+        )
+
+        # Register session immediately to avoid race conditions
+        connection_manager.sessions[session_id] = session_data
+        
+        logger.info(f"Created processing session {session_id} for manuscript {request.manuscript_id}")
 
         # Enhance style config with LLM provider information from environment
         enhanced_style_config = dict(request.style_config)
@@ -730,41 +772,52 @@ async def run_processing_workflow(
         if not isinstance(sessions, MutableMapping):
             connection_manager.sessions = {}
 
-        # Create or restore session data
-        if resume_info:
-            initial_status = ProcessingStatus(
-                session_id=session_id,
-                manuscript_id=manuscript_id,
-                status="resuming",
-                progress=resume_info["progress_percent"],
-                total_chapters=resume_info["total_chapters"],
-                message=f"Resuming from {resume_info['latest_checkpoint_type']}...",
-                current_chapter=resume_info.get("current_chapter"),
-                error=None
-            )
+        # Get or update the existing session data (it should already exist from start_processing)
+        if session_id in connection_manager.sessions:
+            session_data = connection_manager.sessions[session_id]
+            # Update status to indicate we're starting actual processing
+            session_data.status.status = "started" if not resume_info else "resuming"
+            session_data.status.message = "Starting manuscript processing..." if not resume_info else f"Resuming from {resume_info['latest_checkpoint_type']}..."
+            if resume_info:
+                session_data.status.progress = resume_info["progress_percent"]
+                session_data.status.current_chapter = resume_info.get("current_chapter")
         else:
-            initial_status = ProcessingStatus(
+            # Fallback: create session if it doesn't exist (shouldn't happen with the new flow)
+            logger.warning(f"Session {session_id} not found in connection manager, creating new one")
+            if resume_info:
+                initial_status = ProcessingStatus(
+                    session_id=session_id,
+                    manuscript_id=manuscript_id,
+                    status="resuming",
+                    progress=resume_info["progress_percent"],
+                    total_chapters=resume_info["total_chapters"],
+                    message=f"Resuming from {resume_info['latest_checkpoint_type']}...",
+                    current_chapter=resume_info.get("current_chapter"),
+                    error=None
+                )
+            else:
+                initial_status = ProcessingStatus(
+                    session_id=session_id,
+                    manuscript_id=manuscript_id,
+                    status="started",
+                    progress=0,
+                    total_chapters=0,  # Will be updated when we load the manuscript
+                    message="Starting manuscript processing...",
+                    current_chapter=None,
+                    error=None
+                )
+
+            session_data = ProcessingSessionData(
                 session_id=session_id,
                 manuscript_id=manuscript_id,
-                status="started",
-                progress=0,
-                total_chapters=0,  # Will be updated when we load the manuscript
-                message="Starting manuscript processing...",
-                current_chapter=None,
-                error=None
+                websocket=None,
+                status=initial_status,
+                start_time=datetime.now().isoformat(),
+                started_at=datetime.now().isoformat(),
+                step_status={0: "pending", 1: "pending", 2: "pending", 3: "pending"}
             )
 
-        session_data = ProcessingSessionData(
-            session_id=session_id,
-            manuscript_id=manuscript_id,
-            websocket=None,
-            status=initial_status,
-            start_time=datetime.now().isoformat(),
-            started_at=datetime.now().isoformat(),
-            step_status={0: "pending", 1: "pending", 2: "pending", 3: "pending"}
-        )
-
-        connection_manager.sessions[session_id] = session_data
+            connection_manager.sessions[session_id] = session_data
 
         # Send initial status
         initial_message = "Resuming manuscript processing..." if resume_info else "Starting manuscript processing..."
