@@ -736,6 +736,24 @@ class FluxDevVertexProvider(ImageGenerationProvider):
                 'success': False,
                 'error': 'No Vertex AI endpoint URL configured for Flux Dev'
             }
+        
+        # Handle different endpoint URL formats
+        endpoint_url = self.endpoint_url
+        
+        # If the URL is just the dedicated endpoint hostname, construct the full URL
+        if endpoint_url.endswith('.prediction.vertexai.goog'):
+            # Extract endpoint ID from hostname
+            hostname_parts = endpoint_url.split('.')
+            if len(hostname_parts) >= 3:
+                endpoint_id = hostname_parts[0]
+                endpoint_url = f"https://{endpoint_url}/v1/endpoints/{endpoint_id}:predict"
+        elif not endpoint_url.startswith(('https://', 'http://')):
+            return {
+                'success': False,
+                'error': f'Invalid endpoint URL format: {endpoint_url}. Must be a full URL or dedicated endpoint hostname'
+            }
+        
+        logger.info(f"Using Flux Dev Vertex endpoint: {endpoint_url}")
 
         try:
             from google.auth import default
@@ -761,45 +779,78 @@ class FluxDevVertexProvider(ImageGenerationProvider):
                 "Content-Type": "application/json",
             }
 
-            # Prepare payload for Vertex AI
+            # Prepare payload for Vertex AI Flux Dev model
+            # Flux Dev model expects text input for the prompt
+            instances = [{
+                "text": prompt.prompt
+            }]
+            
+            # Add technical parameters if provided
+            if prompt.technical_params:
+                instances[0].update(prompt.technical_params)
+            
+            # Add negative prompt if provided
+            if prompt.negative_prompt:
+                instances[0]["negative_prompt"] = prompt.negative_prompt
+            
             payload = {
-                "instances": [{
-                    "prompt": prompt.prompt,
-                    "negative_prompt": prompt.negative_prompt or "",
-                    **prompt.technical_params
-                }]
+                "instances": instances,
+                "parameters": {}
             }
 
             async with aiohttp.ClientSession() as session:
+                logger.info(f"Making request to Vertex AI endpoint: {endpoint_url}")
+                logger.debug(f"Request payload: {payload}")
+                
                 async with session.post(
-                    self.endpoint_url,
+                    endpoint_url,
                     headers=headers,
                     json=payload
                 ) as response:
+                    response_text = await response.text()
+                    logger.debug(f"Response status: {response.status}")
+                    logger.debug(f"Response text: {response_text}")
+                    
                     if response.status == 200:
-                        result = await response.json()
-                        # Vertex AI typically returns predictions array
-                        if 'predictions' in result and result['predictions']:
-                            prediction = result['predictions'][0]
-                            if 'image' in prediction:
-                                # Handle base64 encoded image
-                                image_data = prediction['image']
-                                return {
-                                    'success': True,
-                                    'image_data': image_data,
-                                    'format': 'base64',
-                                    'provider': 'flux_dev_vertex'
-                                }
-                        
-                        return {
-                            'success': False,
-                            'error': 'No image data in Vertex AI response'
-                        }
+                        try:
+                            result = await response.json()
+                            logger.debug(f"Response JSON: {result}")
+                            
+                            # Vertex AI typically returns predictions array
+                            if 'predictions' in result and result['predictions']:
+                                prediction = result['predictions'][0]
+                                if 'image' in prediction:
+                                    # Handle base64 encoded image
+                                    image_data = prediction['image']
+                                    return {
+                                        'success': True,
+                                        'image_data': image_data,
+                                        'format': 'base64',
+                                        'provider': 'flux_dev_vertex'
+                                    }
+                                elif 'generated_image' in prediction:
+                                    # Alternative response format
+                                    image_data = prediction['generated_image']
+                                    return {
+                                        'success': True,
+                                        'image_data': image_data,
+                                        'format': 'base64',
+                                        'provider': 'flux_dev_vertex'
+                                    }
+                            
+                            return {
+                                'success': False,
+                                'error': f'No image data in Vertex AI response. Response: {result}'
+                            }
+                        except Exception as json_error:
+                            return {
+                                'success': False,
+                                'error': f'Failed to parse JSON response: {json_error}. Response: {response_text}'
+                            }
                     else:
-                        error_text = await response.text()
                         return {
                             'success': False,
-                            'error': f"Vertex AI error {response.status}: {error_text}",
+                            'error': f"Vertex AI error {response.status}: {response_text}",
                             'status_code': response.status
                         }
 
