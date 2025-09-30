@@ -554,6 +554,17 @@ async def preview_style_image(
         style_config = StyleConfig(**request.style_config.model_dump(exclude={'replicate_model'}))
         logger.debug("Style config created: provider=%s", style_config.image_provider)
 
+        # Get context early to ensure GCP Project ID is available for all providers
+        context = get_default_context()
+        
+        # Ensure user API configuration overrides defaults
+        # Check if user selected Anthropic Vertex and has GCP project ID
+        if context.llm_provider == LLMProvider.ANTHROPIC_VERTEX:
+            gcp_project_id = os.getenv('GOOGLE_PROJECT_ID') or os.getenv('GCP_PROJECT_ID')
+            if not gcp_project_id:
+                raise ValueError("GCP Project ID is required for Anthropic Vertex. Please configure it in API Configuration.")
+            context.gcp_project_id = gcp_project_id
+
         # Get the image provider
         provider = get_image_provider(
             style_config.image_provider,
@@ -675,15 +686,6 @@ async def preview_style_image(
         if excerpt_text:
             try:
                 logger.debug("Starting excerpt analysis for preview generation")
-                context = get_default_context()
-                
-                # Ensure user API configuration overrides defaults
-                # Check if user selected Anthropic Vertex and has GCP project ID
-                if context.llm_provider == LLMProvider.ANTHROPIC_VERTEX:
-                    gcp_project_id = os.getenv('GOOGLE_PROJECT_ID') or os.getenv('GCP_PROJECT_ID')
-                    if not gcp_project_id:
-                        raise ValueError("GCP Project ID is required for Anthropic Vertex. Please configure it in API Configuration.")
-                    context.gcp_project_id = gcp_project_id
                 
                 context.image_provider = style_config.image_provider
                 context.default_art_style = style_config.art_style or context.default_art_style
