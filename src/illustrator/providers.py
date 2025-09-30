@@ -740,14 +740,14 @@ class FluxDevVertexProvider(ImageGenerationProvider):
         # Handle different endpoint URL formats
         endpoint_url = self.endpoint_url
         
-        # If the URL is just the dedicated endpoint hostname, construct the full URL
+        # According to HuggingFace documentation, deployed models use /predict route
         if endpoint_url.endswith('.prediction.vertexai.goog') and not endpoint_url.startswith('http'):
-            # For dedicated endpoints, try the direct prediction URL format
+            # Dedicated endpoint hostname - add protocol and predict path
             endpoint_url = f"https://{endpoint_url}/predict"
         elif endpoint_url.endswith('.prediction.vertexai.goog') and endpoint_url.startswith('http'):
-            # Already has protocol, check if it needs /predict suffix
+            # Already has protocol, ensure it has the correct predict path
             if not endpoint_url.endswith('/predict'):
-                endpoint_url = f"{endpoint_url}/predict"
+                endpoint_url = f"{endpoint_url.rstrip('/')}/predict"
         elif not endpoint_url.startswith(('https://', 'http://')):
             return {
                 'success': False,
@@ -780,80 +780,122 @@ class FluxDevVertexProvider(ImageGenerationProvider):
                 "Content-Type": "application/json",
             }
 
-            # Prepare payload for Vertex AI Flux Dev model
-            # Flux Dev model expects text input for the prompt
-            instances = [{
-                "text": prompt.prompt
-            }]
+            # Prepare payload for Vertex AI Flux Dev model according to HuggingFace documentation
+            # The instances should be a simple array of text strings
+            instances = [prompt.prompt]
             
-            # Add technical parameters if provided
+            # Prepare parameters according to documentation format
+            parameters = {}
+            
+            # Add default or provided technical parameters
             if prompt.technical_params:
-                instances[0].update(prompt.technical_params)
+                # Map common parameters to expected format
+                if 'width' in prompt.technical_params:
+                    parameters['width'] = prompt.technical_params['width']
+                if 'height' in prompt.technical_params:
+                    parameters['height'] = prompt.technical_params['height']
+                if 'num_inference_steps' in prompt.technical_params:
+                    parameters['num_inference_steps'] = prompt.technical_params['num_inference_steps']
+                if 'guidance_scale' in prompt.technical_params:
+                    parameters['guidance_scale'] = prompt.technical_params['guidance_scale']
+                    
+                # Add any other parameters that might be supported
+                for key, value in prompt.technical_params.items():
+                    if key not in ['width', 'height', 'num_inference_steps', 'guidance_scale']:
+                        parameters[key] = value
             
-            # Add negative prompt if provided
+            # Set defaults if not provided (matching documentation example)
+            if 'width' not in parameters:
+                parameters['width'] = 512
+            if 'height' not in parameters:
+                parameters['height'] = 512
+            if 'num_inference_steps' not in parameters:
+                parameters['num_inference_steps'] = 8
+            if 'guidance_scale' not in parameters:
+                parameters['guidance_scale'] = 3.5
+            
+            # Add negative prompt if provided (might be supported)
             if prompt.negative_prompt:
-                instances[0]["negative_prompt"] = prompt.negative_prompt
+                parameters['negative_prompt'] = prompt.negative_prompt
             
             payload = {
                 "instances": instances,
-                "parameters": {}
+                "parameters": parameters
             }
 
+            # Try multiple endpoint paths for dedicated endpoints
+            endpoint_paths_to_try = [endpoint_url]
+            
+            # If this is a dedicated endpoint, add alternative paths to try
+            # According to documentation, the primary path should be /predict
+            if '.prediction.vertexai.goog' in endpoint_url:
+                base_url = endpoint_url.rstrip('/predict').rstrip('/v1/predict')
+                alternative_paths = [
+                    f"{base_url}/predict",  # Primary path per documentation
+                    f"{base_url}/v1/predict", 
+                    f"{base_url}/v1/models/flux-dev:predict",
+                    f"{base_url}:predict"
+                ]
+                # Add alternatives that aren't already in the list
+                for path in alternative_paths:
+                    if path not in endpoint_paths_to_try:
+                        endpoint_paths_to_try.append(path)
+
             async with aiohttp.ClientSession() as session:
-                logger.info(f"Making request to Vertex AI endpoint: {endpoint_url}")
-                logger.debug(f"Request payload: {payload}")
+                last_error = None
                 
-                async with session.post(
-                    endpoint_url,
-                    headers=headers,
-                    json=payload
-                ) as response:
-                    response_text = await response.text()
-                    logger.debug(f"Response status: {response.status}")
-                    logger.debug(f"Response text: {response_text}")
+                for attempt_url in endpoint_paths_to_try:
+                    logger.info(f"Trying Vertex AI endpoint: {attempt_url}")
+                    logger.debug(f"Request payload: {payload}")
                     
-                    if response.status == 200:
-                        try:
-                            result = await response.json()
-                            logger.debug(f"Response JSON: {result}")
-                            
-                            # Vertex AI typically returns predictions array
-                            if 'predictions' in result and result['predictions']:
-                                prediction = result['predictions'][0]
-                                if 'image' in prediction:
-                                    # Handle base64 encoded image
-                                    image_data = prediction['image']
+                    async with session.post(
+                        attempt_url,
+                        headers=headers,
+                        json=payload
+                    ) as response:
+                        response_text = await response.text()
+                        logger.debug(f"Response status: {response.status}")
+                        logger.debug(f"Response text: {response_text}")
+                        
+                        if response.status == 200:
+                            try:
+                                result = await response.json()
+                                logger.debug(f"Response JSON: {result}")
+                                
+                                # According to HuggingFace documentation, response format is:
+                                # output.predictions[0] contains the base64 encoded image directly
+                                if 'predictions' in result and result['predictions']:
+                                    # The prediction should be a base64 encoded image string
+                                    image_data = result['predictions'][0]
+                                    logger.info(f"Successfully generated image using endpoint: {attempt_url}")
                                     return {
                                         'success': True,
                                         'image_data': image_data,
                                         'format': 'base64',
                                         'provider': 'flux_dev_vertex'
                                     }
-                                elif 'generated_image' in prediction:
-                                    # Alternative response format
-                                    image_data = prediction['generated_image']
-                                    return {
-                                        'success': True,
-                                        'image_data': image_data,
-                                        'format': 'base64',
-                                        'provider': 'flux_dev_vertex'
-                                    }
+                                
+                                last_error = f'No image data in Vertex AI response. Response: {result}'
+                            except Exception as json_error:
+                                last_error = f'Failed to parse JSON response: {json_error}. Response: {response_text}'
+                        else:
+                            # Store error for this attempt
+                            last_error = f"Vertex AI error {response.status}: {response_text}"
+                            logger.debug(f"Endpoint {attempt_url} failed with status {response.status}")
                             
-                            return {
-                                'success': False,
-                                'error': f'No image data in Vertex AI response. Response: {result}'
-                            }
-                        except Exception as json_error:
-                            return {
-                                'success': False,
-                                'error': f'Failed to parse JSON response: {json_error}. Response: {response_text}'
-                            }
-                    else:
-                        return {
-                            'success': False,
-                            'error': f"Vertex AI error {response.status}: {response_text}",
-                            'status_code': response.status
-                        }
+                            # If this is a 404, try the next endpoint
+                            if response.status == 404:
+                                continue
+                            else:
+                                # For non-404 errors, don't try other endpoints
+                                break
+                
+                # If we get here, all endpoints failed
+                return {
+                    'success': False,
+                    'error': f"All endpoint attempts failed. Last error: {last_error}",
+                    'attempted_urls': endpoint_paths_to_try
+                }
 
         except Exception as e:
             logger.error(f"Flux Dev Vertex generation error: {e}")
