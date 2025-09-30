@@ -735,7 +735,7 @@ class FluxDevVertexProvider(ImageGenerationProvider):
 
         try:
             from google.auth import default
-            from google.auth.transport.aiohttp import Request as AsyncRequest
+            from google.auth.transport._aiohttp_requests import Request as AsyncRequest
             import aiohttp
 
             # Get credentials
@@ -1507,7 +1507,7 @@ class ProviderFactory:
                     "Google Cloud project ID required for Flux Dev Vertex provider"
                 )
             return FluxDevVertexProvider(
-                project_id,
+                gcp_project_id=project_id,
                 flux_dev_vertex_endpoint_url=credentials.get('flux_dev_vertex_endpoint_url'),
                 gcp_credentials=credentials.get('google_credentials'),
                 **common_llm_kwargs,
