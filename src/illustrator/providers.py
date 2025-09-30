@@ -702,17 +702,30 @@ class FluxDevVertexProvider(ImageGenerationProvider):
         if gcp_credentials:
             try:
                 import json
-                credentials_info = json.loads(gcp_credentials)
+                import os
+                
+                # Check if gcp_credentials is a file path or JSON string
+                if os.path.isfile(gcp_credentials):
+                    # It's a file path, read the JSON from file
+                    with open(gcp_credentials, 'r') as f:
+                        credentials_info = json.load(f)
+                else:
+                    # It's a JSON string, parse it directly
+                    credentials_info = json.loads(gcp_credentials)
+                
                 # Create service account credentials with proper scopes for Vertex AI
                 self.credentials = service_account.Credentials.from_service_account_info(
                     credentials_info,
                     scopes=['https://www.googleapis.com/auth/cloud-platform']
                 )
-            except (json.JSONDecodeError, KeyError) as e:
+                logger.info("Successfully loaded GCP service account credentials")
+            except (json.JSONDecodeError, KeyError, FileNotFoundError, OSError) as e:
                 logger.warning(f"Invalid GCP credentials format: {e}")
+                logger.info("Falling back to default Google Cloud credentials")
                 self.credentials = None
         else:
             # Use default credentials
+            logger.info("No GCP credentials provided, using default Google Cloud credentials")
             self.credentials = None
 
     def get_provider_type(self) -> ImageProvider:
@@ -1105,6 +1118,18 @@ class HuggingFaceImageProvider(ImageGenerationProvider):
             )
         except Exception as exc:
             logger.error("HuggingFace image generation failed", exc_info=exc)
+            
+            # Check if this is a paused endpoint error
+            error_message = str(exc)
+            if "paused" in error_message.lower() or "503" in error_message:
+                logger.warning("HuggingFace endpoint appears to be paused, image generation failed")
+                return {
+                    'success': False,
+                    'error': f"HuggingFace endpoint is paused or unavailable: {exc}",
+                    'status_code': 503,
+                    'suggestion': 'The HuggingFace endpoint needs to be restarted. Please check your HuggingFace Inference Endpoint dashboard.'
+                }
+            
             return {
                 'success': False,
                 'error': f"HuggingFace image generation failed: {exc}",
