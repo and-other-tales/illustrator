@@ -1498,6 +1498,7 @@ class ReplicateImagenProvider(ReplicateImageProvider):
         anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
     ) -> None:
         super().__init__(
             api_token,
@@ -1508,6 +1509,7 @@ class ReplicateImagenProvider(ReplicateImageProvider):
             anthropic_api_key=anthropic_api_key,
             huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
+            gcp_project_id=gcp_project_id,
         )
 
     def get_provider_type(self) -> ImageProvider:
@@ -1541,6 +1543,7 @@ class SeedreamProvider(ReplicateImageProvider):
         anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
     ) -> None:
         super().__init__(
             api_token,
@@ -1551,6 +1554,7 @@ class SeedreamProvider(ReplicateImageProvider):
             anthropic_api_key=anthropic_api_key,
             huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
+            gcp_project_id=gcp_project_id,
         )
 
     def get_provider_type(self) -> ImageProvider:
