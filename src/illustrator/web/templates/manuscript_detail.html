@@ -343,6 +343,17 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+.reset-button-active {
+    font-weight: 600 !important;
+    background: rgba(220, 53, 69, 0.1) !important;
+    border-radius: 6px !important;
+}
+.reset-button-active:hover {
+    background: rgba(220, 53, 69, 0.2) !important;
+}
+</style>
+
 <script>
 let currentManuscriptId = '{{ manuscript_id }}';
 let manuscriptData = null;
@@ -355,16 +366,30 @@ document.addEventListener('DOMContentLoaded', function() {
         checkProcessingStatus();
     }
     
-    // Set up reset button event listener
+    // Set up reset button event listener with multiple event types for reliability
     const resetButton = document.getElementById('resetImagesBtn');
     if (resetButton) {
-        resetButton.addEventListener('click', function(event) {
+        const handleResetClick = function(event) {
             event.preventDefault();
             event.stopPropagation();
             
             const isEnabled = this.getAttribute('data-enabled') === 'true';
             if (isEnabled) {
                 resetManuscriptImages(event);
+            } else {
+                // Provide feedback when disabled
+                console.log('Reset button is disabled - no images to reset');
+            }
+        };
+        
+        // Add both click and touchstart for better mobile support
+        resetButton.addEventListener('click', handleResetClick);
+        resetButton.addEventListener('touchstart', handleResetClick);
+        
+        // Also handle keyboard activation
+        resetButton.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                handleResetClick.call(this, event);
             }
         });
     }
@@ -491,14 +516,17 @@ function setResetIllustrationsState(resetControl, hasImages, totalImages) {
 
     if (hasImages) {
         resetControl.removeAttribute('tabindex');
-        resetControl.style.pointerEvents = '';
-        resetControl.style.opacity = '';
+        resetControl.style.pointerEvents = 'auto';
+        resetControl.style.opacity = '1';
         resetControl.style.cursor = 'pointer';
+        // Add a visual indicator that it's active
+        resetControl.classList.add('reset-button-active');
     } else {
         resetControl.setAttribute('tabindex', '-1');
-        resetControl.style.pointerEvents = 'none';
+        resetControl.style.pointerEvents = 'auto'; // Still allow clicks for debugging
         resetControl.style.opacity = '0.5';
         resetControl.style.cursor = 'not-allowed';
+        resetControl.classList.remove('reset-button-active');
     }
 }
 
