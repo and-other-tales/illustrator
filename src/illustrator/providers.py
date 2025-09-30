@@ -735,7 +735,7 @@ class FluxDevVertexProvider(ImageGenerationProvider):
 
         try:
             from google.auth import default
-            from google.auth.transport._aiohttp_requests import Request as AsyncRequest
+            from google.auth.transport.requests import Request
             import aiohttp
 
             # Get credentials
@@ -744,9 +744,10 @@ class FluxDevVertexProvider(ImageGenerationProvider):
             else:
                 credentials, _ = default()
 
-            # Create authenticated request
-            request = AsyncRequest()
-            await credentials.refresh(request)
+            # Refresh credentials if needed (using sync request for credential refresh)
+            if not credentials.valid:
+                sync_request = Request()
+                credentials.refresh(sync_request)
             
             headers = {
                 "Authorization": f"Bearer {credentials.token}",
