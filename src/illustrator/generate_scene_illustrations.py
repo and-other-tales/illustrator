@@ -547,6 +547,7 @@ class IllustrationGenerator:
             huggingface_model_kwargs=self.context.huggingface_model_kwargs,
             huggingface_endpoint_url=self.context.huggingface_endpoint_url,
             huggingface_timeout=self.context.huggingface_timeout,
+            flux_dev_vertex_endpoint_url=getattr(self.context, 'flux_dev_vertex_endpoint_url', None),
         )
 
     async def generate_illustration_prompts(
