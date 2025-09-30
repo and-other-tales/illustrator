@@ -2345,7 +2345,7 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 enhanced_parts = [f"Cinematic artistic scene with detailed environmental and emotional elements: {prompt}"]
                 enhanced_parts.append("Professional artistic rendering with rich atmospheric detail")
 
-        elif provider in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.FLUX_SCHNELL_VERTEX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
+        elif provider in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
             enhanced_parts = []
 
             if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):

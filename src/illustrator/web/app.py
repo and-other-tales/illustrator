@@ -882,7 +882,7 @@ async def run_processing_workflow(
         output_dir = Path("illustrator_output") / "generated_images"
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        generator = WebSocketIllustrationGenerator(connection_manager, session_id, provider, output_dir)
+        generator = WebSocketIllustrationGenerator(connection_manager, session_id, provider, output_dir, style_config)
 
         # Load manuscript chapters
         await connection_manager.send_personal_message(
@@ -1580,7 +1580,7 @@ class WebSocketComprehensiveSceneAnalyzer:
 class WebSocketIllustrationGenerator:
     """Enhanced image generator that sends progress updates via WebSocket."""
 
-    def __init__(self, connection_manager, session_id, provider, output_dir):
+    def __init__(self, connection_manager, session_id, provider, output_dir, style_config=None):
         # Import here to avoid circular imports
         try:
             from illustrator import generate_scene_illustrations as _scene_tools
@@ -1612,6 +1612,16 @@ class WebSocketIllustrationGenerator:
             context.image_provider = None
 
         context.image_provider = provider
+
+        # Set Flux Dev Vertex endpoint URL from style config if provided
+        if style_config and provider.value == "flux_dev_vertex":
+            flux_endpoint_url = style_config.get("flux_dev_vertex_endpoint_url")
+            if flux_endpoint_url:
+                # Set as environment variable so the provider can access it
+                os.environ["FLUX_DEV_VERTEX_ENDPOINT_URL"] = flux_endpoint_url
+                # Also set on context if it has the attribute
+                if hasattr(context, 'flux_dev_vertex_endpoint_url'):
+                    context.flux_dev_vertex_endpoint_url = flux_endpoint_url
 
         if not getattr(context, 'model', None):
             context.model = "gpt-oss-120b"

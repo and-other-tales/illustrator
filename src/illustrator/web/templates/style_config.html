@@ -78,6 +78,16 @@
                                 </div>
                             </div>
 
+                            <!-- Flux Dev Vertex Configuration -->
+                            <div class="mb-4" id="fluxDevVertexGroup" style="display: none;">
+                                <label for="fluxDevVertexEndpointUrlLocal" class="form-label fw-semibold d-flex align-items-center">
+                                    <span class="material-icons-outlined me-2">cloud</span>
+                                    Flux Dev Vertex Endpoint URL
+                                </label>
+                                <input type="text" class="form-control" id="fluxDevVertexEndpointUrlLocal" name="flux_dev_vertex_endpoint_url" placeholder="https://vertex.googleapis.com/v1/projects/.../endpoints/.../predict" disabled>
+                                <div class="form-text">Enter the Google Vertex AI endpoint URL for your deployed Flux Dev model. This can also be set globally in the API credentials.</div>
+                            </div>
+
                             <!-- Art Style -->
                             <div class="mb-4">
                                 <label for="artStyle" class="form-label fw-semibold d-flex align-items-center">
@@ -562,8 +572,10 @@ function toggleProviderSpecificFields() {
     const huggingfaceGroup = document.getElementById('huggingfaceModelGroup');
     const huggingfaceModelInput = document.getElementById('huggingfaceModelId');
     const huggingfaceProviderInput = document.getElementById('huggingfaceProvider');
+    const fluxDevVertexGroup = document.getElementById('fluxDevVertexGroup');
+    const fluxDevVertexInput = document.getElementById('fluxDevVertexEndpointUrlLocal');
 
-    if (!providerSelect || !replicateGroup || !replicateSelect || !huggingfaceGroup || !huggingfaceModelInput || !huggingfaceProviderInput) {
+    if (!providerSelect || !replicateGroup || !replicateSelect || !huggingfaceGroup || !huggingfaceModelInput || !huggingfaceProviderInput || !fluxDevVertexGroup || !fluxDevVertexInput) {
         return;
     }
 
@@ -582,6 +594,14 @@ function toggleProviderSpecificFields() {
     huggingfaceGroup.style.display = isHuggingFace ? 'block' : 'none';
     huggingfaceModelInput.disabled = !isHuggingFace;
     huggingfaceProviderInput.disabled = !isHuggingFace;
+
+    const isFluxDevVertex = providerValue === 'flux_dev_vertex';
+    fluxDevVertexGroup.style.display = isFluxDevVertex ? 'block' : 'none';
+    fluxDevVertexInput.disabled = !isFluxDevVertex;
+
+    if (!isFluxDevVertex) {
+        fluxDevVertexInput.value = '';
+    }
 }
 
 function normalizeStyleProvider(styleConfig) {
@@ -618,6 +638,17 @@ function normalizeStyleProvider(styleConfig) {
     } else {
         delete styleConfig.huggingface_model_id;
         delete styleConfig.huggingface_provider;
+    }
+
+    if (provider === 'flux_dev_vertex') {
+        const endpointField = document.getElementById('fluxDevVertexEndpointUrlLocal');
+        const endpointUrl = (styleConfig.flux_dev_vertex_endpoint_url || '').trim();
+        if (endpointUrl && endpointField) {
+            endpointField.value = endpointUrl;
+            styleConfig.flux_dev_vertex_endpoint_url = endpointUrl;
+        }
+    } else {
+        delete styleConfig.flux_dev_vertex_endpoint_url;
     }
 
     delete styleConfig.replicate_model;
