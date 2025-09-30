@@ -215,19 +215,38 @@ const expectedImagesCount = galleryParams.get('images');
 // Load gallery on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadGallery();
+    
+    // Auto-refresh gallery every 30 seconds as fallback
+    setInterval(() => {
+        if (!galleryWebSocket || galleryWebSocket.readyState !== WebSocket.OPEN) {
+            console.log('Auto-refreshing gallery (WebSocket not connected)');
+            loadGallery();
+        }
+    }, 30000);
 });
 
-async function loadGallery() {
+let lastImageCount = 0;
+let isLoading = false;
+
+async function loadGallery(showLoadingMessage = false) {
+    // Prevent multiple simultaneous loads
+    if (isLoading) {
+        return;
+    }
+    isLoading = true;
+    
     const galleryGrid = document.getElementById('galleryGrid');
     const emptyState = document.getElementById('emptyState');
     const loadingState = document.getElementById('loadingState');
     const galleryContainer = document.querySelector('.gallery-container');
 
-    // Show loading state
-    loadingState.style.display = 'block';
+    // Show loading state only if explicitly requested or if it's the first load
+    if (showLoadingMessage || galleryGrid.children.length === 0) {
+        loadingState.style.display = 'block';
+    }
+    
     emptyState.style.display = 'none';
-    galleryGrid.innerHTML = '';
-    if (galleryContainer) {
+    if (galleryContainer && galleryGrid.children.length === 0) {
         galleryContainer.style.display = 'none';
     }
 
@@ -239,6 +258,14 @@ async function loadGallery() {
             const images = data.images || [];
 
             loadingState.style.display = 'none';
+
+            // Check if image count changed
+            if (images.length !== lastImageCount) {
+                if (lastImageCount > 0 && images.length > lastImageCount) {
+                    showMessage(`${images.length - lastImageCount} new image(s) generated!`, 'success');
+                }
+                lastImageCount = images.length;
+            }
 
             if (images.length === 0) {
                 emptyState.style.display = 'block';
@@ -274,6 +301,9 @@ async function loadGallery() {
         if (galleryContainer) {
             galleryContainer.style.display = 'none';
         }
+        showMessage('Failed to load gallery images', 'warning');
+    } finally {
+        isLoading = false;
     }
 }
 
