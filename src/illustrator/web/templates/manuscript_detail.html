@@ -365,33 +365,34 @@ document.addEventListener('DOMContentLoaded', function() {
         loadManuscriptDetails();
         checkProcessingStatus();
     }
-    
+
     // Set up reset button event listener with multiple event types for reliability
     const resetButton = document.getElementById('resetImagesBtn');
     if (resetButton) {
+        console.log('[DEBUG] Reset button found on DOMContentLoaded:', resetButton);
         const handleResetClick = function(event) {
             event.preventDefault();
             event.stopPropagation();
-            
             const isEnabled = this.getAttribute('data-enabled') === 'true';
+            console.log('[DEBUG] Reset button clicked. Enabled:', isEnabled, 'Images:', this.getAttribute('data-images-count'));
             if (isEnabled) {
                 resetManuscriptImages(event);
             } else {
                 // Provide feedback when disabled
-                console.log('Reset button is disabled - no images to reset');
+                console.log('[DEBUG] Reset button is disabled - no images to reset');
             }
         };
-        
         // Add both click and touchstart for better mobile support
         resetButton.addEventListener('click', handleResetClick);
         resetButton.addEventListener('touchstart', handleResetClick);
-        
         // Also handle keyboard activation
         resetButton.addEventListener('keydown', function(event) {
             if (event.key === 'Enter' || event.key === ' ') {
                 handleResetClick.call(this, event);
             }
         });
+    } else {
+        console.log('[DEBUG] Reset button NOT found on DOMContentLoaded');
     }
 });
 
@@ -504,16 +505,21 @@ function displayChapters() {
 
 function setResetIllustrationsState(resetControl, hasImages, totalImages) {
     if (!resetControl) {
+        console.log('[DEBUG] setResetIllustrationsState: resetControl is null');
         return;
     }
-
+    console.log('[DEBUG] setResetIllustrationsState:', {
+        hasImages,
+        totalImages,
+        dataEnabled: hasImages ? 'true' : 'false',
+        currentImagesCount: resetControl.getAttribute('data-images-count')
+    });
     // Use data attribute instead of disabled class to avoid Bootstrap interference
     resetControl.setAttribute('data-enabled', hasImages ? 'true' : 'false');
     resetControl.classList.toggle('text-danger', hasImages);
     resetControl.classList.toggle('text-muted', !hasImages);
     resetControl.setAttribute('aria-disabled', hasImages ? 'false' : 'true');
     resetControl.setAttribute('data-images-count', totalImages != null ? totalImages : 0);
-
     if (hasImages) {
         resetControl.removeAttribute('tabindex');
         resetControl.style.pointerEvents = 'auto';
