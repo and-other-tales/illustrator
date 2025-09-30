@@ -1704,11 +1704,13 @@ class ProviderFactory:
                     provider_type,
                     "Google Cloud project ID required for Flux Dev Vertex provider"
                 )
+            # Remove gcp_project_id from common_llm_kwargs to avoid duplicate argument error
+            flux_vertex_kwargs = {k: v for k, v in common_llm_kwargs.items() if k != 'gcp_project_id'}
             return FluxDevVertexProvider(
                 gcp_project_id=project_id,
                 flux_dev_vertex_endpoint_url=credentials.get('flux_dev_vertex_endpoint_url'),
                 gcp_credentials=credentials.get('google_credentials'),
-                **common_llm_kwargs,
+                **flux_vertex_kwargs,
             )
 
         elif provider_type == ImageProvider.HUGGINGFACE:
