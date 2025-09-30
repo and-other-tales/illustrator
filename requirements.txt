@@ -5,6 +5,7 @@ langchain>=0.2.0
 langchain-core>=0.2.0
 langchain-openai>=0.2.0
 langchain-anthropic>=0.2.0
+anthropic[vertex]>=0.34.0
 python-dotenv>=1.0.1
 sqlalchemy>=2.0.30
 spacy>=3.7.0

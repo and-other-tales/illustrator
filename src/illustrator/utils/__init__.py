@@ -34,6 +34,7 @@ format_file_size = utils_direct.format_file_size
 load_config = utils_direct.load_config
 save_config = utils_direct.save_config
 create_prompt_variations = utils_direct.create_prompt_variations
+enforce_prompt_length = utils_direct.enforce_prompt_length
 
 # Define __all__ to specify what gets exported
 __all__ = [
@@ -50,5 +51,6 @@ __all__ = [
     'format_file_size',
     'load_config',
     'save_config',
-    'create_prompt_variations'
+    'create_prompt_variations',
+    'enforce_prompt_length'
 ]

@@ -3,131 +3,12 @@
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
-from enum import Enum
-
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from illustrator.utils import parse_llm_json
-
-from illustrator.models import (
-    EmotionalMoment,
-    IllustrationPrompt,
-    ImageProvider,
-)
-
+from illustrator.models import EmotionalMoment, IllustrationPrompt, ImageProvider
+from illustrator.quality_models import QualityMetric, IterationReason, QualityAssessment, PromptPerformance, PromptIteration, QualityReport
 logger = logging.getLogger(__name__)
-
-
-class QualityMetric(str, Enum):
-    """Quality assessment metrics for generated images."""
-    VISUAL_ACCURACY = "visual_accuracy"
-    EMOTIONAL_RESONANCE = "emotional_resonance"
-    ARTISTIC_CONSISTENCY = "artistic_consistency"
-    TECHNICAL_QUALITY = "technical_quality"
-    NARRATIVE_RELEVANCE = "narrative_relevance"
-
-
-class IterationReason(str, Enum):
-    """Reasons for prompt iteration."""
-    LOW_OVERALL_QUALITY = "low_overall_quality"
-    POOR_ACCURACY = "poor_accuracy"
-    WEAK_TECHNICAL_QUALITY = "weak_technical_quality"
-    INSUFFICIENT_DETAIL = "insufficient_detail"
-    WEAK_EMOTIONAL_RESONANCE = "weak_emotional_resonance"
-    INCONSISTENT_STYLE = "inconsistent_style"
-
-
-@dataclass
-class QualityAssessment:
-    """Quality assessment for a generated image.
-
-    This class is intentionally flexible to accept both the modern shape
-    (quality_scores dict) and legacy flat numeric fields used by older tests
-    and code paths.
-    """
-    # Modern fields
-    prompt_id: Optional[str] = None
-    generation_success: Optional[bool] = None
-    quality_scores: Optional[Dict[QualityMetric, float]] = None  # 0.0 to 1.0
-    feedback_notes: str = ""
-    improvement_suggestions: Optional[List[str]] = None
-    provider: Optional[ImageProvider] = None
-    timestamp: Optional[str] = None
-
-    # Legacy / convenience numeric fields (0-100 scale in some tests)
-    overall_score: Optional[float] = None
-    accuracy_score: Optional[float] = None
-    style_consistency: Optional[float] = None
-    emotional_alignment: Optional[float] = None
-    technical_quality: Optional[float] = None
-    prompt_effectiveness: Optional[float] = None
-
-    # legacy lists
-    areas_for_improvement: Optional[List[str]] = None
-    strengths: Optional[List[str]] = None
-    recommendations: Optional[List[str]] = None
-
-    def needs_improvement(self) -> bool:
-        """Return True if assessment indicates the prompt needs improvement.
-
-        Priority: use overall_score if present (0-100), otherwise use
-        quality_scores average (0.0-1.0) with threshold ~0.75.
-        """
-        if self.overall_score is not None:
-            try:
-                return float(self.overall_score) < 75.0
-            except Exception:
-                pass
-
-        if self.quality_scores:
-            avg = sum(self.quality_scores.values()) / len(self.quality_scores)
-            return avg < 0.75
-
-        # Fall back to conservative default
-        return True
-
-
-@dataclass
-class PromptPerformance:
-    """Track prompt performance over time."""
-    prompt_template: str
-    provider: ImageProvider
-    success_rate: float
-    avg_quality_scores: Dict[QualityMetric, float]
-    usage_count: int
-    last_updated: str
-
-
-@dataclass
-class PromptIteration:
-    """Represents a single prompt improvement iteration."""
-    iteration_number: int
-    original_prompt: IllustrationPrompt
-    improved_prompt: IllustrationPrompt
-    quality_assessment: QualityAssessment
-    iteration_reasons: List[IterationReason]
-    improvements_made: List[str]
-    timestamp: str
-
-
-@dataclass
-class QualityReport:
-    """Comprehensive quality report for a prompt improvement session."""
-    # Make session_id and initial_prompt optional for backward compatibility with tests
-    session_id: str | None = None
-    initial_prompt: Optional[IllustrationPrompt] = None
-    # legacy/test-expected fields
-    original_prompt: Optional[IllustrationPrompt] = None
-    original_quality_score: Optional[float] = None
-    summary: Optional[str] = None
-    final_prompt: Optional[IllustrationPrompt] = None
-    iterations: Optional[List[PromptIteration]] = None
-    total_iterations: int = 0
-    total_improvements: int = 0
-    improvement_achieved: Optional[float] = None
-    final_quality_score: float = 0.0
-    target_quality_reached: bool = False
     processing_time_seconds: float = 0.0
     timestamp: Optional[str] = None
     # modern fields
@@ -423,7 +304,7 @@ Generation success: {generation_result.get('success', False)}
             if "cinematic" not in prompt.prompt.lower():
                 suggestions.append("Add cinematic language for better Imagen4 results")
 
-        elif prompt.provider in (ImageProvider.FLUX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
+        elif prompt.provider in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.FLUX_SCHNELL_VERTEX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
             if not any(word in prompt.prompt.lower() for word in ["artistic", "detailed", "style"]):
                 suggestions.append("Enhance artistic style descriptions for Flux optimization")
 

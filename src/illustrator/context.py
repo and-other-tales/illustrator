@@ -51,6 +51,14 @@ class ManuscriptContext(BaseModel):
         default=None,
         description="HuggingFace Inference Endpoint URL used for Flux image generation",
     )
+    flux_dev_vertex_endpoint_url: str | None = Field(
+        default=None,
+        description="Google Vertex AI endpoint URL for Flux Dev model",
+    )
+    flux_schnell_vertex_endpoint_url: str | None = Field(
+        default=None,
+        description="Google Vertex AI endpoint URL for Flux Schnell model",
+    )
     huggingface_image_model: str | None = Field(
         default=None,
         description="Default HuggingFace text-to-image model identifier",
@@ -111,6 +119,7 @@ Scene context: {scene_context}""",
     anthropic_api_key: str | None = Field(default=None, description="Anthropic API key for Claude")
     google_credentials: str | None = Field(default=None, description="Google Cloud credentials for Imagen4")
     google_project_id: str | None = Field(default=None, description="Google Cloud project ID for Imagen4")
+    gcp_project_id: str | None = Field(default=None, description="Google Cloud project ID for Anthropic Vertex")
     huggingface_api_key: str | None = Field(default=None, description="HuggingFace API key for language models and Flux")
     replicate_api_token: str | None = Field(default=None, description="Replicate API token for hosted image models")
 
@@ -155,20 +164,25 @@ def get_default_context() -> IllustratorContext:
             provider = None
 
     anthropic_key = os.getenv('ANTHROPIC_API_KEY')
+    gcp_project_id = os.getenv('GCP_PROJECT_ID')
     hf_endpoint_env = (os.getenv('HUGGINGFACE_ENDPOINT_URL') or '').strip()
 
     if hf_endpoint_env:
         provider = LLMProvider.HUGGINGFACE
     elif provider is None:
-        provider = LLMProvider.ANTHROPIC if anthropic_key else LLMProvider.HUGGINGFACE
+        if gcp_project_id:
+            provider = LLMProvider.ANTHROPIC_VERTEX
+        else:
+            provider = LLMProvider.ANTHROPIC if anthropic_key else LLMProvider.HUGGINGFACE
 
     default_model = os.getenv('DEFAULT_LLM_MODEL')
     if not default_model:
-        default_model = (
-            "claude-3-5-sonnet-20241022"
-            if provider == LLMProvider.ANTHROPIC
-            else "gpt-oss-120b"
-        )
+        if provider == LLMProvider.ANTHROPIC_VERTEX:
+            default_model = "claude-sonnet-4-5@20250929"
+        elif provider == LLMProvider.ANTHROPIC:
+            default_model = "claude-3-5-sonnet-20241022"
+        else:
+            default_model = "gpt-oss-120b"
 
     # Ensure Anthropic models are referenced without provider prefix for LangChain init
     if provider == LLMProvider.ANTHROPIC and default_model.startswith("anthropic/"):
@@ -207,6 +221,9 @@ def get_default_context() -> IllustratorContext:
     if not hf_flux_endpoint:
         hf_flux_endpoint = "https://qj029p0ofvfmjxus.us-east-1.aws.endpoints.huggingface.cloud"
 
+    flux_dev_vertex_endpoint = os.getenv('FLUX_DEV_VERTEX_ENDPOINT_URL')
+    flux_schnell_vertex_endpoint = os.getenv('FLUX_SCHNELL_VERTEX_ENDPOINT_URL')
+
     hf_image_model = os.getenv('HUGGINGFACE_IMAGE_MODEL')
     hf_image_endpoint = os.getenv('HUGGINGFACE_IMAGE_ENDPOINT_URL')
     hf_image_provider = os.getenv('HUGGINGFACE_IMAGE_PROVIDER')
@@ -221,6 +238,7 @@ def get_default_context() -> IllustratorContext:
         anthropic_api_key=anthropic_key,  # Keep API key regardless of active provider
         google_credentials=os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
         google_project_id=os.getenv('GOOGLE_PROJECT_ID'),
+        gcp_project_id=gcp_project_id,
         huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),
         replicate_api_token=replicate_token,
         huggingface_task=huggingface_task,
@@ -230,6 +248,8 @@ def get_default_context() -> IllustratorContext:
         huggingface_endpoint_url=hf_endpoint,
         huggingface_timeout=huggingface_timeout,
         huggingface_flux_endpoint_url=hf_flux_endpoint,
+        flux_dev_vertex_endpoint_url=flux_dev_vertex_endpoint,
+        flux_schnell_vertex_endpoint_url=flux_schnell_vertex_endpoint,
         huggingface_image_model=hf_image_model,
         huggingface_image_endpoint_url=hf_image_endpoint,
         huggingface_image_provider=hf_image_provider,

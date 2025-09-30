@@ -23,6 +23,8 @@ except ImportError:
 from illustrator.models import LLMProvider
 import json
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:  # pragma: no cover - typing helpers
     from illustrator.context import ManuscriptContext
 
@@ -467,10 +469,67 @@ def _extract_chat_completion_text(completion: Any) -> str:
     return str(content or "")
 
 
-def _normalize_provider(provider: LLMProvider | str | None, anthropic_key: str | None) -> LLMProvider:
+class AnthropicVertexWrapper:
+    """Wrapper to make AnthropicVertex client compatible with LangChain interface."""
+    
+    def __init__(self, client, model: str):
+        self._client = client
+        self._model = model
+    
+    async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
+        """Generate a response asynchronously using Anthropic Vertex."""
+        # Convert LangChain messages to Anthropic format
+        anthropic_messages = []
+        system_message = None
+        
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                system_message = msg.content
+            elif isinstance(msg, HumanMessage):
+                anthropic_messages.append({"role": "user", "content": msg.content})
+            elif isinstance(msg, AIMessage):
+                anthropic_messages.append({"role": "assistant", "content": msg.content})
+        
+        # Prepare request parameters
+        request_params = {
+            "model": self._model,
+            "max_tokens": 1024,
+            "messages": anthropic_messages,
+            "anthropic_version": "vertex-2023-10-16"
+        }
+        
+        if system_message:
+            request_params["system"] = system_message
+        
+        try:
+            # Run the synchronous call in a thread pool
+            loop = asyncio.get_running_loop()
+            response = await loop.run_in_executor(
+                None, 
+                lambda: self._client.messages.create(**request_params)
+            )
+            
+            # Extract content from response
+            content = ""
+            if hasattr(response, 'content') and response.content:
+                if isinstance(response.content, list) and len(response.content) > 0:
+                    content = response.content[0].text
+                else:
+                    content = str(response.content)
+            
+            return AIMessage(content=content)
+            
+        except Exception as e:
+            logger.error(f"Anthropic Vertex API call failed: {e}")
+            return AIMessage(content="")
+
+
+def _normalize_provider(provider: LLMProvider | str | None, anthropic_key: str | None, gcp_project_id: str | None = None) -> LLMProvider:
     """Resolve the configured provider, defaulting based on available credentials."""
 
     if provider is None:
+        if gcp_project_id:
+            return LLMProvider.ANTHROPIC_VERTEX
         return LLMProvider.ANTHROPIC if anthropic_key else LLMProvider.HUGGINGFACE
 
     if isinstance(provider, str):
@@ -491,13 +550,14 @@ def create_chat_model(
     model: str,
     anthropic_api_key: str | None,
     huggingface_api_key: str | None,
+    gcp_project_id: str | None = None,
     huggingface_config: HuggingFaceConfig | None = None,
     stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
     session_id: str | None = None,
 ) -> Any:
     """Instantiate a chat-capable model for the requested provider."""
 
-    resolved_provider = _normalize_provider(provider, anthropic_api_key)
+    resolved_provider = _normalize_provider(provider, anthropic_api_key, gcp_project_id)
 
     if resolved_provider == LLMProvider.ANTHROPIC:
         if not anthropic_api_key:
@@ -516,6 +576,30 @@ def create_chat_model(
             model_provider="anthropic",
             api_key=anthropic_api_key,
         )
+
+    if resolved_provider == LLMProvider.ANTHROPIC_VERTEX:
+        if not gcp_project_id:
+            if _allow_offline_fallback():
+                logger.warning(
+                    "GCP Project ID missing; using LocalLLM fallback for offline execution."
+                )
+                return LocalLLM("anthropic_vertex")
+
+            raise ValueError("GCP Project ID is required when using the Anthropic Vertex provider")
+
+        try:
+            from anthropic import AnthropicVertex
+        except ImportError:
+            raise ValueError("anthropic[vertex] package is required for Anthropic Vertex provider. Install with: pip install 'anthropic[vertex]'")
+
+        # Create Anthropic Vertex client
+        client = AnthropicVertex(
+            region="global",
+            project_id=gcp_project_id
+        )
+        
+        # Return a wrapper that mimics LangChain interface
+        return AnthropicVertexWrapper(client, model)
 
     if not huggingface_api_key:
         if _allow_offline_fallback():
@@ -600,6 +684,7 @@ def create_chat_model_from_context(context: ManuscriptContext, session_id: str |
         huggingface_config=huggingface_config_from_context(context),
         stream_callback=getattr(context, "huggingface_stream_callback", None),
         session_id=session_id,
+        gcp_project_id=getattr(context, "gcp_project_id", None),
     )
 logger = logging.getLogger(__name__)
 

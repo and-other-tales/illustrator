@@ -129,17 +129,38 @@ class LightingMood(str, Enum):
 @dataclass
 class VisualElement:
     """Represents a visual element extracted from text."""
-    # Support both positional-style construction used in composition tests
-    # and keyword-style construction used by LLM extraction code.
     element_type: str
     position: Optional[Tuple[float, float]] = None
     size: Optional[float] = None
+    size_ratio: Optional[float] = None
     visual_weight: Optional[float] = None
     name: Optional[str] = None
     description: Optional[str] = None
     modifier: Optional[str] = None
     importance: Optional[float] = None  # 0.0 to 1.0
     attributes: Dict[str, Any] = field(default_factory=dict)
+    def __init__(
+        self,
+        element_type: str,
+        position: Optional[Tuple[float, float]] = None,
+        size_ratio: Optional[float] = None,
+        importance: Optional[float] = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        modifier: Optional[str] = None,
+        attributes: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ):
+        self.element_type = element_type
+        self.position = position
+        self.size = size_ratio
+        self.size_ratio = size_ratio
+        self.visual_weight = importance
+        self.importance = importance
+        self.name = name
+        self.description = description
+        self.modifier = modifier
+        self.attributes = attributes or {}
     def __init__(
         self,
         element_type: str,
@@ -176,7 +197,6 @@ class SceneComposition:
     lighting_mood: LightingMood
     atmosphere: str
     color_palette_suggestion: str
-    # Added to support fallback/emotional weighting used elsewhere in the codebase/tests
     emotional_weight: float = 0.5
     emotional_tones: List[EmotionalTone] | None = None
     emotional_weight: float
@@ -950,7 +970,7 @@ class StyleTranslator:
                 return self._translate_for_dalle(style_config, scene_composition)
             elif provider == ImageProvider.IMAGEN4:
                 return self._translate_for_imagen4(style_config, scene_composition)
-            elif provider in (ImageProvider.FLUX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
+            elif provider in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.FLUX_SCHNELL_VERTEX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
                 return self._translate_for_flux(style_config, scene_composition)
             else:
                 return self._generic_translation(style_config)
@@ -2325,7 +2345,7 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 enhanced_parts = [f"Cinematic artistic scene with detailed environmental and emotional elements: {prompt}"]
                 enhanced_parts.append("Professional artistic rendering with rich atmospheric detail")
 
-        elif provider in (ImageProvider.FLUX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
+        elif provider in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.FLUX_SCHNELL_VERTEX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
             enhanced_parts = []
 
             if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):
@@ -2395,6 +2415,8 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             ImageProvider.DALLE: 400,
             ImageProvider.IMAGEN4: 500,
             ImageProvider.FLUX: 600,
+            ImageProvider.FLUX_DEV_VERTEX: 600,
+            ImageProvider.FLUX_SCHNELL_VERTEX: 600,
             ImageProvider.SEEDREAM: 600,
             ImageProvider.HUGGINGFACE: 600,
         }.get(provider, 400)
