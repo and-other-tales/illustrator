@@ -131,10 +131,6 @@ class ManuscriptCLI:
             if not os.getenv('GOOGLE_PROJECT_ID'):
                 console.print("[red]Error: Provide GOOGLE_PROJECT_ID for Flux Dev Vertex[/red]")
                 sys.exit(1)
-        elif image_provider == 'flux_schnell_vertex':
-            if not os.getenv('GOOGLE_PROJECT_ID'):
-                console.print("[red]Error: Provide GOOGLE_PROJECT_ID for Flux Schnell Vertex[/red]")
-                sys.exit(1)
         elif image_provider in {'seedream', 'seedream4'}:
             if not replicate_token:
                 console.print("[red]Error: REPLICATE_API_TOKEN required for Seedream[/red]")
@@ -233,7 +229,7 @@ class ManuscriptCLI:
             Text.assemble(
                 "\nAnalyze your manuscript chapters and generate AI illustrations\n\n",
                 ("• Enter chapter content with CTRL+D when finished\n", "green"),
-                ("• Choose from DALL-E, Imagen4, Flux, Flux Dev[Vertex], Flux Schnell[Vertex], or Seedream for image generation\n", "green"),
+                ("• Choose from DALL-E, Imagen4, Flux, Flux Dev[Vertex], or Seedream for image generation\n", "green"),
                 ("• Get emotional analysis and optimal illustration prompts\n", "green"),
             ),
             title=welcome_text,
@@ -320,7 +316,6 @@ class ManuscriptCLI:
             ("imagen4", "Imagen4 (Google or Replicate)"),
             ("flux", "Flux 1.1 Pro (Replicate or HuggingFace)"),
             ("flux_dev_vertex", "Flux Dev (Google Vertex AI)"),
-            ("flux_schnell_vertex", "Flux Schnell (Google Vertex AI)"),
             ("seedream", "Seedream 4 (Replicate)")
         ]
 
