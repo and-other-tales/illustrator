@@ -703,7 +703,11 @@ class FluxDevVertexProvider(ImageGenerationProvider):
             try:
                 import json
                 credentials_info = json.loads(gcp_credentials)
-                self.credentials = service_account.Credentials.from_service_account_info(credentials_info)
+                # Create service account credentials with proper scopes for Vertex AI
+                self.credentials = service_account.Credentials.from_service_account_info(
+                    credentials_info,
+                    scopes=['https://www.googleapis.com/auth/cloud-platform']
+                )
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning(f"Invalid GCP credentials format: {e}")
                 self.credentials = None
@@ -738,11 +742,14 @@ class FluxDevVertexProvider(ImageGenerationProvider):
             from google.auth.transport.requests import Request
             import aiohttp
 
-            # Get credentials
+            # Get credentials with proper scopes for Vertex AI
             if self.credentials:
                 credentials = self.credentials
             else:
-                credentials, _ = default()
+                # Request credentials with Vertex AI scopes
+                credentials, _ = default(scopes=[
+                    'https://www.googleapis.com/auth/cloud-platform'
+                ])
 
             # Refresh credentials if needed (using sync request for credential refresh)
             if not credentials.valid:
