@@ -710,6 +710,13 @@ class IllustrationGenerator:
                 "guidance_scale": 7.5,
                 "num_inference_steps": 50
             }
+        elif self.provider == ImageProvider.FLUX_DEV_VERTEX:
+            return {
+                "width": 1024,
+                "height": 1024,
+                "guidance_scale": 7.5,
+                "num_inference_steps": 50
+            }
         elif self.provider == ImageProvider.SEEDREAM:
             return {
                 "width": 1024,
