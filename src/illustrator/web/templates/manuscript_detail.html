@@ -468,6 +468,7 @@ function setResetIllustrationsState(resetControl, hasImages, totalImages) {
         return;
     }
 
+    // Toggle the disabled class (Bootstrap blocks clicks on disabled dropdown items)
     resetControl.classList.toggle('disabled', !hasImages);
     resetControl.classList.toggle('text-danger', hasImages);
     resetControl.classList.toggle('text-muted', !hasImages);
@@ -476,8 +477,12 @@ function setResetIllustrationsState(resetControl, hasImages, totalImages) {
 
     if (hasImages) {
         resetControl.removeAttribute('tabindex');
+        // Ensure the button is clickable by removing any pointer-events restriction
+        resetControl.style.pointerEvents = '';
     } else {
         resetControl.setAttribute('tabindex', '-1');
+        // Prevent clicks when disabled for better UX
+        resetControl.style.pointerEvents = 'none';
     }
 }
 
@@ -537,6 +542,18 @@ async function resetManuscriptImages(event) {
 
     if (isDisabled) {
         return;
+    }
+
+    // Close the dropdown before showing confirmation
+    const dropdown = resetControl.closest('.dropdown');
+    if (dropdown) {
+        const dropdownToggle = dropdown.querySelector('[data-bs-toggle="dropdown"]');
+        if (dropdownToggle) {
+            const bsDropdown = bootstrap.Dropdown.getInstance(dropdownToggle);
+            if (bsDropdown) {
+                bsDropdown.hide();
+            }
+        }
     }
 
     const confirmationMessage = totalImages > 0
