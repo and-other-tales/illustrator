@@ -701,7 +701,6 @@ class FluxDevVertexProvider(ImageGenerationProvider):
             anthropic_api_key=anthropic_api_key,
             huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
-            gcp_project_id=gcp_project_id,
         )
         self.gcp_project_id = gcp_project_id
         self.endpoint_url = flux_dev_vertex_endpoint_url

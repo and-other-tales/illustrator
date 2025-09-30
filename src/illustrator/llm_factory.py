@@ -495,7 +495,6 @@ class AnthropicVertexWrapper:
             "model": self._model,
             "max_tokens": 1024,
             "messages": anthropic_messages,
-            "anthropic_version": "vertex-2023-10-16"
         }
         
         if system_message:
