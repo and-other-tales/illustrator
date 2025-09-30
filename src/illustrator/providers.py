@@ -805,16 +805,19 @@ class FluxDevVertexProvider(ImageGenerationProvider):
                 "Content-Type": "application/json",
             }
 
-            # Prepare payload for Vertex AI Flux Dev model according to HuggingFace documentation
-            # The instances should be a simple array of text strings
+            # Prepare payload for Vertex AI Flux Dev model
+            # Based on error message, this is using HuggingFace FluxPipeline directly
+            # So we need to match the FluxPipeline.__call__() signature
+            
+            # For HuggingFace FluxPipeline, the main parameter is the prompt
             instances = [prompt.prompt]
             
-            # Prepare parameters according to documentation format
+            # Prepare parameters that FluxPipeline accepts
             parameters = {}
             
-            # Add default or provided technical parameters
+            # FluxPipeline common parameters (based on diffusers FluxPipeline)
             if prompt.technical_params:
-                # Map common parameters to expected format
+                # Map parameters that FluxPipeline actually accepts
                 if 'width' in prompt.technical_params:
                     parameters['width'] = prompt.technical_params['width']
                 if 'height' in prompt.technical_params:
@@ -823,13 +826,14 @@ class FluxDevVertexProvider(ImageGenerationProvider):
                     parameters['num_inference_steps'] = prompt.technical_params['num_inference_steps']
                 if 'guidance_scale' in prompt.technical_params:
                     parameters['guidance_scale'] = prompt.technical_params['guidance_scale']
-                    
-                # Add any other parameters that might be supported
-                for key, value in prompt.technical_params.items():
-                    if key not in ['width', 'height', 'num_inference_steps', 'guidance_scale']:
-                        parameters[key] = value
+                
+                # Additional FluxPipeline parameters
+                flux_params = ['generator', 'latents', 'output_type', 'return_dict', 'joint_attention_kwargs', 'max_sequence_length']
+                for param in flux_params:
+                    if param in prompt.technical_params:
+                        parameters[param] = prompt.technical_params[param]
             
-            # Set defaults if not provided (matching documentation example)
+            # Set reasonable defaults for FluxPipeline
             if 'width' not in parameters:
                 parameters['width'] = 512
             if 'height' not in parameters:
@@ -839,7 +843,7 @@ class FluxDevVertexProvider(ImageGenerationProvider):
             if 'guidance_scale' not in parameters:
                 parameters['guidance_scale'] = 3.5
             
-            # Add negative prompt if provided (might be supported)
+            # Add negative prompt if provided
             if prompt.negative_prompt:
                 parameters['negative_prompt'] = prompt.negative_prompt
             
@@ -847,6 +851,11 @@ class FluxDevVertexProvider(ImageGenerationProvider):
                 "instances": instances,
                 "parameters": parameters
             }
+            
+            # Debug logging to see exactly what we're sending
+            logger.info(f"Flux Dev Vertex payload: {payload}")
+            logger.debug(f"Payload instances: {instances}")
+            logger.debug(f"Payload parameters: {parameters}")
 
             # Try multiple endpoint paths for dedicated endpoints
             endpoint_paths_to_try = [endpoint_url]
@@ -911,17 +920,25 @@ class FluxDevVertexProvider(ImageGenerationProvider):
                         else:
                             # Store error for this attempt
                             last_error = f"Vertex AI error {response.status}: {response_text}"
-                            logger.debug(f"Endpoint {attempt_url} failed with status {response.status}")
+                            logger.warning(f"Endpoint {attempt_url} failed with status {response.status}")
+                            logger.warning(f"Response: {response_text}")
                             
-                            # For 404 errors, provide more specific guidance
-                            if response.status == 404:
+                            # For 400 errors, provide more specific guidance about FluxPipeline
+                            if response.status == 400:
+                                if "unexpected keyword argument" in response_text:
+                                    last_error = f"FluxPipeline parameter error (400): {response_text}. This suggests incompatible parameters are being passed to the HuggingFace FluxPipeline."
+                                else:
+                                    last_error = f"Bad request (400): {response_text}. Please check the request format and parameters."
+                                # Don't try other endpoints for 400 errors - it's a payload issue
+                                break
+                            elif response.status == 404:
                                 if "UNIMPLEMENTED" in response_text:
                                     last_error = f"Endpoint not found (404 UNIMPLEMENTED): {attempt_url}. This suggests the Vertex AI endpoint may not be deployed, active, or the URL format is incorrect. Please verify the endpoint is running in Google Cloud Console."
                                 else:
                                     last_error = f"Endpoint not found (404): {attempt_url}. Please verify the endpoint URL and deployment status."
                                 continue
                             else:
-                                # For non-404 errors, don't try other endpoints
+                                # For non-400/404 errors, don't try other endpoints
                                 break
                 
                 # If we get here, all endpoints failed
