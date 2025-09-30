@@ -163,9 +163,8 @@ def get_default_context() -> IllustratorContext:
     gcp_project_id = os.getenv('GCP_PROJECT_ID')
     hf_endpoint_env = (os.getenv('HUGGINGFACE_ENDPOINT_URL') or '').strip()
 
-    if hf_endpoint_env:
-        provider = LLMProvider.HUGGINGFACE
-    elif provider is None:
+    # Only set provider from environment if not explicitly specified
+    if provider is None:
         if gcp_project_id:
             provider = LLMProvider.ANTHROPIC_VERTEX
         else:

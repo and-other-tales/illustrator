@@ -413,12 +413,22 @@ async def start_processing(
         # Generate a session ID for tracking
         session_id = str(uuid.uuid4())
 
+        # Enhance style config with LLM provider information from environment
+        enhanced_style_config = dict(request.style_config)
+        llm_provider = os.getenv('LLM_PROVIDER', '').lower()
+        llm_model = os.getenv('DEFAULT_LLM_MODEL', '').strip()
+        
+        if llm_provider:
+            enhanced_style_config['llm_provider'] = llm_provider
+        if llm_model:
+            enhanced_style_config['llm_model'] = llm_model
+
         # Start the actual processing in the background
         background_tasks.add_task(
             run_processing_workflow,
             session_id=session_id,
             manuscript_id=request.manuscript_id,
-            style_config=request.style_config,
+            style_config=enhanced_style_config,
             max_emotional_moments=getattr(request, 'max_emotional_moments', 10),
             resume_from_checkpoint=False
         )
@@ -469,12 +479,22 @@ async def resume_processing_from_checkpoint(
                 "resume_info": resume_info
             }
 
+        # Enhance style config with LLM provider information from environment
+        enhanced_style_config = dict(resume_info["style_config"])
+        llm_provider = os.getenv('LLM_PROVIDER', '').lower()
+        llm_model = os.getenv('DEFAULT_LLM_MODEL', '').strip()
+        
+        if llm_provider:
+            enhanced_style_config['llm_provider'] = llm_provider
+        if llm_model:
+            enhanced_style_config['llm_model'] = llm_model
+
         # Start processing with resume flag
         background_tasks.add_task(
             run_processing_workflow,
             session_id=session_id,
             manuscript_id=resume_info["manuscript_id"],
-            style_config=resume_info["style_config"],
+            style_config=enhanced_style_config,
             max_emotional_moments=resume_info["max_emotional_moments"],
             resume_from_checkpoint=True
         )
@@ -870,7 +890,9 @@ async def run_processing_workflow(
         connection_manager.sessions[session_id].status.total_chapters = len(chapters)
 
         # Initialize components with WebSocket-enabled analyzer
-        analyzer = WebSocketComprehensiveSceneAnalyzer(connection_manager, session_id)
+        # Pass LLM model from style config if available
+        llm_model = style_config.get("llm_model")
+        analyzer = WebSocketComprehensiveSceneAnalyzer(connection_manager, session_id, llm_model)
         from illustrator.models import ImageProvider
 
         # Map string to ImageProvider enum
@@ -1385,10 +1407,13 @@ class WebSocketComprehensiveSceneAnalyzer:
             except Exception:
                 # context may be a SimpleNamespace without attributes; ignore
                 pass
+            # Check if model has provider prefix (e.g., "anthropic/claude-3-5-sonnet")
             if "/" in llm_model:
                 provider_prefix = llm_model.split("/", 1)[0]
                 try:
                     context.llm_provider = LLMProvider(provider_prefix)
+                    # Remove provider prefix from model name for actual usage
+                    context.model = llm_model.split("/", 1)[1]
                 except Exception:
                     pass
 
@@ -1631,6 +1656,27 @@ class WebSocketIllustrationGenerator:
             context.image_provider = None
 
         context.image_provider = provider
+        
+        # Apply LLM provider and model from style config if provided
+        if style_config:
+            llm_provider_str = style_config.get("llm_provider")
+            if llm_provider_str:
+                try:
+                    context.llm_provider = LLMProvider(llm_provider_str)
+                except ValueError:
+                    pass  # Keep default if invalid
+            
+            llm_model = style_config.get("llm_model")
+            if llm_model:
+                context.model = llm_model
+                # If model has provider prefix, extract provider
+                if "/" in llm_model:
+                    provider_prefix = llm_model.split("/", 1)[0]
+                    try:
+                        context.llm_provider = LLMProvider(provider_prefix)
+                        context.model = llm_model.split("/", 1)[1]
+                    except ValueError:
+                        pass  # Keep original model if provider prefix is invalid
 
         # Set Flux Dev Vertex endpoint URL from style config if provided
         if style_config and provider.value == "flux_dev_vertex":
