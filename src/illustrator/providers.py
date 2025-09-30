@@ -889,8 +889,12 @@ class FluxDevVertexProvider(ImageGenerationProvider):
                             last_error = f"Vertex AI error {response.status}: {response_text}"
                             logger.debug(f"Endpoint {attempt_url} failed with status {response.status}")
                             
-                            # If this is a 404, try the next endpoint
+                            # For 404 errors, provide more specific guidance
                             if response.status == 404:
+                                if "UNIMPLEMENTED" in response_text:
+                                    last_error = f"Endpoint not found (404 UNIMPLEMENTED): {attempt_url}. This suggests the Vertex AI endpoint may not be deployed, active, or the URL format is incorrect. Please verify the endpoint is running in Google Cloud Console."
+                                else:
+                                    last_error = f"Endpoint not found (404): {attempt_url}. Please verify the endpoint URL and deployment status."
                                 continue
                             else:
                                 # For non-404 errors, don't try other endpoints
