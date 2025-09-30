@@ -1630,6 +1630,11 @@ class ProviderFactory:
             'gcp_project_id': credentials.get('gcp_project_id'),
             'huggingface_config': huggingface_config,
         }
+        
+        # Debug logging for LLM kwargs
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug("ProviderFactory: common_llm_kwargs = %s", {k: v for k, v in common_llm_kwargs.items() if k in ['llm_provider', 'gcp_project_id', 'llm_model']})
 
         if provider_type == ImageProvider.DALLE:
             api_key = credentials.get('openai_api_key')
@@ -1792,6 +1797,9 @@ class ProviderFactory:
 def get_image_provider(provider_type: str | ImageProvider, **credentials) -> ImageGenerationProvider:
     """Get an image provider instance with credentials from context or environment."""
     from illustrator.context import get_default_context
+    import logging
+    
+    logger = logging.getLogger(__name__)
 
     # Convert string to ImageProvider enum if needed
     if isinstance(provider_type, str):
@@ -1799,6 +1807,9 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
 
     # Get credentials from context or fallback to provided ones
     context = get_default_context()
+    
+    logger.debug("get_image_provider: context GCP Project ID: %s", getattr(context, 'gcp_project_id', None))
+    logger.debug("get_image_provider: provided credentials: %s", {k: v for k, v in credentials.items() if k in ['gcp_project_id', 'llm_provider']})
 
     # Prepare credentials dict, filtering out None values
     creds = {
@@ -1825,5 +1836,8 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
             **credentials
         }.items() if value is not None
     }
+    
+    logger.debug("get_image_provider: final GCP Project ID: %s", creds.get('gcp_project_id'))
+    logger.debug("get_image_provider: final LLM provider: %s", creds.get('llm_provider'))
 
     return ProviderFactory.create_provider(provider_type, **creds)
