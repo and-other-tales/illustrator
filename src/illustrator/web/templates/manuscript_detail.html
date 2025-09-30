@@ -465,8 +465,11 @@ function displayChapters() {
 
 function setResetIllustrationsState(resetControl, hasImages, totalImages) {
     if (!resetControl) {
+        console.log('setResetIllustrationsState: resetControl is null');
         return;
     }
+
+    console.log('setResetIllustrationsState:', { hasImages, totalImages }); // Debug log
 
     // Use data attribute instead of disabled class to avoid Bootstrap interference
     resetControl.setAttribute('data-enabled', hasImages ? 'true' : 'false');
@@ -490,6 +493,8 @@ function updateGalleryButton(totalImages) {
     const button = document.getElementById('viewGalleryBtn');
     const badge = document.getElementById('galleryImageCountBadge');
     const resetControl = document.getElementById('resetImagesBtn');
+
+    console.log('updateGalleryButton called with:', { totalImages, resetControl }); // Debug log
 
     if (!button) {
         return;
@@ -537,10 +542,13 @@ async function resetManuscriptImages(event) {
     }
 
     const resetControl = document.getElementById('resetImagesBtn');
-    const isDisabled = resetControl ? resetControl.classList.contains('disabled') : true;
+    const isEnabled = resetControl ? resetControl.getAttribute('data-enabled') === 'true' : false;
     const totalImages = resetControl ? parseInt(resetControl.getAttribute('data-images-count') || '0', 10) : 0;
 
-    if (isDisabled) {
+    console.log('Reset button clicked:', { isEnabled, totalImages, resetControl }); // Debug log
+
+    if (!isEnabled) {
+        console.log('Reset button is disabled, exiting early');
         return;
     }
 
