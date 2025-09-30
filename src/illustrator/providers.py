@@ -994,6 +994,7 @@ class HuggingFaceImageProvider(ImageGenerationProvider):
         anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
     ) -> None:
         if not api_token:
             raise ValueError("HuggingFace API token is required for the HuggingFace image provider")
@@ -1007,6 +1008,7 @@ class HuggingFaceImageProvider(ImageGenerationProvider):
             anthropic_api_key=anthropic_api_key,
             huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
+            gcp_project_id=gcp_project_id,
         )
 
         self._api_token = api_token
@@ -1191,6 +1193,7 @@ class ReplicateImageProvider(ImageGenerationProvider):
         anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
         model_version: str | None = None,
     ) -> None:
         """Initialise the Replicate provider with authentication and prompt tools."""
@@ -1202,6 +1205,7 @@ class ReplicateImageProvider(ImageGenerationProvider):
             anthropic_api_key=anthropic_api_key,
             huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
+            gcp_project_id=gcp_project_id,
         )
 
         try:
@@ -1418,6 +1422,7 @@ class ReplicateFluxProvider(ReplicateImageProvider):
         anthropic_api_key: str | None = None,
         huggingface_api_key: str | None = None,
         huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
     ) -> None:
         super().__init__(
             api_token,
@@ -1428,6 +1433,7 @@ class ReplicateFluxProvider(ReplicateImageProvider):
             anthropic_api_key=anthropic_api_key,
             huggingface_api_key=huggingface_api_key,
             huggingface_config=huggingface_config,
+            gcp_project_id=gcp_project_id,
         )
 
     def get_provider_type(self) -> ImageProvider:
