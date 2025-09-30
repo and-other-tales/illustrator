@@ -29,6 +29,10 @@ dependencies = [
     # Image generation APIs
     "openai>=1.47.0",
     "google-cloud-aiplatform>=1.60.0",
+    "google-auth>=2.35.0",
+    "google-auth-httplib2>=1.0.0",
+    "google-auth-oauthlib>=1.0.0",
+    "anthropic[vertex]>=0.34.0",
     "huggingface_hub>=0.24.0",
     "langchain-huggingface>=0.1.0",
     "replicate>=0.24.0",
