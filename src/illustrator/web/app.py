@@ -1325,20 +1325,22 @@ async def run_processing_workflow(
         if session_id in connection_manager.sessions:
             connection_manager.sessions[session_id].step_status[3] = "completed"
 
-        # Create session completion checkpoint
-        checkpoint_manager.create_session_completed_checkpoint(
-            session_id=db_session_id_for_persistence,
-            total_images_generated=total_images,
-            total_chapters_processed=len(chapters)
-        )
+        # Create session completion checkpoint if persistence is available
+        if checkpoint_manager and db_session_id_for_persistence:
+            checkpoint_manager.create_session_completed_checkpoint(
+                session_id=db_session_id_for_persistence,
+                total_images_generated=total_images,
+                total_chapters_processed=len(chapters)
+            )
 
-        # Update session status in database
-        persistence_service.update_session_status(
-            session_id=db_session_id_for_persistence,
-            status="completed",
-            progress_percent=100,
-            current_task="Session completed successfully"
-        )
+        # Update session status in database when persistence is configured
+        if persistence_service and db_session_id_for_persistence:
+            persistence_service.update_session_status(
+                session_id=db_session_id_for_persistence,
+                status="completed",
+                progress_percent=100,
+                current_task="Session completed successfully"
+            )
 
         await connection_manager.send_personal_message(
             json.dumps({
@@ -1366,7 +1368,6 @@ async def run_processing_workflow(
             connection_manager.sessions[session_id].status.message = f"Successfully generated {total_images} illustrations!"
             
             # Schedule cleanup of completed session after 30 seconds to allow frontend to see completion
-            import asyncio
             asyncio.create_task(_cleanup_completed_session_after_delay(session_id, 30))
 
     except Exception as e:

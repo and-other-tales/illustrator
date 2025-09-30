@@ -2311,6 +2311,29 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             }
         }
 
+        style_keywords = [
+            "line drawing",
+            "pen-and-ink",
+            "pencil sketch",
+            "shepard style",
+            "style of e.h. shepard",
+        ]
+
+        def _prune_style_sentences(text: str) -> str:
+            sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+            filtered: list[str] = []
+
+            for sentence in sentences:
+                normalized = sentence.lower()
+                if any(keyword in normalized for keyword in style_keywords):
+                    continue
+                filtered.append(sentence)
+
+            if not filtered:
+                return text
+
+            return " ".join(s.strip() for s in filtered if s.strip())
+
         # Provider-specific enhancements with rich E.H. Shepard artistic detail integration
         if provider == ImageProvider.DALLE:
             enhanced_parts = []
@@ -2319,7 +2342,7 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):
                 style_prefix = "A black-and-white pencil sketch in the style of E.H. Shepard."
                 enhanced_parts.append(style_prefix)
-                enhanced_parts.append(prompt)
+                enhanced_parts.append(_prune_style_sentences(prompt))
                 enhanced_parts.extend([
                     "The atmosphere is intimate and everyday, with charming sketchy detail rendered in fine pencil linework.",
                     "Expressive and whimsical style with delicate crosshatching, gentle shading, capturing subtle emotional tension in the scene.",
@@ -2335,7 +2358,7 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):
                 style_prefix = "Pencil illustration, drawn in the expressive and whimsical style of E.H. Shepard."
                 enhanced_parts.append(style_prefix)
-                enhanced_parts.append(prompt)
+                enhanced_parts.append(_prune_style_sentences(prompt))
                 enhanced_parts.extend([
                     "The scene should feel like an ordinary moment with charming sketchy detail — rendered in fine pencil linework.",
                     "Classic book illustration with detailed crosshatching, soft graphite shading, expressive character faces.",
@@ -2351,7 +2374,7 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):
                 style_prefix = "A natural pencil sketch illustration in the classic E.H. Shepard style."
                 enhanced_parts.append(style_prefix)
-                enhanced_parts.append(prompt)
+                enhanced_parts.append(_prune_style_sentences(prompt))
                 enhanced_parts.extend([
                     "The sketch should balance whimsy and emotional depth, with fine crosshatching, detailed environmental textures, and expressive, characterful linework.",
                     "Classic children's book illustration technique with delicate pencil work, gentle shading, and intimate scene composition.",
@@ -2365,7 +2388,20 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             enhanced_parts = [prompt]
 
         def _normalize_parts(parts: List[str]) -> List[str]:
-            return [str(part).strip() for part in parts if part and str(part).strip()]
+            normalized: List[str] = []
+            seen: set[str] = set()
+            for part in parts:
+                if not part:
+                    continue
+                text = str(part).strip()
+                if not text:
+                    continue
+                dedupe_key = " ".join(text.lower().split())
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                normalized.append(text)
+            return normalized
 
         def _trim_prompt(parts: List[str], limit: int) -> str:
             normalized_parts = _normalize_parts(parts)
@@ -2420,4 +2456,21 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
             ImageProvider.HUGGINGFACE: 600,
         }.get(provider, 400)
 
-        return _trim_prompt(enhanced_parts, max_length)
+        def _dedupe_sentences(text: str) -> str:
+            sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+            unique: list[str] = []
+            seen_sentences: set[str] = set()
+
+            for sentence in sentences:
+                normalized_sentence = " ".join(sentence.strip().lower().split())
+                if not normalized_sentence:
+                    continue
+                if normalized_sentence in seen_sentences:
+                    continue
+                seen_sentences.add(normalized_sentence)
+                unique.append(sentence.strip())
+
+            return " ".join(unique)
+
+        combined_prompt = _trim_prompt(enhanced_parts, max_length)
+        return _dedupe_sentences(combined_prompt)

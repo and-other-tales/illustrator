@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "cf59744a-0574-4ea8-a311-deaafccaa9c3",
+  "session_id": "50183ef8-e83c-4321-9274-b1a51d91a675",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 1,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 1,
+  "created_at": "2025-09-30T01:20:14",
+  "checkpoint_data": {
+    "chapter_number": 1,
+    "chapter_title": "A City Wakes",
+    "chapter_word_count": 5312,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 20
+}

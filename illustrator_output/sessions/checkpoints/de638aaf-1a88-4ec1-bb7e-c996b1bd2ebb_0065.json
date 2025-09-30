@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "460eaf8c-5d1d-4b1d-9ad4-70bcbe498562",
+  "session_id": "de638aaf-1a88-4ec1-bb7e-c996b1bd2ebb",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 17,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 65,
+  "created_at": "2025-09-30T08:21:50",
+  "checkpoint_data": {
+    "chapter_number": 17,
+    "chapter_title": "A Star In The Storm",
+    "chapter_word_count": 2355,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 68
+}

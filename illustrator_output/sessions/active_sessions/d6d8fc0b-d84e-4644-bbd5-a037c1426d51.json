@@ -1,0 +1,32 @@
+{
+  "session_id": "d6d8fc0b-d84e-4644-bbd5-a037c1426d51",
+  "manuscript_id": "3938f8ad-7291-5b5b-97b3-9eb7afa48a39",
+  "external_session_id": "abdcf74a-a0c5-4aa1-a76c-1ad956b2d50a",
+  "status": "pending",
+  "progress_percent": 0,
+  "current_chapter": null,
+  "total_chapters": 14,
+  "current_task": null,
+  "style_config": {
+    "image_provider": "flux",
+    "art_style": "pencil sketch",
+    "color_palette": "Black and White",
+    "artistic_influences": null,
+    "style_config_path": "eh_shepard_2.json",
+    "huggingface_model_id": null,
+    "huggingface_provider": null
+  },
+  "max_emotional_moments": 10,
+  "last_completed_step": null,
+  "last_completed_chapter": 0,
+  "processed_chapters": [],
+  "current_prompts": [],
+  "generated_images": [],
+  "emotional_moments": [],
+  "total_images_generated": 0,
+  "error_message": null,
+  "started_at": "2025-09-29T12:33:20.506243",
+  "paused_at": null,
+  "resumed_at": null,
+  "last_heartbeat": "2025-09-29T12:33:20.506280"
+}

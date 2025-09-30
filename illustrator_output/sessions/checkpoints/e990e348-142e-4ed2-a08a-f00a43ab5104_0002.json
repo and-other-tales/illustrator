@@ -1,0 +1,27 @@
+{
+  "checkpoint_id": "d807f6df-0a41-4a87-8f02-e8f671003d81",
+  "session_id": "e990e348-142e-4ed2-a08a-f00a43ab5104",
+  "checkpoint_type": "error_occurred",
+  "chapter_number": 0,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 2,
+  "created_at": "2025-09-30T10:26:45",
+  "checkpoint_data": {
+    "chapter_number": 0,
+    "current_step": "analyzing_chapters",
+    "error_message": "Failed to initialize prompt engineering LLM: GCP Project ID is required when using the Anthropic Vertex provider",
+    "error_details": {
+      "error_type": "ValueError",
+      "traceback": "Failed to initialize prompt engineering LLM: GCP Project ID is required when using the Anthropic Vertex provider"
+    },
+    "error_occurred": true,
+    "error_time": "2025-09-30T10:26:45.209696"
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "retry_step",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 0
+}
