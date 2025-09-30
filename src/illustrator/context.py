@@ -160,7 +160,8 @@ def get_default_context() -> IllustratorContext:
             provider = None
 
     anthropic_key = os.getenv('ANTHROPIC_API_KEY')
-    gcp_project_id = os.getenv('GCP_PROJECT_ID')
+    # Check for GCP project ID from API configuration first, then fallback to .env
+    gcp_project_id = os.getenv('GOOGLE_PROJECT_ID') or os.getenv('GCP_PROJECT_ID')
     hf_endpoint_env = (os.getenv('HUGGINGFACE_ENDPOINT_URL') or '').strip()
 
     # Only set provider from environment if not explicitly specified

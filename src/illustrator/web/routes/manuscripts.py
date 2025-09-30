@@ -2,6 +2,7 @@
 
 import base64
 import json
+import os
 import uuid
 import logging
 from datetime import datetime
@@ -19,6 +20,7 @@ from illustrator.models import (
     EmotionalMoment,
     EmotionalTone,
     IllustrationPrompt,
+    LLMProvider,
 )
 from illustrator.web.models.web_models import (
     ManuscriptCreateRequest,
@@ -674,6 +676,15 @@ async def preview_style_image(
             try:
                 logger.debug("Starting excerpt analysis for preview generation")
                 context = get_default_context()
+                
+                # Ensure user API configuration overrides defaults
+                # Check if user selected Anthropic Vertex and has GCP project ID
+                if context.llm_provider == LLMProvider.ANTHROPIC_VERTEX:
+                    gcp_project_id = os.getenv('GOOGLE_PROJECT_ID') or os.getenv('GCP_PROJECT_ID')
+                    if not gcp_project_id:
+                        raise ValueError("GCP Project ID is required for Anthropic Vertex. Please configure it in API Configuration.")
+                    context.gcp_project_id = gcp_project_id
+                
                 context.image_provider = style_config.image_provider
                 context.default_art_style = style_config.art_style or context.default_art_style
                 context.color_palette = style_config.color_palette or context.color_palette

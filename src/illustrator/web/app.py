@@ -1407,8 +1407,17 @@ class WebSocketComprehensiveSceneAnalyzer:
             provider_str = style_config['llm_provider'].lower()
             if provider_str == 'anthropic':
                 context.llm_provider = LLMProvider.ANTHROPIC
+            elif provider_str == 'anthropic_vertex':
+                context.llm_provider = LLMProvider.ANTHROPIC_VERTEX
             elif provider_str == 'huggingface':
                 context.llm_provider = LLMProvider.HUGGINGFACE
+
+        # Ensure GCP project ID is available for Anthropic Vertex
+        if context.llm_provider == LLMProvider.ANTHROPIC_VERTEX:
+            import os
+            gcp_project_id = os.getenv('GOOGLE_PROJECT_ID') or os.getenv('GCP_PROJECT_ID')
+            if gcp_project_id:
+                context.gcp_project_id = gcp_project_id
 
         if llm_model:
             try:
