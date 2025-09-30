@@ -890,9 +890,9 @@ async def run_processing_workflow(
         connection_manager.sessions[session_id].status.total_chapters = len(chapters)
 
         # Initialize components with WebSocket-enabled analyzer
-        # Pass LLM model from style config if available
+        # Pass LLM model and style config for proper provider detection
         llm_model = style_config.get("llm_model")
-        analyzer = WebSocketComprehensiveSceneAnalyzer(connection_manager, session_id, llm_model)
+        analyzer = WebSocketComprehensiveSceneAnalyzer(connection_manager, session_id, llm_model, style_config)
         from illustrator.models import ImageProvider
 
         # Map string to ImageProvider enum
@@ -1387,6 +1387,7 @@ class WebSocketComprehensiveSceneAnalyzer:
         connection_manager,
         session_id,
         llm_model: str | None = "claude-sonnet-4-20250514",
+        style_config: dict | None = None,
     ):
         # Import here to avoid circular imports
         try:
@@ -1400,6 +1401,14 @@ class WebSocketComprehensiveSceneAnalyzer:
         ComprehensiveSceneAnalyzer = _scene_tools.ComprehensiveSceneAnalyzer
 
         context: ManuscriptContext = get_default_context()
+
+        # Apply LLM provider from style config if available
+        if style_config and 'llm_provider' in style_config:
+            provider_str = style_config['llm_provider'].lower()
+            if provider_str == 'anthropic':
+                context.llm_provider = LLMProvider.ANTHROPIC
+            elif provider_str == 'huggingface':
+                context.llm_provider = LLMProvider.HUGGINGFACE
 
         if llm_model:
             try:
