@@ -157,6 +157,10 @@ class ManuscriptCLI:
         if os.getenv('ANTHROPIC_API_KEY'):
             providers.append(LLMProvider.ANTHROPIC)
 
+        # Check for Google Cloud credentials that enable Anthropic Vertex
+        if os.getenv('GOOGLE_APPLICATION_CREDENTIALS') and os.getenv('GOOGLE_PROJECT_ID'):
+            providers.append(LLMProvider.ANTHROPIC_VERTEX)
+
         if os.getenv('HUGGINGFACE_API_KEY'):
             providers.append(LLMProvider.HUGGINGFACE)
 

@@ -140,6 +140,7 @@
                                     <select class="form-select" id="llmProviderSelect">
                                         <option value="">Auto-detect from configured keys</option>
                                         <option value="anthropic">Anthropic (Claude)</option>
+                                        <option value="anthropic_vertex">Anthropic[Vertex] (Claude via Google Cloud)</option>
                                         <option value="huggingface">HuggingFace (Hosted Endpoint)</option>
                                     </select>
                                     <div class="form-text">Used for manuscript analysis and prompt engineering.</div>
@@ -243,13 +244,13 @@
                             <div class="row g-3 mt-1">
                                 <div class="col-md-6">
                                     <label for="googleCredentials" class="form-label">Google Cloud Credentials Path</label>
-                                    <input type="text" class="form-control" id="googleCredentials" placeholder="/path/to/credentials.json">
-                                    <div class="form-text">Used for Imagen 4 via Vertex AI.</div>
+                                    <input type="text" class="form-control" id="googleCredentials" placeholder="/path/to/vertex.json or /path/to/credentials.json">
+                                    <div class="form-text">Used for Imagen 4 and Anthropic[Vertex] via Vertex AI. Can point to vertex.json file.</div>
                                 </div>
                                 <div class="col-md-6">
                                     <label for="googleProjectId" class="form-label">Google Cloud Project ID</label>
                                     <input type="text" class="form-control" id="googleProjectId" placeholder="my-gcp-project">
-                                    <div class="form-text">Required when supplying Google credentials.</div>
+                                    <div class="form-text">Required for Google Cloud services including Anthropic[Vertex].</div>
                                 </div>
                             </div>
                         </div>
