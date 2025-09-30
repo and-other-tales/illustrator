@@ -559,11 +559,23 @@ async def preview_style_image(
         logger.debug("Initial context LLM provider: %s", context.llm_provider)
         logger.debug("Initial context GCP Project ID: %s", getattr(context, 'gcp_project_id', None))
         
+        # COMPREHENSIVE DEBUGGING: Check all environment variables
+        logger.debug("=== ENVIRONMENT VARIABLE DEBUG ===")
+        logger.debug("GOOGLE_PROJECT_ID: %s", os.getenv('GOOGLE_PROJECT_ID'))
+        logger.debug("GCP_PROJECT_ID: %s", os.getenv('GCP_PROJECT_ID'))
+        logger.debug("LLM_PROVIDER: %s", os.getenv('LLM_PROVIDER'))
+        logger.debug("DEFAULT_LLM_PROVIDER: %s", os.getenv('DEFAULT_LLM_PROVIDER'))
+        logger.debug("ANTHROPIC_API_KEY present: %s", bool(os.getenv('ANTHROPIC_API_KEY')))
+        logger.debug("=== END ENVIRONMENT DEBUG ===")
+        
         # Ensure user API configuration overrides defaults
+        # Always check for GCP Project ID regardless of detected provider
+        gcp_project_id = os.getenv('GOOGLE_PROJECT_ID') or os.getenv('GCP_PROJECT_ID')
+        logger.debug("Environment GCP Project ID: %s", gcp_project_id)
+        
         # Check if user selected Anthropic Vertex and has GCP project ID
         if context.llm_provider == LLMProvider.ANTHROPIC_VERTEX:
-            gcp_project_id = os.getenv('GOOGLE_PROJECT_ID') or os.getenv('GCP_PROJECT_ID')
-            logger.debug("Environment GCP Project ID: %s", gcp_project_id)
+            logger.debug("Detected Anthropic Vertex provider, checking GCP Project ID...")
             
             # Check if the GCP Project ID is a placeholder or invalid
             is_placeholder = (
@@ -575,22 +587,47 @@ async def preview_style_image(
             
             if is_placeholder:
                 logger.error("GCP Project ID is missing or appears to be a placeholder: %s", gcp_project_id)
-                raise ValueError(
-                    "GCP Project ID is required for Anthropic Vertex provider. "
-                    "Please open the API Configuration popup (gear icon) and:\n"
-                    "1. Set your real GCP Project ID (not 'your-google-project-id')\n"
-                    "2. Select 'Anthropic Vertex' as LLM Provider\n"
-                    "3. Click 'Save Configuration'\n"
-                    f"Current value '{gcp_project_id}' appears to be a placeholder."
+                
+                # Check what's in the .env file to provide better guidance
+                env_file_value = os.getenv('GOOGLE_PROJECT_ID')
+                logger.debug("GOOGLE_PROJECT_ID from environment: %s", env_file_value)
+                
+                error_msg = (
+                    "GCP Project ID is required for Anthropic Vertex provider.\n\n"
+                    "🔧 REQUIRED STEPS:\n"
+                    "1. Click the API Configuration button (⚙️ gear icon) in the top navigation\n"
+                    "2. Enter your real Google Cloud Project ID (not 'your-google-project-id')\n"
+                    "3. Select 'Anthropic Vertex' as LLM Provider\n"
+                    "4. Enter your Anthropic API key if needed\n"
+                    "5. Click 'Save Configuration'\n\n"
+                    f"💡 Current value '{gcp_project_id}' appears to be a placeholder.\n"
+                    f"Your .env file shows: GOOGLE_PROJECT_ID={env_file_value}\n\n"
+                    "After saving, the API Configuration will override your .env file settings."
                 )
+                
+                raise ValueError(error_msg)
             
             context.gcp_project_id = gcp_project_id
             logger.debug("Context GCP Project ID updated to: %s", context.gcp_project_id)
+        else:
+            logger.debug("Not using Anthropic Vertex provider (provider: %s), but setting GCP Project ID anyway", context.llm_provider)
+            if gcp_project_id:
+                context.gcp_project_id = gcp_project_id
+                logger.debug("Context GCP Project ID set to: %s", context.gcp_project_id)
 
         # Get the image provider
         gcp_project_id_to_pass = getattr(context, 'gcp_project_id', None)
+        anthropic_api_key_to_pass = getattr(context, 'anthropic_api_key', None)
+        
+        logger.debug("=== PROVIDER CREATION DEBUG ===")
+        logger.debug("Image provider type: %s", style_config.image_provider)
         logger.debug("Passing GCP Project ID to provider: %s", gcp_project_id_to_pass)
         logger.debug("Passing LLM provider to provider: %s", context.llm_provider)
+        logger.debug("Passing Anthropic API key present: %s", bool(anthropic_api_key_to_pass))
+        logger.debug("Context has anthropic_api_key attr: %s", hasattr(context, 'anthropic_api_key'))
+        logger.debug("Context attributes: %s", [attr for attr in dir(context) if not attr.startswith('_')])
+        logger.debug("=== END PROVIDER DEBUG ===")
+        
         provider = get_image_provider(
             style_config.image_provider,
             huggingface_image_model=style_config.huggingface_model_id,
@@ -598,7 +635,7 @@ async def preview_style_image(
             # Pass the GCP Project ID and LLM provider explicitly to ensure they're available
             gcp_project_id=gcp_project_id_to_pass,
             llm_provider=context.llm_provider,
-            anthropic_api_key=getattr(context, 'anthropic_api_key', None),
+            anthropic_api_key=anthropic_api_key_to_pass,
         )
         logger.debug("Image provider created successfully: %s", type(provider))
 
