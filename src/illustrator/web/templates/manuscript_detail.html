@@ -37,7 +37,7 @@
                                 <li><a class="dropdown-item" href="#" onclick="exportManuscript()">
                                     <i class="bi bi-download me-2"></i>Export
                                 </a></li>
-                                <li><a class="dropdown-item disabled text-muted" href="#" id="resetImagesBtn" onclick="resetManuscriptImages(event)" aria-disabled="true" tabindex="-1" data-images-count="0">
+                                <li><a class="dropdown-item text-muted" href="#" id="resetImagesBtn" onclick="resetManuscriptImages(event)" aria-disabled="true" tabindex="-1" data-images-count="0" data-enabled="false">
                                     <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Illustrations
                                 </a></li>
                                 <li><hr class="dropdown-divider"></li>
@@ -468,8 +468,8 @@ function setResetIllustrationsState(resetControl, hasImages, totalImages) {
         return;
     }
 
-    // Toggle the disabled class (Bootstrap blocks clicks on disabled dropdown items)
-    resetControl.classList.toggle('disabled', !hasImages);
+    // Use data attribute instead of disabled class to avoid Bootstrap interference
+    resetControl.setAttribute('data-enabled', hasImages ? 'true' : 'false');
     resetControl.classList.toggle('text-danger', hasImages);
     resetControl.classList.toggle('text-muted', !hasImages);
     resetControl.setAttribute('aria-disabled', hasImages ? 'false' : 'true');
@@ -477,12 +477,12 @@ function setResetIllustrationsState(resetControl, hasImages, totalImages) {
 
     if (hasImages) {
         resetControl.removeAttribute('tabindex');
-        // Ensure the button is clickable by removing any pointer-events restriction
         resetControl.style.pointerEvents = '';
+        resetControl.style.opacity = '';
     } else {
         resetControl.setAttribute('tabindex', '-1');
-        // Prevent clicks when disabled for better UX
         resetControl.style.pointerEvents = 'none';
+        resetControl.style.opacity = '0.5';
     }
 }
 
