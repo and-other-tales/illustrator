@@ -628,6 +628,10 @@ async function fetchCurrentProgress() {
                         document.getElementById('imagesGenerated').textContent = session.status.images_generated;
                     }
                 }
+            } else {
+                // No active session found - this might be a completed/error session
+                addLogMessage('warning', 'No active session found for this manuscript');
+                updateProgress(0, 'No active processing session');
             }
         }
     } catch (error) {
@@ -694,6 +698,7 @@ function handleProcessingUpdate(data) {
 }
 
 function updateProgress(percentage, message) {
+    console.log(`updateProgress called with: ${percentage}%, message: ${message}`);
     const progressBar = document.getElementById('overallProgress');
     const progressPercent = document.getElementById('progressPercent');
     const currentTask = document.getElementById('currentTask');
