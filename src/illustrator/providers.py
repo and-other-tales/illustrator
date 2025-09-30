@@ -1617,6 +1617,7 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
             'huggingface_temperature': getattr(context, 'huggingface_temperature', None),
             'huggingface_model_kwargs': getattr(context, 'huggingface_model_kwargs', None),
             'huggingface_flux_endpoint_url': getattr(context, 'huggingface_flux_endpoint_url', None),
+            'flux_dev_vertex_endpoint_url': getattr(context, 'flux_dev_vertex_endpoint_url', None),
             'huggingface_image_model': getattr(context, 'huggingface_image_model', None),
             'huggingface_image_endpoint_url': getattr(context, 'huggingface_image_endpoint_url', None),
             'huggingface_image_provider': getattr(context, 'huggingface_image_provider', None),
