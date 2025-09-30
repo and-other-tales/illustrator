@@ -230,6 +230,24 @@ class ConnectionManager:
             websocket = self.active_connections[status.session_id]
             await websocket.send_json(status.dict())
 
+    async def notify_gallery_update(self, manuscript_id: str, update_type: str, data: dict = None):
+        """Send updates to gallery WebSocket connections for a specific manuscript."""
+        gallery_session_id = f"gallery_{manuscript_id}"
+        if gallery_session_id in self.active_connections:
+            import json
+            message = {
+                "type": update_type,
+                "manuscript_id": manuscript_id,
+                **(data or {})
+            }
+            websocket = self.active_connections[gallery_session_id]
+            try:
+                await websocket.send_text(json.dumps(message))
+            except Exception as e:
+                print(f"Failed to send gallery update: {e}")
+                # Remove stale connection
+                self.disconnect(gallery_session_id)
+
     async def broadcast_message(self, message: str):
         """Send a message to all active connections."""
         for connection in self.active_connections.values():

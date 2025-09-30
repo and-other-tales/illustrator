@@ -1117,6 +1117,18 @@ async def run_processing_workflow(
                 session_id
             )
 
+            # Notify gallery of progress
+            await connection_manager.notify_gallery_update(
+                manuscript_id=manuscript_id,
+                update_type="processing_progress",
+                data={
+                    "progress": 20 + (i * progress_per_chapter) + (2 * progress_per_chapter // 3),
+                    "message": f"Generating images for Chapter {chapter.number}",
+                    "chapter_number": chapter.number,
+                    "images_generated": total_images
+                }
+            )
+
             # Create checkpoint before starting image generation
             if checkpoint_manager:
                 checkpoint_manager.create_images_generating_checkpoint(
@@ -1153,6 +1165,17 @@ async def run_processing_workflow(
                             "prompt": result.get("prompt", "")
                         }),
                         session_id
+                    )
+
+                    # Notify gallery of new image
+                    await connection_manager.notify_gallery_update(
+                        manuscript_id=manuscript_id,
+                        update_type="new_image",
+                        data={
+                            "image_url": image_url,
+                            "prompt": result.get("prompt", ""),
+                            "chapter_number": chapter.number
+                        }
                     )
 
             # Create chapter completed checkpoint
@@ -1232,6 +1255,16 @@ async def run_processing_workflow(
                 "message": f"Successfully generated {total_images} illustrations!"
             }),
             session_id
+        )
+
+        # Notify gallery of processing completion
+        await connection_manager.notify_gallery_update(
+            manuscript_id=manuscript_id,
+            update_type="processing_complete",
+            data={
+                "images_count": total_images,
+                "message": f"Processing completed - {total_images} illustrations generated!"
+            }
         )
 
         # Update session status to completed
