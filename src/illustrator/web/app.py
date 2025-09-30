@@ -199,6 +199,8 @@ CREDENTIAL_ENV_KEYS = [
     "HUGGINGFACE_API_KEY",
     "HUGGINGFACE_ENDPOINT_URL",
     "HUGGINGFACE_FLUX_ENDPOINT_URL",
+    "FLUX_DEV_VERTEX_ENDPOINT_URL",
+    "FLUX_SCHNELL_VERTEX_ENDPOINT_URL",
     "REPLICATE_API_TOKEN",
     "GOOGLE_APPLICATION_CREDENTIALS",
     "GOOGLE_PROJECT_ID",
@@ -868,6 +870,10 @@ async def run_processing_workflow(
             provider = ImageProvider.IMAGEN4
         elif provider_str == "flux":
             provider = ImageProvider.FLUX
+        elif provider_str == "flux_dev_vertex":
+            provider = ImageProvider.FLUX_DEV_VERTEX
+        elif provider_str == "flux_schnell_vertex":
+            provider = ImageProvider.FLUX_SCHNELL_VERTEX
         elif provider_str == "huggingface":
             provider = ImageProvider.HUGGINGFACE
         elif provider_str in {"seedream", "seedream4"}:
@@ -1814,7 +1820,7 @@ class WebSocketIllustrationGenerator:
 
     def _add_flux_style_tags(self, prompt_text: str | None, provider: ImageProvider) -> str | None:
         """Boost Flux prompts with explicit line-art tags for stronger style anchoring."""
-        if not prompt_text or provider != ImageProvider.FLUX:
+        if not prompt_text or provider not in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.FLUX_SCHNELL_VERTEX):
             return prompt_text
 
         updated = prompt_text.strip()

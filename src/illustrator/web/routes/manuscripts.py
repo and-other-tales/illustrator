@@ -599,6 +599,8 @@ async def preview_style_image(
         style_modifiers = _normalize_style_modifiers(style_translation.get("style_modifiers", []))
         is_flux_family = style_config.image_provider in {
             ImageProvider.FLUX,
+            ImageProvider.FLUX_DEV_VERTEX,
+            ImageProvider.FLUX_SCHNELL_VERTEX,
             ImageProvider.SEEDREAM,
             ImageProvider.HUGGINGFACE,
         }

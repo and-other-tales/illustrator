@@ -10,6 +10,8 @@ window.illustratorApp = {
         HUGGINGFACE_API_KEY: '',
         HUGGINGFACE_ENDPOINT_URL: '',
         HUGGINGFACE_FLUX_ENDPOINT_URL: '',
+        FLUX_DEV_VERTEX_ENDPOINT_URL: '',
+        FLUX_SCHNELL_VERTEX_ENDPOINT_URL: '',
         REPLICATE_API_TOKEN: '',
         GOOGLE_APPLICATION_CREDENTIALS: '',
         GOOGLE_PROJECT_ID: '',
@@ -243,6 +245,8 @@ function saveApiKeys() {
         HUGGINGFACE_API_KEY: document.getElementById('huggingfaceApiKey').value.trim(),
         HUGGINGFACE_ENDPOINT_URL: huggingfaceEndpoint,
         HUGGINGFACE_FLUX_ENDPOINT_URL: document.getElementById('huggingfaceFluxEndpointUrl').value.trim(),
+        FLUX_DEV_VERTEX_ENDPOINT_URL: document.getElementById('fluxDevVertexEndpointUrl').value.trim(),
+        FLUX_SCHNELL_VERTEX_ENDPOINT_URL: document.getElementById('fluxSchnellVertexEndpointUrl').value.trim(),
         REPLICATE_API_TOKEN: document.getElementById('replicateApiToken').value.trim(),
         GOOGLE_APPLICATION_CREDENTIALS: document.getElementById('googleCredentials').value.trim(),
         GOOGLE_PROJECT_ID: document.getElementById('googleProjectId').value.trim(),
@@ -298,6 +302,8 @@ function populateApiKeyForm() {
     if (keys.HUGGINGFACE_API_KEY) document.getElementById('huggingfaceApiKey').value = keys.HUGGINGFACE_API_KEY;
     if (keys.HUGGINGFACE_ENDPOINT_URL) document.getElementById('huggingfaceEndpointUrl').value = keys.HUGGINGFACE_ENDPOINT_URL;
     if (keys.HUGGINGFACE_FLUX_ENDPOINT_URL) document.getElementById('huggingfaceFluxEndpointUrl').value = keys.HUGGINGFACE_FLUX_ENDPOINT_URL;
+    if (keys.FLUX_DEV_VERTEX_ENDPOINT_URL) document.getElementById('fluxDevVertexEndpointUrl').value = keys.FLUX_DEV_VERTEX_ENDPOINT_URL;
+    if (keys.FLUX_SCHNELL_VERTEX_ENDPOINT_URL) document.getElementById('fluxSchnellVertexEndpointUrl').value = keys.FLUX_SCHNELL_VERTEX_ENDPOINT_URL;
     if (keys.REPLICATE_API_TOKEN) document.getElementById('replicateApiToken').value = keys.REPLICATE_API_TOKEN;
     if (keys.GOOGLE_APPLICATION_CREDENTIALS) document.getElementById('googleCredentials').value = keys.GOOGLE_APPLICATION_CREDENTIALS;
     if (keys.GOOGLE_PROJECT_ID) document.getElementById('googleProjectId').value = keys.GOOGLE_PROJECT_ID;
