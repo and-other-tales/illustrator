@@ -1208,6 +1208,12 @@ async def run_processing_workflow(
             start_chapter_index = resume_info["last_completed_chapter"]
             total_images = resume_info.get("total_images_generated", 0)
 
+        # Validate start_chapter_index to prevent skipping all chapters
+        if start_chapter_index >= len(chapters):
+            logger.warning(f"Invalid start_chapter_index {start_chapter_index} >= {len(chapters)} chapters. Resetting to 0.")
+            start_chapter_index = 0
+            total_images = 0
+
         session_data.status.total_chapters = len(chapters)
         session_data.status.chapters_processed = start_chapter_index
         session_data.status.images_generated = total_images
@@ -1533,7 +1539,7 @@ async def run_processing_workflow(
 
         # Final completion
         session_data.status.current_chapter = None
-        session_data.status.chapters_processed = len(chapters)
+        # Keep the actual chapters processed count, don't overwrite it
         session_data.status.images_generated = total_images
 
         await connection_manager.send_personal_message(
@@ -1559,7 +1565,7 @@ async def run_processing_workflow(
             checkpoint_manager.create_session_completed_checkpoint(
                 session_id=db_session_id_for_persistence,
                 total_images_generated=total_images,
-                total_chapters_processed=len(chapters)
+                total_chapters_processed=session_data.status.chapters_processed
             )
 
         # Update session status in database when persistence is configured
@@ -1575,7 +1581,7 @@ async def run_processing_workflow(
             json.dumps({
                 "type": "complete",
                 "images_count": total_images,
-                "chapters_processed": len(chapters),
+                "chapters_processed": session_data.status.chapters_processed,
                 "total_chapters": len(chapters),
                 "message": f"Successfully generated {total_images} illustrations!"
             }),

@@ -1,0 +1,26 @@
+{
+  "session_id": "0494f700-f905-46ad-a022-308e6942142a",
+  "manuscript_id": "test_manuscript",
+  "external_session_id": "ext_session",
+  "status": "pending",
+  "progress_percent": 0,
+  "current_chapter": null,
+  "total_chapters": 5,
+  "current_task": null,
+  "style_config": {
+    "art_style": "digital"
+  },
+  "max_emotional_moments": 10,
+  "last_completed_step": null,
+  "last_completed_chapter": 0,
+  "processed_chapters": [],
+  "current_prompts": [],
+  "generated_images": [],
+  "emotional_moments": [],
+  "total_images_generated": 0,
+  "error_message": null,
+  "started_at": "2025-10-02T20:29:59.412296",
+  "paused_at": null,
+  "resumed_at": null,
+  "last_heartbeat": "2025-10-02T20:29:59.412296"
+}
