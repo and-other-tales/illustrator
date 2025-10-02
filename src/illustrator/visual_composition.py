@@ -1194,7 +1194,8 @@ class AdvancedVisualComposer:
 
         # Delegate to professional calculation
         return self._calculate_professional_focal_point(mapped_rules, comp_elements, EmotionalMoment(
-            text_excerpt='', start_position=0, end_position=0, emotional_tones=[EmotionalTone.NEUTRAL], intensity_score=0.5, context=''))
+            text_excerpt='', start_position=0, end_position=0, emotional_tones=[EmotionalTone.NEUTRAL], intensity_score=0.5, context='',
+            characters_present=[], setting_description='', narrative_context=''))
 
     def _extract_visual_elements(self, text: str) -> List[VisualElement]:
         """Lightweight extractor used by unit tests when a full LLM is not available.
