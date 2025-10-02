@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -175,6 +176,91 @@ def _render_harmony_prompt(messages: Sequence[BaseMessage]) -> str:
     return "\n\n".join(seg.rstrip() for seg in segments)
 
 
+def _is_deepseek_model(model: str) -> bool:
+    """Check if the model is a DeepSeek model that includes thinking tokens."""
+    if not model:
+        return False
+    model_lower = model.lower()
+    return "deepseek" in model_lower or "deep-seek" in model_lower
+
+
+def _extract_final_response_from_deepseek(content: str) -> str:
+    """Extract the final response from DeepSeek model output that includes thinking tokens.
+    
+    DeepSeek models often return responses in a format like:
+    <thinking>
+    [reasoning content]
+    </thinking>
+    
+    [final response]
+    
+    This function extracts just the final response part.
+    """
+    if not content:
+        return content
+    
+    # Look for thinking tags and extract content after them
+    thinking_patterns = [
+        r'<thinking>.*?</thinking>\s*',  # XML-style thinking tags
+        r'<think>.*?</think>\s*',       # Alternative thinking tags  
+        r'\*\*Thinking:\*\*.*?\n\n',    # Markdown-style thinking sections
+        r'Thinking:.*?\n\n',            # Simple thinking sections
+        r'Let me think.*?\n\n',         # Natural language thinking
+    ]
+    
+    cleaned_content = content
+    for pattern in thinking_patterns:
+        cleaned_content = re.sub(pattern, '', cleaned_content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Also try to detect if the response has a clear structure where
+    # the first part is reasoning and the later part is the actual answer
+    lines = cleaned_content.split('\n')
+    
+    # Look for common transition phrases that indicate the start of the final answer
+    answer_indicators = [
+        'in conclusion',
+        'therefore',
+        'so the answer is',
+        'the final answer is',
+        'to summarize',
+        'based on this analysis',
+        'the result is',
+        'final response:',
+        'answer:',
+    ]
+    
+    for i, line in enumerate(lines):
+        line_lower = line.lower().strip()
+        for indicator in answer_indicators:
+            if indicator in line_lower:
+                # Return everything from this line onwards
+                return '\n'.join(lines[i:]).strip()
+    
+    # If no clear structure is found, return the cleaned content
+    # but try to remove common reasoning prefixes
+    reasoning_prefixes = [
+        'alright, so i need to',
+        'okay, so the user',
+        'let me analyze',
+        'first, i need to',
+        'i need to',
+        'so i need to',
+        'the user wants me to',
+        'the user is asking',
+    ]
+    
+    cleaned_lower = cleaned_content.lower().strip()
+    for prefix in reasoning_prefixes:
+        if cleaned_lower.startswith(prefix):
+            # Try to find where the actual content starts
+            sentences = cleaned_content.split('. ')
+            if len(sentences) > 1:
+                # Skip the first reasoning sentence and return the rest
+                return '. '.join(sentences[1:]).strip()
+    
+    return cleaned_content.strip()
+
+
 def _extract_text_from_content(content: Any, allowed_channels: set[str] | None = None) -> str:
     """Extract textual content from structured chat completions."""
 
@@ -256,6 +342,7 @@ class OpenAICompatibleChatWrapper:
         temperature: float = 0.7,
         stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
         session_id: str | None = None,
+        original_model: str | None = None,  # Store the original model name for DeepSeek detection
     ) -> None:
         self._client = client
         self._model = model
@@ -263,6 +350,7 @@ class OpenAICompatibleChatWrapper:
         self._temperature = temperature
         self._stream_callback = stream_callback
         self._session_id = session_id
+        self._original_model = original_model or model
 
     async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
         """Generate a response using OpenAI-compatible API."""
@@ -306,6 +394,11 @@ class OpenAICompatibleChatWrapper:
                             logger.exception("Stream callback raised an exception")
 
             final_content = "".join(content_parts)
+            
+            # Extract final response if this is a DeepSeek model
+            if _is_deepseek_model(self._model) or _is_deepseek_model(getattr(self, '_original_model', '')):
+                final_content = _extract_final_response_from_deepseek(final_content)
+            
             return AIMessage(content=final_content)
 
         except Exception as e:
@@ -1170,6 +1263,7 @@ def create_chat_model(
             temperature=config.temperature,
             stream_callback=stream_callback,
             session_id=session_id,
+            original_model=model,  # Pass the original model name for DeepSeek detection
         )
 
     client_kwargs: dict[str, Any] = {
