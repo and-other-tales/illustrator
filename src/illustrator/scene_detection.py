@@ -506,6 +506,89 @@ Return JSON:
                 "narrative_importance": 0.5
             }
 
+    async def detect_scenes_in_chapter(self, chapter) -> 'SceneDetectionResult':
+        """
+        Async implementation for scene detection in a chapter.
+        
+        Args:
+            chapter: Chapter object with text and metadata
+            
+        Returns:
+            SceneDetectionResult: Scene detection results
+        """
+        from .models import SceneDetectionResult
+        
+        # Create prompt for scene detection
+        prompt = self.scene_detection_prompt.format(
+            chapter_title=chapter.title,
+            chapter_content=chapter.content
+        )
+        
+        # Send to LLM for analysis - let exceptions propagate for testing
+        response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+        
+        # Parse the JSON response - let JSON errors propagate for testing
+        try:
+            result_data = parse_llm_json(response.content)
+        except ValueError as e:
+            # Convert ValueError to JSONDecodeError to match test expectations
+            import json
+            raise json.JSONDecodeError("Invalid JSON", response.content, 0)
+        
+        # Handle case where result_data is not a dict
+        if not isinstance(result_data, dict):
+            import json
+            raise json.JSONDecodeError("Response is not a JSON object", response.content, 0)
+        
+        return SceneDetectionResult(
+            chapter_id=chapter.id,
+            scenes=result_data.get("scenes", []),
+            total_scenes=result_data.get("total_scenes", 0),
+            confidence=0.8
+        )
+
+    @property
+    def scene_detection_prompt(self) -> str:
+        """
+        Scene detection prompt template.
+        
+        Returns:
+            str: The prompt template for scene detection
+        """
+        return """Analyze this chapter text and identify distinct scenes within it. 
+
+Chapter Title: {chapter_title}
+
+Chapter Content:
+{chapter_content}
+
+Please identify distinct scenes and provide:
+- Scene number
+- Setting description
+- Characters present
+- Action/events
+- Mood/emotional tone
+- Key visual elements
+- Whether dialogue is present
+
+Return the analysis as JSON with the following structure:
+{{
+    "scenes": [
+        {{
+            "scene_number": 1,
+            "setting": "description of setting",
+            "characters": ["character1", "character2"],
+            "action": "description of what happens",
+            "mood": "mood description",
+            "key_elements": ["element1", "element2"],
+            "dialogue_present": true/false,
+            "emotional_tone": "tone description"
+        }}
+    ],
+    "total_scenes": number,
+    "chapter_summary": "brief summary"
+}}"""
+
 
 # Alias for backward compatibility with tests
 SceneDetector = LiterarySceneDetector

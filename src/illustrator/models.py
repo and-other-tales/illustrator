@@ -116,9 +116,15 @@ class IllustrationPrompt(BaseModel):
 
 class StyleConfig(BaseModel):
     """Configuration for illustration style and provider."""
+    style_name: str | None = Field(default=None, description="Style configuration name")
     image_provider: ImageProvider = Field(default=ImageProvider.DALLE, description="Image generation provider")
     art_style: str = Field(default="digital painting", description="Base artistic style")
     color_palette: str | None = Field(default=None, description="Color palette preferences")
+    composition: str | None = Field(default=None, description="Composition style")
+    lighting: str | None = Field(default=None, description="Lighting style")
+    mood: str | None = Field(default=None, description="Mood or atmosphere")
+    detail_level: str | None = Field(default=None, description="Level of detail")
+    technical_settings: Dict[str, Any] = Field(default_factory=dict, description="Technical configuration settings")
     artistic_influences: str | None = Field(default=None, description="Artistic influences or inspirations")
     style_config_path: str | None = Field(default=None, description="Path to custom style config file")
     huggingface_model_id: str | None = Field(default=None, description="HuggingFace text-to-image model identifier")
@@ -143,6 +149,9 @@ class ManuscriptMetadata(BaseModel):
     genre: str | None = Field(default=None, description="Literary genre")
     total_chapters: int = Field(default=1, description="Total number of chapters")
     created_at: str = Field(default_factory=lambda: "2024-01-01T00:00:00Z", description="When processing started")
+    language: str | None = Field(default=None, description="Manuscript language")
+    target_audience: str | None = Field(default=None, description="Target audience")
+    estimated_length: int | None = Field(default=None, description="Estimated word count")
 
 
 # Additional enums for backward compatibility
@@ -156,13 +165,17 @@ class OutputFormat(str, Enum):
 
 class SceneDetectionResult(BaseModel):
     """Results from scene detection analysis."""
+    chapter_id: str | None = Field(default=None, description="Chapter identifier")
     scenes: List[dict] = Field(default_factory=list, description="Detected scenes")
+    total_scenes: int = Field(default=0, description="Total number of scenes")
     confidence: float = Field(default=0.8, description="Detection confidence score")
 
 
 class CharacterDetectionResult(BaseModel):
     """Results from character detection analysis."""
-    characters: List[dict] = Field(default_factory=list, description="Detected characters")
+    chapter_id: str | None = Field(default=None, description="Chapter identifier")
+    characters: Dict[str, Dict[str, Any]] = Field(default_factory=dict, description="Detected characters")
+    total_characters: int = Field(default=0, description="Total number of characters")
     confidence: float = Field(default=0.8, description="Detection confidence score")
 
 
