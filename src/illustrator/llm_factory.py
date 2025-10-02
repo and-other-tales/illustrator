@@ -57,6 +57,10 @@ if _messages_module is not None:
     if hasattr(_messages_module, "BaseMessage"):
         setattr(_messages_module, "BaseMessage", BaseMessage)
 from huggingface_hub import InferenceClient
+try:
+    from huggingface_hub.errors import HfHubHTTPError
+except ImportError:  # pragma: no cover - backwards compatibility for older hub versions
+    from huggingface_hub.utils import HfHubHTTPError
 from transformers import pipeline as hf_pipeline
 try:
     from requests.exceptions import ChunkedEncodingError
@@ -243,6 +247,13 @@ class HuggingFaceConfig:
 
 class HuggingFaceEndpointChatWrapper:
     """Async-friendly wrapper that mirrors LangChain chat behaviour for HF endpoints."""
+
+    class _OfflineFallbackRequested(Exception):
+        """Internal control-flow exception signalling a switch to LocalLLM."""
+
+        def __init__(self, reason: str) -> None:
+            super().__init__(reason)
+            self.reason = reason
 
     def __init__(
         self,
@@ -501,7 +512,7 @@ class HuggingFaceEndpointChatWrapper:
                 )
             except Exception as e:
                 error_message = str(e)
-                
+
                 # Handle ChunkedEncodingError specifically
                 if isinstance(e, ChunkedEncodingError):
                     logger.warning("HuggingFace text_generation failed with ChunkedEncodingError: %s; retrying once", str(e))
@@ -534,6 +545,33 @@ class HuggingFaceEndpointChatWrapper:
                             type(retry_e).__name__, str(retry_e)
                         )
                         return _coerce_ai_message_instance(AIMessage(content=""))
+                elif isinstance(e, HfHubHTTPError):
+                    # Detect missing model errors so we can fall back when allowed
+                    response = getattr(e, "response", None)
+                    status_code = getattr(response, "status_code", None)
+                    if status_code is None:
+                        status_code = getattr(e, "status_code", None)
+
+                    message_lower = error_message.lower()
+                    missing_model = False
+                    if status_code == 404:
+                        missing_model = True
+                    elif "404" in message_lower or "not found" in message_lower or "does not exist" in message_lower:
+                        missing_model = True
+
+                    if missing_model and _allow_offline_fallback():
+                        logger.warning(
+                            "HuggingFace text_generation reported missing model (status %s): %s; using LocalLLM fallback",
+                            status_code or "unknown",
+                            error_message,
+                        )
+                        raise HuggingFaceEndpointChatWrapper._OfflineFallbackRequested("huggingface_missing_model") from e
+
+                    logger.error(
+                        "HuggingFace text_generation failed with %s: %s",
+                        type(e).__name__, error_message,
+                    )
+                    return _coerce_ai_message_instance(AIMessage(content=""))
                 else:
                     logger.error(
                         "HuggingFace text_generation failed with %s: %s",
@@ -580,7 +618,15 @@ class HuggingFaceEndpointChatWrapper:
 
             return _coerce_ai_message_instance(AIMessage(content=generated_text.strip()))
 
-        return await asyncio.to_thread(_run_endpoint)
+        try:
+            return await asyncio.to_thread(_run_endpoint)
+        except HuggingFaceEndpointChatWrapper._OfflineFallbackRequested as fallback_exc:
+            logger.warning(
+                "Using LocalLLM fallback due to HuggingFace endpoint error: %s",
+                fallback_exc.reason,
+            )
+            fallback_model = LocalLLM(fallback_exc.reason)
+            return await fallback_model.ainvoke(messages)
 
 
 class HuggingFacePipelineChatWrapper:

@@ -1,6 +1,7 @@
 """API routes for chapter management."""
 
 import json
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -46,6 +47,207 @@ ILLUSTRATOR_OUTPUT_DIR = Path("illustrator_output")
 logger = logging.getLogger("api")
 
 
+def _parse_bool(value: str | None) -> bool | None:
+    if value is None:
+        return None
+    lowered = value.strip().lower()
+    if not lowered:
+        return None
+    if lowered in {"1", "true", "yes", "on"}:
+        return True
+    if lowered in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+def _apply_chapter_header_context_overrides(context: ManuscriptContext) -> ManuscriptContext:
+    """Override context values for chapter header generation using env vars."""
+
+    provider_override = os.getenv("CHAPTER_HEADER_LLM_PROVIDER")
+    if provider_override:
+        try:
+            context.llm_provider = LLMProvider(provider_override.strip().lower())
+        except ValueError:
+            logger.warning(
+                "Ignoring invalid CHAPTER_HEADER_LLM_PROVIDER value: %s",
+                provider_override,
+            )
+
+    model_override = os.getenv("CHAPTER_HEADER_MODEL")
+    if model_override:
+        context.model = model_override.strip()
+
+    huggingface_endpoint = os.getenv("CHAPTER_HEADER_HUGGINGFACE_ENDPOINT_URL")
+    if huggingface_endpoint:
+        context.huggingface_endpoint_url = huggingface_endpoint.strip()
+
+    hf_api_key = os.getenv("CHAPTER_HEADER_HUGGINGFACE_API_KEY")
+    if hf_api_key:
+        context.huggingface_api_key = hf_api_key.strip()
+
+    hf_use_pipeline = _parse_bool(os.getenv("CHAPTER_HEADER_HUGGINGFACE_USE_PIPELINE"))
+    if hf_use_pipeline is not None:
+        context.huggingface_use_pipeline = hf_use_pipeline
+
+    hf_task = os.getenv("CHAPTER_HEADER_HUGGINGFACE_TASK")
+    if hf_task:
+        context.huggingface_task = hf_task.strip()
+
+    hf_device = os.getenv("CHAPTER_HEADER_HUGGINGFACE_DEVICE")
+    if hf_device:
+        device_value: str | int
+        stripped = hf_device.strip()
+        if stripped.isdigit():
+            device_value = int(stripped)
+        else:
+            device_value = stripped
+        context.huggingface_device = device_value
+
+    hf_max_tokens = os.getenv("CHAPTER_HEADER_HUGGINGFACE_MAX_NEW_TOKENS")
+    if hf_max_tokens:
+        try:
+            context.huggingface_max_new_tokens = int(hf_max_tokens)
+        except ValueError:
+            logger.warning(
+                "Ignoring invalid CHAPTER_HEADER_HUGGINGFACE_MAX_NEW_TOKENS value: %s",
+                hf_max_tokens,
+            )
+
+    hf_temperature = os.getenv("CHAPTER_HEADER_HUGGINGFACE_TEMPERATURE")
+    if hf_temperature:
+        try:
+            context.huggingface_temperature = float(hf_temperature)
+        except ValueError:
+            logger.warning(
+                "Ignoring invalid CHAPTER_HEADER_HUGGINGFACE_TEMPERATURE value: %s",
+                hf_temperature,
+            )
+
+    hf_timeout = os.getenv("CHAPTER_HEADER_HUGGINGFACE_TIMEOUT")
+    if hf_timeout:
+        try:
+            context.huggingface_timeout = float(hf_timeout)
+        except ValueError:
+            logger.warning(
+                "Ignoring invalid CHAPTER_HEADER_HUGGINGFACE_TIMEOUT value: %s",
+                hf_timeout,
+            )
+
+    hf_model_kwargs = os.getenv("CHAPTER_HEADER_HUGGINGFACE_MODEL_KWARGS")
+    if hf_model_kwargs:
+        try:
+            context.huggingface_model_kwargs = json.loads(hf_model_kwargs)
+        except json.JSONDecodeError:
+            logger.warning(
+                "Ignoring invalid JSON in CHAPTER_HEADER_HUGGINGFACE_MODEL_KWARGS",
+            )
+
+    anthropic_api_key = os.getenv("CHAPTER_HEADER_ANTHROPIC_API_KEY")
+    if anthropic_api_key:
+        context.anthropic_api_key = anthropic_api_key.strip()
+
+    gcp_project_id = os.getenv("CHAPTER_HEADER_GCP_PROJECT_ID")
+    if gcp_project_id:
+        context.gcp_project_id = gcp_project_id.strip()
+
+    return context
+
+
+def _apply_style_config_context_overrides(
+    context: ManuscriptContext,
+    style_config: dict | None,
+) -> ManuscriptContext:
+    """Apply style-config-provided overrides to the manuscript context."""
+
+    if not style_config:
+        return context
+
+    provider_value = style_config.get("llm_provider")
+    if provider_value:
+        try:
+            context.llm_provider = LLMProvider(str(provider_value).lower())
+        except ValueError:
+            logger.warning("Ignoring invalid llm_provider in style config: %s", provider_value)
+
+    model_value = style_config.get("llm_model") or style_config.get("model")
+    if model_value:
+        model_value = str(model_value).strip()
+        context.model = model_value
+        if "/" in model_value:
+            provider_prefix, _, bare_model = model_value.partition("/")
+            try:
+                context.llm_provider = LLMProvider(provider_prefix)
+                context.model = bare_model
+            except ValueError:
+                pass
+
+    endpoint = style_config.get("huggingface_endpoint_url") or style_config.get("endpoint_url")
+    if endpoint:
+        context.huggingface_endpoint_url = str(endpoint).strip()
+
+    hf_api_key = style_config.get("huggingface_api_key")
+    if hf_api_key:
+        context.huggingface_api_key = str(hf_api_key).strip()
+
+    hf_use_pipeline = style_config.get("huggingface_use_pipeline")
+    if hf_use_pipeline is not None:
+        context.huggingface_use_pipeline = bool(hf_use_pipeline)
+
+    hf_task = style_config.get("huggingface_task")
+    if hf_task:
+        context.huggingface_task = str(hf_task).strip()
+
+    hf_device = style_config.get("huggingface_device")
+    if hf_device is not None:
+        if isinstance(hf_device, int):
+            context.huggingface_device = hf_device
+        else:
+            device_str = str(hf_device).strip()
+            if device_str.isdigit():
+                context.huggingface_device = int(device_str)
+            elif device_str:
+                context.huggingface_device = device_str
+
+    hf_max_tokens = style_config.get("huggingface_max_new_tokens")
+    if hf_max_tokens is not None:
+        try:
+            context.huggingface_max_new_tokens = int(hf_max_tokens)
+        except (TypeError, ValueError):
+            logger.warning("Invalid huggingface_max_new_tokens in style config: %s", hf_max_tokens)
+
+    hf_temperature = style_config.get("huggingface_temperature")
+    if hf_temperature is not None:
+        try:
+            context.huggingface_temperature = float(hf_temperature)
+        except (TypeError, ValueError):
+            logger.warning("Invalid huggingface_temperature in style config: %s", hf_temperature)
+
+    hf_timeout = style_config.get("huggingface_timeout")
+    if hf_timeout is not None:
+        try:
+            context.huggingface_timeout = float(hf_timeout)
+        except (TypeError, ValueError):
+            logger.warning("Invalid huggingface_timeout in style config: %s", hf_timeout)
+
+    hf_model_kwargs = style_config.get("huggingface_model_kwargs")
+    if hf_model_kwargs:
+        if isinstance(hf_model_kwargs, dict):
+            context.huggingface_model_kwargs = hf_model_kwargs
+        else:
+            try:
+                context.huggingface_model_kwargs = json.loads(str(hf_model_kwargs))
+            except json.JSONDecodeError:
+                logger.warning("Invalid huggingface_model_kwargs in style config")
+
+    anthropic_key = style_config.get("anthropic_api_key")
+    if anthropic_key:
+        context.anthropic_api_key = str(anthropic_key).strip()
+
+    gcp_project = style_config.get("gcp_project_id") or style_config.get("google_project_id")
+    if gcp_project:
+        context.gcp_project_id = str(gcp_project).strip()
+
+    return context
 def load_manuscript_by_id(manuscript_id: str) -> tuple[SavedManuscript, Path]:
     """Load a manuscript by its ID."""
     if not SAVED_MANUSCRIPTS_DIR.exists():
@@ -438,6 +640,8 @@ async def generate_chapter_headers(
         from illustrator.models import ImageProvider
 
         context: ManuscriptContext = get_default_context()
+        context = _apply_chapter_header_context_overrides(context)
+        context = _apply_style_config_context_overrides(context, style_config)
         if context.llm_provider == LLMProvider.ANTHROPIC and not context.anthropic_api_key:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

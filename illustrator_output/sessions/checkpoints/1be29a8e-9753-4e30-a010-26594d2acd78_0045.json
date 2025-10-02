@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "2a9ddef7-9112-4798-ab6a-bdb314af67eb",
+  "session_id": "1be29a8e-9753-4e30-a010-26594d2acd78",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 12,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 45,
+  "created_at": "2025-10-02T12:54:24.408379",
+  "checkpoint_data": {
+    "chapter_number": 12,
+    "chapter_title": "The Moon's Reflection",
+    "chapter_word_count": 3531,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 75
+}

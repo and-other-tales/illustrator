@@ -1967,7 +1967,11 @@ class WebSocketIllustrationGenerator:
                     self.session_id
                 )
 
-            prompt_text = self._add_flux_style_tags(illustration_prompt.prompt, provider)
+            prompt_text = self._add_flux_style_tags(
+                illustration_prompt.prompt,
+                provider,
+                style_config,
+            )
             return prompt_text
 
         except Exception as e:
@@ -1987,7 +1991,11 @@ class WebSocketIllustrationGenerator:
                 chapter.title,
                 style_config.get("art_style", "digital painting")
             )
-            return self._add_flux_style_tags(fallback_prompt, provider)
+            return self._add_flux_style_tags(
+                fallback_prompt,
+                provider,
+                style_config,
+            )
 
     def _create_fallback_prompt(self, text_excerpt, emotional_tone, chapter_title, art_style):
         """Create an instructive, high-quality fallback prompt (string).
@@ -2092,22 +2100,61 @@ class WebSocketIllustrationGenerator:
 
         return " ".join(parts)
 
-    def _add_flux_style_tags(self, prompt_text: str | None, provider: ImageProvider) -> str | None:
+    def _add_flux_style_tags(
+        self,
+        prompt_text: str | None,
+        provider: ImageProvider,
+        style_config: Dict[str, Any] | None,
+    ) -> str | None:
         """Boost Flux prompts with explicit line-art tags for stronger style anchoring."""
         if not prompt_text or provider not in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX):
             return prompt_text
 
         updated = prompt_text.strip()
 
-        prefix = "Line drawing, pen-and-ink illustration in the style of E.H. Shepard."
-        if prefix.lower() not in updated.lower():
-            updated = f"{prefix} {updated}" if updated else prefix
+        style_config = style_config or {}
+        art_style = str(style_config.get("art_style") or "").strip()
+        influences = str(style_config.get("artistic_influences") or "").strip()
+        color_palette = str(style_config.get("color_palette") or "").strip()
 
-        suffix = "Detailed line art, vintage children's book illustration style, monochrome."
-        if suffix.lower() not in updated.lower():
-            if updated and not updated.strip().endswith(tuple(".!?")):
-                updated = updated.rstrip() + "."
-            updated = f"{updated} {suffix}" if updated else suffix
+        prompt_lower = updated.lower()
+        shepard_requested = "shepard" in prompt_lower or "shepard" in art_style.lower() or "shepard" in influences.lower()
+
+        if shepard_requested:
+            prefix = "Line drawing, pen-and-ink illustration in the style of E.H. Shepard."
+            if prefix.lower() not in prompt_lower:
+                updated = f"{prefix} {updated}" if updated else prefix
+
+            suffix = "Detailed line art, vintage children's book illustration style, monochrome."
+            if suffix.lower() not in updated.lower():
+                if updated and not updated.strip().endswith(tuple(".!?")):
+                    updated = updated.rstrip() + "."
+                updated = f"{updated} {suffix}" if updated else suffix
+            return updated
+
+        descriptors: list[str] = []
+        if art_style and art_style.lower() not in prompt_lower:
+            descriptors.append(art_style)
+        if color_palette and color_palette.lower() not in prompt_lower:
+            descriptors.append(f"{color_palette} palette")
+
+        if descriptors:
+            lead = ", ".join(descriptors)
+            if lead:
+                if not lead.endswith("."):
+                    lead_sentence = lead + " illustration." if "illustration" not in lead.lower() else lead + "."
+                else:
+                    lead_sentence = lead
+                if not updated.lower().startswith(lead_sentence.lower()):
+                    updated = f"{lead_sentence} {updated}" if updated else lead_sentence
+
+        ink_keywords = {"ink", "line", "monochrome", "black and white", "pen"}
+        if any(keyword in prompt_lower for keyword in ink_keywords):
+            detail_suffix = "Detailed line art, crisp hatching, controlled contrast."
+            if detail_suffix.lower() not in updated.lower():
+                if updated and not updated.strip().endswith(tuple(".!?")):
+                    updated = updated.rstrip() + "."
+                updated = f"{updated} {detail_suffix}"
 
         return updated
 

@@ -23,6 +23,7 @@ from illustrator.llm_factory import (
     _messages_to_prompt,
     _messages_to_chat_messages,
     _allow_offline_fallback,
+    HfHubHTTPError,
 )
 from illustrator.models import LLMProvider
 
@@ -346,6 +347,36 @@ class TestHuggingFaceEndpointChatWrapper:
 
         assert isinstance(result, AIMessage)
         assert result.content == "Hello world"
+
+    @pytest.mark.asyncio
+    async def test_ainvoke_missing_model_uses_local_fallback(self, monkeypatch):
+        """Missing HuggingFace models should trigger the LocalLLM fallback when allowed."""
+        monkeypatch.setenv("ILLUSTRATOR_OFFLINE_MODE", "1")
+
+        mock_client = Mock()
+        response = Mock(status_code=404)
+        chat_error = HfHubHTTPError("404 Client Error: Not Found", response=response)
+        text_error = HfHubHTTPError("404 Client Error: Not Found", response=response)
+
+        mock_client.chat_completion.side_effect = chat_error
+        mock_client.text_generation.side_effect = text_error
+
+        wrapper = HuggingFaceEndpointChatWrapper(
+            client=mock_client,
+            generation_kwargs={"temperature": 0.7},
+        )
+
+        messages = [HumanMessage(content="Test")]
+        fallback_message = AIMessage(content="{}")
+        fallback_instance = MagicMock()
+        fallback_instance.ainvoke = AsyncMock(return_value=fallback_message)
+
+        with patch("illustrator.llm_factory.LocalLLM", return_value=fallback_instance) as mock_local_llm:
+            result = await wrapper.ainvoke(messages)
+
+        mock_local_llm.assert_called_once_with("huggingface_missing_model")
+        fallback_instance.ainvoke.assert_awaited_once_with(messages)
+        assert result is fallback_message
 
 
 class TestMessageConversion:

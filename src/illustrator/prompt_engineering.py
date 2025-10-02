@@ -1235,21 +1235,29 @@ class StyleTranslator:
         """Translate style for Flux specific optimization."""
         vocabulary = self.flux_vocabulary
 
-        style_modifiers = []
+        style_modifiers: List[str] = []
 
-        # Base artistic style
-        base_style = style_config.get('style_name', 'digital painting')
-        if base_style.lower() in vocabulary['artistic_styles']:
-            style_modifiers.append(vocabulary['artistic_styles'][base_style.lower()])
+        # Determine core stylistic descriptors
+        style_name = (
+            style_config.get('style_name')
+            or style_config.get('art_style')
+            or 'digital painting'
+        )
+        art_style = style_config.get('art_style') or style_name
+
+        if style_name.lower() in vocabulary['artistic_styles']:
+            style_modifiers.append(vocabulary['artistic_styles'][style_name.lower()])
         else:
             base_modifiers = self._coerce_to_list(style_config.get('base_prompt_modifiers'))
-            style_modifiers.extend(base_modifiers or [base_style])
+            style_modifiers.extend(base_modifiers or [style_name])
 
         # Flux excels at artistic detail and style flexibility
+        art_style_lower = art_style.lower()
+
         style_modifiers.extend([
             "masterful artistic technique",
             "rich artistic detail",
-            "expressive brushwork" if "painting" in base_style.lower() else "precise technique"
+            "expressive brushwork" if "painting" in art_style_lower else "precise technique"
         ])
 
         # Composition-based artistic modifiers
@@ -1313,16 +1321,40 @@ class StyleTranslator:
             "inconsistent artistic style"
         ])
 
+        color_palette_pref = (
+            style_config.get('color_palette')
+            or scene_composition.color_palette_suggestion
+        )
+        artistic_influences = style_config.get('artistic_influences')
+        custom_style_lead = style_config.get('style_lead')
+        is_shepard_style = any(
+            'shepard' in str(value).lower()
+            for value in (style_name, art_style, artistic_influences)
+            if value
+        )
+
+        provider_optimizations: Dict[str, Any] = {
+            "artistic_flexibility": True,
+            "detailed_technique": True,
+            "style_consistency": True,
+            "creative_interpretation": True,
+            "art_style": art_style,
+            "color_palette": color_palette_pref,
+            "artistic_influences": artistic_influences,
+            "style_lead": custom_style_lead,
+            "is_eh_shepard": is_shepard_style,
+        }
+
+        provider_optimizations = {
+            key: value for key, value in provider_optimizations.items()
+            if value is not None
+        }
+
         return {
             "style_modifiers": style_modifiers,
             "technical_params": technical_params,
             "negative_prompt": negative_prompt,
-            "provider_optimizations": {
-                "artistic_flexibility": True,
-                "detailed_technique": True,
-                "style_consistency": True,
-                "creative_interpretation": True
-            }
+            "provider_optimizations": provider_optimizations,
         }
 
     def _format_shepard_scene(self, text: str, visual_elements: List[VisualElement]) -> str:
@@ -2369,9 +2401,35 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 enhanced_parts.append("Professional artistic rendering with rich atmospheric detail")
 
         elif provider in (ImageProvider.FLUX, ImageProvider.FLUX_DEV_VERTEX, ImageProvider.SEEDREAM, ImageProvider.HUGGINGFACE):
-            enhanced_parts = []
+            enhanced_parts: List[str] = []
 
-            if any(keyword in prompt.lower() for keyword in ["pencil sketch", "shepard", "crosshatching", "hand-drawn", "line work"]):
+            def _clean(value: Any) -> str:
+                return str(value).strip() if value is not None else ""
+
+            art_style = _clean(optimizations.get("art_style"))
+            color_palette = _clean(optimizations.get("color_palette"))
+            influences = _clean(optimizations.get("artistic_influences"))
+            style_lead = _clean(optimizations.get("style_lead"))
+            is_shepard_style = bool(optimizations.get("is_eh_shepard"))
+
+            prompt_lower = prompt.lower()
+            shepard_keywords = [
+                "pencil sketch",
+                "shepard",
+                "crosshatching",
+                "hand-drawn",
+                "line work",
+                "pen-and-ink",
+            ]
+
+            shepard_detected = is_shepard_style or any(keyword in prompt_lower for keyword in shepard_keywords)
+            if not shepard_detected and art_style:
+                lowered_style = art_style.lower()
+                shepard_detected = any(keyword in lowered_style for keyword in shepard_keywords)
+            if not shepard_detected and influences:
+                shepard_detected = "shepard" in influences.lower()
+
+            if shepard_detected:
                 style_prefix = "A natural pencil sketch illustration in the classic E.H. Shepard style."
                 enhanced_parts.append(style_prefix)
                 enhanced_parts.append(_prune_style_sentences(prompt))
@@ -2381,8 +2439,51 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                     "Traditional book illustration aesthetic with detailed character expressions and rich environmental storytelling."
                 ])
             else:
-                enhanced_parts = [f"Masterful artistic interpretation with detailed environmental and character elements: {prompt}"]
-                enhanced_parts.append("Superior artistic technique with rich visual storytelling")
+                if style_lead:
+                    lead_sentence = style_lead.rstrip('.') + '.'
+                else:
+                    descriptor_parts: List[str] = []
+                    if color_palette:
+                        descriptor_parts.append(color_palette)
+                    if art_style:
+                        descriptor_parts.append(art_style)
+                    else:
+                        descriptor_parts.append("artistic")
+
+                    descriptor = " ".join(part.strip() for part in descriptor_parts if part.strip()).strip()
+                    if descriptor:
+                        if "illustration" not in descriptor.lower():
+                            descriptor = f"{descriptor} illustration"
+                        lead_sentence = descriptor[0].upper() + descriptor[1:]
+                    else:
+                        lead_sentence = "Detailed artistic illustration"
+
+                    if not lead_sentence.endswith('.'):
+                        lead_sentence += '.'
+
+                enhanced_parts.append(lead_sentence)
+                enhanced_parts.append(prompt.strip())
+
+                detail_clauses: List[str] = []
+                if art_style:
+                    detail_clauses.append(
+                        f"Render using authentic {art_style.lower()} techniques with deliberate, confident linework"
+                    )
+                if color_palette:
+                    detail_clauses.append(
+                        f"Restrict the palette to {color_palette.lower()} tones to emphasize contrast"
+                    )
+                if influences:
+                    detail_clauses.append(f"Subtle inspiration from {influences}")
+
+                detail_clauses.append(
+                    "Preserve the scene's emotional atmosphere and architectural detail"
+                )
+
+                detail_sentence = "Technique: " + "; ".join(detail_clauses)
+                if not detail_sentence.endswith('.'):
+                    detail_sentence += '.'
+                enhanced_parts.append(detail_sentence)
 
         else:
             enhanced_parts = [prompt]
