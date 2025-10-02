@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 test*
+debug*
 .mdgen_cache.json
 __pycache__/
 *.py[codz]
