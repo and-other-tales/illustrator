@@ -1245,14 +1245,14 @@ class StyleTranslator:
         )
         art_style = style_config.get('art_style') or style_name
 
-        if style_name.lower() in vocabulary['artistic_styles']:
-            style_modifiers.append(vocabulary['artistic_styles'][style_name.lower()])
+        if (style_name or '').lower() in vocabulary['artistic_styles']:
+            style_modifiers.append(vocabulary['artistic_styles'][(style_name or '').lower()])
         else:
             base_modifiers = self._coerce_to_list(style_config.get('base_prompt_modifiers'))
             style_modifiers.extend(base_modifiers or [style_name])
 
         # Flux excels at artistic detail and style flexibility
-        art_style_lower = art_style.lower()
+        art_style_lower = (art_style or '').lower()
 
         style_modifiers.extend([
             "masterful artistic technique",
