@@ -187,15 +187,15 @@ def _is_deepseek_model(model: str) -> bool:
 def _extract_final_response_from_deepseek(content: str) -> str:
     """Extract the final response from DeepSeek model output that includes thinking tokens.
     
-    DeepSeek models often return responses in a format with reasoning followed by the answer.
-    This function attempts to extract just the useful response part.
+    DeepSeek models often include extensive reasoning throughout their responses.
+    This function identifies and extracts the actual deliverable content.
     """
     if not content:
         return content
     
     original_content = content.strip()
     
-    # First, look for thinking tags and extract content after them
+    # First, handle explicit thinking tags
     thinking_patterns = [
         r'<thinking>.*?</thinking>\s*',  # XML-style thinking tags
         r'<think>.*?</think>\s*',       # Alternative thinking tags  
@@ -207,86 +207,98 @@ def _extract_final_response_from_deepseek(content: str) -> str:
     for pattern in thinking_patterns:
         cleaned_content = re.sub(pattern, '', cleaned_content, flags=re.DOTALL | re.IGNORECASE)
     
-    # If content was cleaned by removing thinking tags, return that
-    if len(cleaned_content) < len(original_content) * 0.8:  # Significant reduction
+    # If content was significantly cleaned by removing thinking tags, return that
+    if len(cleaned_content) < len(original_content) * 0.7:
         return cleaned_content.strip()
     
-    # Look for structural indicators that separate reasoning from final answer
-    paragraphs = [p.strip() for p in cleaned_content.split('\n\n') if p.strip()]
+    # Look for direct content indicators that suggest the start of the actual answer
+    sentences = [s.strip() for s in re.split(r'[.!?]+', cleaned_content) if s.strip()]
     
-    if len(paragraphs) > 1:
-        # Look for paragraphs that start with answer indicators
-        answer_indicators = [
-            'based on',
-            'looking at',
-            'analyzing',
-            'the text',
-            'here are',
-            'i can identify',
-            'the following',
-            '1.',  # Numbered lists often indicate structured answers
-            '*',   # Bullet points
-            '-',   # Dash lists
-            '{',   # JSON responses
-            'visual elements',
-            'emotional',
-            'primary',
-        ]
+    # Identify where the actual content starts by looking for these patterns
+    content_start_indicators = [
+        # Direct descriptions
+        r'^(a|an|the)\s+\w+.*\b(woman|man|person|character|scene|library|forest|room|building)',
+        r'^(tall|ancient|mysterious|golden|dark|bright|young|old)\s+',
+        r'^(in|at|on|through|under|over|beside|within)\s+',
         
-        for i, paragraph in enumerate(paragraphs):
-            paragraph_lower = paragraph.lower()
-            
-            # If paragraph starts with answer indicator, return from here onwards
-            for indicator in answer_indicators:
-                if paragraph_lower.startswith(indicator):
-                    return '\n\n'.join(paragraphs[i:]).strip()
+        # Visual descriptors  
+        r'^(golden|warm|soft|bright|dim|shadow|light|sun|moon)',
+        r'^(towering|tall|ancient|gothic|ornate|intricate)',
         
-        # Check for transitions that indicate the end of reasoning
-        reasoning_end_patterns = [
-            r'now\s*[,.]?\s*',
-            r'so\s*[,.]?\s*',
-            r'therefore\s*[,.]?\s*',
-            r'given this\s*[,.]?\s*',
-        ]
+        # JSON or structured content
+        r'^\s*[{\[]',
+        r'^\s*\d+\.\s+',  # Numbered lists
+        r'^\s*[-*]\s+',   # Bullet points
         
-        for i, paragraph in enumerate(paragraphs):
-            for pattern in reasoning_end_patterns:
-                if re.search(pattern, paragraph.lower(), re.IGNORECASE):
-                    # Find where the actual answer starts in this paragraph
-                    sentences = paragraph.split('.')
-                    for j, sentence in enumerate(sentences):
-                        if re.search(pattern, sentence.lower(), re.IGNORECASE):
-                            # Return from the next sentence onwards
-                            remaining_sentences = sentences[j+1:]
-                            if remaining_sentences:
-                                current_para = '.'.join(remaining_sentences).strip()
-                                if current_para:
-                                    result_paragraphs = [current_para] + paragraphs[i+1:]
-                                    return '\n\n'.join(result_paragraphs).strip()
-                            # If nothing left in current paragraph, return remaining paragraphs
-                            if i + 1 < len(paragraphs):
-                                return '\n\n'.join(paragraphs[i+1:]).strip()
-    
-    # Last resort: try to remove obvious reasoning prefixes from the start
-    reasoning_prefixes = [
-        r'^(alright|okay|well),?\s*(so\s+)?i\s+(need\s+to|should|will)\s+.*?\.\s*',
-        r'^the\s+user\s+(wants?|is\s+asking).*?\.\s*',
-        r'^let\s+me\s+(think|analyze).*?\.\s*',
-        r'^first,?\s+i\s+(need\s+to|should|will).*?\.\s*',
-        r'^first,?\s+.*?\.\s*',  # More general "First," removal
-        r'^i\s+(need\s+to|should|will)\s+.*?\.\s*',  # General "I need to" removal
+        # Common prompt starters
+        r'^(create|generate|show|depict|illustrate|render)',
+        r'^(detailed|cinematic|atmospheric|dramatic|professional)',
+        
+        # Analysis results
+        r'^(primary|main|key|dominant)\s+(emotion|visual|element|theme)',
+        r'^(emotional|visual|narrative)\s+(analysis|element|component)',
     ]
     
-    for prefix_pattern in reasoning_prefixes:
-        match = re.search(prefix_pattern, cleaned_content, re.IGNORECASE | re.DOTALL)
-        if match:
-            # Remove the matched reasoning prefix
-            cleaned = cleaned_content[match.end():].strip()
-            if cleaned and len(cleaned) > 50:  # Ensure we have substantial content left
-                return cleaned
+    for i, sentence in enumerate(sentences):
+        sentence_lower = sentence.lower()
+        
+        # Check if this sentence looks like actual content rather than reasoning
+        for pattern in content_start_indicators:
+            if re.search(pattern, sentence_lower):
+                # Found a content sentence - return from here to the end
+                remaining_sentences = sentences[i:]
+                result = '. '.join(remaining_sentences)
+                if not result.endswith(('.', '!', '?')):
+                    result += '.'
+                return result.strip()
     
-    # If no patterns match, return the original cleaned content
-    return cleaned_content
+    # Look for paragraph-level content indicators
+    paragraphs = [p.strip() for p in cleaned_content.split('\n\n') if p.strip()]
+    
+    for i, paragraph in enumerate(paragraphs):
+        paragraph_lower = paragraph.lower()
+        
+        # Skip obvious reasoning paragraphs
+        reasoning_indicators = [
+            'let me', 'i need to', 'first, i', 'okay, so', 'alright, so',
+            'the user', 'i should', 'i will', 'let\'s', 'now i',
+            'breaking this down', 'let me break', 'i\'m trying to',
+            'first, let me', 'so i need', 'given this', 'based on what',
+            'to create', 'for this prompt', 'the scene is', 'let me think'
+        ]
+        
+        is_reasoning = any(indicator in paragraph_lower for indicator in reasoning_indicators)
+        
+        if not is_reasoning:
+            # Check if this looks like actual content
+            content_indicators = [
+                'ancient', 'mysterious', 'golden', 'light', 'shadow', 'woman', 'library',
+                'visual elements', 'emotions', 'atmosphere', 'composition', 'detailed',
+                'cinematic', 'professional', 'high-resolution', '{', '[', 'primary', 'main'
+            ]
+            
+            has_content = any(indicator in paragraph_lower for indicator in content_indicators)
+            
+            if has_content or len(paragraph) > 200:  # Long paragraphs likely contain actual content
+                return '\n\n'.join(paragraphs[i:]).strip()
+    
+    # If no clear content start found, aggressively remove reasoning sections
+    reasoning_removal_patterns = [
+        r'.*?let me break this down\.?\s*',
+        r'.*?first,?\s+i\s+need\s+to.*?\.?\s*',
+        r'.*?okay,?\s+so.*?\.?\s*',
+        r'.*?the\s+user.*?\.?\s*',
+        r'.*?i\s+should.*?\.?\s*',
+        r'.*?given\s+this.*?\.?\s*',
+    ]
+    
+    result = cleaned_content
+    for pattern in reasoning_removal_patterns:
+        result = re.sub(pattern, '', result, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Final cleanup - remove empty lines and normalize spacing
+    lines = [line.strip() for line in result.split('\n') if line.strip()]
+    return '\n'.join(lines).strip() if lines else original_content
 
 
 def _extract_text_from_content(content: Any, allowed_channels: set[str] | None = None) -> str:
