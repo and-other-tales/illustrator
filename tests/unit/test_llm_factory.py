@@ -14,6 +14,7 @@ from illustrator.llm_factory import (
     is_endpoint_paused_error,
     wait_for_endpoint_restart,
     HuggingFaceEndpointChatWrapper,
+    HuggingFacePipelineChatWrapper,
     HuggingFaceConfig,
     create_chat_model,
     create_chat_model_from_context,
@@ -156,7 +157,10 @@ class TestHuggingFaceConfig:
         assert config.temperature == 0.7
         assert config.timeout is None
         assert config.model_kwargs is None
-    
+        assert config.use_pipeline is False
+        assert config.pipeline_task == "text-generation"
+        assert config.pipeline_device is None
+
     def test_custom_values(self):
         """Test HuggingFaceConfig with custom values."""
         config = HuggingFaceConfig(
@@ -164,13 +168,19 @@ class TestHuggingFaceConfig:
             max_new_tokens=1024,
             temperature=0.8,
             timeout=30.0,
-            model_kwargs={"do_sample": True}
+            model_kwargs={"do_sample": True},
+            use_pipeline=True,
+            pipeline_task="text-generation",
+            pipeline_device="cuda:0",
         )
         assert config.endpoint_url == "https://api.example.com"
         assert config.max_new_tokens == 1024
         assert config.temperature == 0.8
         assert config.timeout == 30.0
         assert config.model_kwargs == {"do_sample": True}
+        assert config.use_pipeline is True
+        assert config.pipeline_task == "text-generation"
+        assert config.pipeline_device == "cuda:0"
 
 
 class TestHuggingFaceEndpointChatWrapper:
@@ -452,6 +462,34 @@ class TestContextHelpers:
                 stream_callback=None,
                 session_id="test_session"
             )
+
+
+class TestHuggingFacePipelineWrapper:
+    """Tests for creating and using HuggingFace pipeline-backed chat models."""
+
+    def test_create_chat_model_uses_pipeline_without_api_key(self):
+        """Pipeline configuration should bypass API key requirement."""
+
+        config = HuggingFaceConfig(use_pipeline=True, pipeline_task="text-generation")
+
+        mock_pipeline_instance = Mock()
+        mock_pipeline_instance.return_value = [{'generated_text': 'Pipeline response'}]
+
+        with patch('illustrator.llm_factory.hf_pipeline', return_value=mock_pipeline_instance) as mocked_pipeline:
+            wrapper = create_chat_model(
+                provider=LLMProvider.HUGGINGFACE,
+                model="google/gemma-2b",
+                anthropic_api_key=None,
+                huggingface_api_key=None,
+                huggingface_config=config,
+            )
+
+        assert isinstance(wrapper, HuggingFacePipelineChatWrapper)
+        response = wrapper.invoke([HumanMessage(content="Hello?")])
+        assert isinstance(response, AIMessage)
+        assert response.content == 'Pipeline response'
+        mocked_pipeline.assert_called_once()
+        mock_pipeline_instance.assert_called_once()
 
 
 class TestOfflineFallback:

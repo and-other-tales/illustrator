@@ -1592,12 +1592,22 @@ class ProviderFactory:
         else:
             llm_provider = LLMProvider(llm_provider_value)
 
+        huggingface_api_key = credentials.get('huggingface_api_key')
+        def _coerce_bool(value: Any) -> bool:
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+            return bool(value)
+
+        huggingface_use_pipeline = _coerce_bool(credentials.get('huggingface_use_pipeline'))
+
         if llm_provider == LLMProvider.ANTHROPIC and not anthropic_key:
             raise _credential_error(
                 provider_type,
                 "Anthropic API key is required when using the Anthropic provider for prompt engineering",
             )
-        if llm_provider == LLMProvider.HUGGINGFACE and not credentials.get('huggingface_api_key'):
+        if llm_provider == LLMProvider.HUGGINGFACE and not (huggingface_api_key or huggingface_use_pipeline):
             raise _credential_error(
                 provider_type,
                 "HuggingFace API key is required when using the HuggingFace provider for prompt engineering",
@@ -1621,13 +1631,16 @@ class ProviderFactory:
             temperature=credentials.get('huggingface_temperature', 0.7),
             timeout=credentials.get('huggingface_timeout'),
             model_kwargs=credentials.get('huggingface_model_kwargs'),
+            use_pipeline=huggingface_use_pipeline,
+            pipeline_task=credentials.get('huggingface_task') or 'text-generation',
+            pipeline_device=credentials.get('huggingface_device'),
         )
 
         common_llm_kwargs = {
             'llm_provider': llm_provider,
             'llm_model': llm_model,
             'anthropic_api_key': anthropic_key,
-            'huggingface_api_key': credentials.get('huggingface_api_key'),
+            'huggingface_api_key': huggingface_api_key,
             'gcp_project_id': credentials.get('gcp_project_id'),
             'huggingface_config': huggingface_config,
         }
@@ -1824,6 +1837,7 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
             'llm_provider': getattr(context, 'llm_provider', None),
             'model': getattr(context, 'model', None),
             'huggingface_task': getattr(context, 'huggingface_task', None),
+            'huggingface_use_pipeline': getattr(context, 'huggingface_use_pipeline', None),
             'huggingface_device': getattr(context, 'huggingface_device', None),
             'huggingface_max_new_tokens': getattr(context, 'huggingface_max_new_tokens', None),
             'huggingface_temperature': getattr(context, 'huggingface_temperature', None),

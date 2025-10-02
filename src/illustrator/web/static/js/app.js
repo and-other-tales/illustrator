@@ -9,6 +9,12 @@ window.illustratorApp = {
         OPENAI_API_KEY: '',
         HUGGINGFACE_API_KEY: '',
         HUGGINGFACE_ENDPOINT_URL: '',
+        HUGGINGFACE_USE_PIPELINE: '',
+        HUGGINGFACE_PIPELINE_TASK: '',
+        HUGGINGFACE_DEVICE: '',
+        HUGGINGFACE_MAX_NEW_TOKENS: '',
+        HUGGINGFACE_TEMPERATURE: '',
+        HUGGINGFACE_MODEL_KWARGS: '',
         HUGGINGFACE_FLUX_ENDPOINT_URL: '',
         FLUX_DEV_VERTEX_ENDPOINT_URL: '',
         REPLICATE_API_TOKEN: '',
@@ -127,6 +133,11 @@ function setupEventListeners() {
     // Theme toggle
     document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
 
+    // HuggingFace pipeline toggle
+    const pipelineToggle = document.getElementById('huggingfaceUsePipeline');
+    pipelineToggle?.addEventListener('change', handleHuggingfacePipelineToggle);
+    handleHuggingfacePipelineToggle();
+
     // Global keyboard shortcuts
     document.addEventListener('keydown', handleKeyboardShortcuts);
 
@@ -154,6 +165,21 @@ function initializeBootstrapComponents() {
     const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
     popoverTriggerList.map(function(popoverTriggerEl) {
         return new bootstrap.Popover(popoverTriggerEl);
+    });
+}
+
+function handleHuggingfacePipelineToggle() {
+    const toggle = document.getElementById('huggingfaceUsePipeline');
+    const container = document.getElementById('huggingfacePipelineFields');
+    if (!container) {
+        return;
+    }
+
+    const enabled = Boolean(toggle && toggle.checked);
+    container.classList.toggle('d-none', !enabled);
+
+    container.querySelectorAll('input, textarea').forEach(element => {
+        element.disabled = !enabled;
     });
 }
 
@@ -238,11 +264,32 @@ function saveApiKeys() {
         }
     }
 
+    const pipelineToggle = document.getElementById('huggingfaceUsePipeline');
+    const pipelineTaskInput = document.getElementById('huggingfacePipelineTask');
+    const pipelineDeviceInput = document.getElementById('huggingfacePipelineDevice');
+    const pipelineMaxTokensInput = document.getElementById('huggingfaceMaxNewTokens');
+    const pipelineTemperatureInput = document.getElementById('huggingfaceTemperature');
+    const pipelineKwargsInput = document.getElementById('huggingfaceModelKwargs');
+
+    const pipelineEnabled = Boolean(pipelineToggle && pipelineToggle.checked);
+    const huggingfaceUsePipeline = pipelineEnabled ? 'true' : '';
+    const huggingfacePipelineTask = pipelineEnabled && pipelineTaskInput ? pipelineTaskInput.value.trim() : '';
+    const huggingfacePipelineDevice = pipelineEnabled && pipelineDeviceInput ? pipelineDeviceInput.value.trim() : '';
+    const huggingfaceMaxNewTokens = pipelineEnabled && pipelineMaxTokensInput ? pipelineMaxTokensInput.value.trim() : '';
+    const huggingfaceTemperature = pipelineEnabled && pipelineTemperatureInput ? pipelineTemperatureInput.value.trim() : '';
+    const huggingfaceModelKwargs = pipelineEnabled && pipelineKwargsInput ? pipelineKwargsInput.value.trim() : '';
+
     const credentials = {
         ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
         OPENAI_API_KEY: document.getElementById('openaiApiKey').value.trim(),
         HUGGINGFACE_API_KEY: document.getElementById('huggingfaceApiKey').value.trim(),
         HUGGINGFACE_ENDPOINT_URL: huggingfaceEndpoint,
+        HUGGINGFACE_USE_PIPELINE: huggingfaceUsePipeline,
+        HUGGINGFACE_PIPELINE_TASK: huggingfacePipelineTask,
+        HUGGINGFACE_DEVICE: huggingfacePipelineDevice,
+        HUGGINGFACE_MAX_NEW_TOKENS: huggingfaceMaxNewTokens,
+        HUGGINGFACE_TEMPERATURE: huggingfaceTemperature,
+        HUGGINGFACE_MODEL_KWARGS: huggingfaceModelKwargs,
         HUGGINGFACE_FLUX_ENDPOINT_URL: document.getElementById('huggingfaceFluxEndpointUrl').value.trim(),
         FLUX_DEV_VERTEX_ENDPOINT_URL: document.getElementById('fluxDevVertexEndpointUrl').value.trim(),
         REPLICATE_API_TOKEN: document.getElementById('replicateApiToken').value.trim(),
@@ -299,6 +346,23 @@ function populateApiKeyForm() {
     if (keys.OPENAI_API_KEY) document.getElementById('openaiApiKey').value = keys.OPENAI_API_KEY;
     if (keys.HUGGINGFACE_API_KEY) document.getElementById('huggingfaceApiKey').value = keys.HUGGINGFACE_API_KEY;
     if (keys.HUGGINGFACE_ENDPOINT_URL) document.getElementById('huggingfaceEndpointUrl').value = keys.HUGGINGFACE_ENDPOINT_URL;
+    const pipelineToggle = document.getElementById('huggingfaceUsePipeline');
+    if (pipelineToggle && keys.HUGGINGFACE_USE_PIPELINE) {
+        const normalized = keys.HUGGINGFACE_USE_PIPELINE.toString().toLowerCase();
+        pipelineToggle.checked = ['1', 'true', 'yes', 'on'].includes(normalized);
+    } else if (pipelineToggle) {
+        pipelineToggle.checked = false;
+    }
+    const pipelineTaskInput = document.getElementById('huggingfacePipelineTask');
+    if (pipelineTaskInput) pipelineTaskInput.value = keys.HUGGINGFACE_PIPELINE_TASK || '';
+    const pipelineDeviceInput = document.getElementById('huggingfacePipelineDevice');
+    if (pipelineDeviceInput) pipelineDeviceInput.value = keys.HUGGINGFACE_DEVICE || '';
+    const pipelineMaxTokensInput = document.getElementById('huggingfaceMaxNewTokens');
+    if (pipelineMaxTokensInput) pipelineMaxTokensInput.value = keys.HUGGINGFACE_MAX_NEW_TOKENS || '';
+    const pipelineTemperatureInput = document.getElementById('huggingfaceTemperature');
+    if (pipelineTemperatureInput) pipelineTemperatureInput.value = keys.HUGGINGFACE_TEMPERATURE || '';
+    const pipelineKwargsInput = document.getElementById('huggingfaceModelKwargs');
+    if (pipelineKwargsInput) pipelineKwargsInput.value = keys.HUGGINGFACE_MODEL_KWARGS || '';
     if (keys.HUGGINGFACE_FLUX_ENDPOINT_URL) document.getElementById('huggingfaceFluxEndpointUrl').value = keys.HUGGINGFACE_FLUX_ENDPOINT_URL;
     if (keys.FLUX_DEV_VERTEX_ENDPOINT_URL) document.getElementById('fluxDevVertexEndpointUrl').value = keys.FLUX_DEV_VERTEX_ENDPOINT_URL;
     if (keys.REPLICATE_API_TOKEN) document.getElementById('replicateApiToken').value = keys.REPLICATE_API_TOKEN;
@@ -313,6 +377,8 @@ function populateApiKeyForm() {
     if (modelInput) {
         modelInput.value = keys.DEFAULT_LLM_MODEL || '';
     }
+
+    handleHuggingfacePipelineToggle();
 }
 
 function togglePasswordVisibility(fieldId) {

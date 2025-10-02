@@ -200,6 +200,36 @@
                                     <option value="https://api-inference.huggingface.co/models/nousresearch/Hermes-3-Llama-3.1-70B">Hermes 3 (Llama 3.1 70B)</option>
                                     <option value="https://api-inference.huggingface.co/models/gpt-oss-120b">gpt-oss-120b</option>
                                 </datalist>
+                                <div class="form-check form-switch mt-3">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="huggingfaceUsePipeline">
+                                    <label class="form-check-label" for="huggingfaceUsePipeline">Use Local HuggingFace Pipeline</label>
+                                    <div class="form-text">Run transformers pipelines locally instead of remote inference endpoints.</div>
+                                </div>
+                                <div class="row g-3 mt-1 d-none" id="huggingfacePipelineFields">
+                                    <div class="col-md-6">
+                                        <label for="huggingfacePipelineTask" class="form-label">Pipeline Task</label>
+                                        <input type="text" class="form-control" id="huggingfacePipelineTask" placeholder="text-generation" disabled>
+                                        <div class="form-text">Matches the transformers pipeline task identifier.</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="huggingfacePipelineDevice" class="form-label">Pipeline Device</label>
+                                        <input type="text" class="form-control" id="huggingfacePipelineDevice" placeholder="auto, cpu, cuda:0" disabled>
+                                        <div class="form-text">Set to auto for automatic placement or specify a device id.</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="huggingfaceMaxNewTokens" class="form-label">Max New Tokens</label>
+                                        <input type="number" min="1" class="form-control" id="huggingfaceMaxNewTokens" placeholder="512" disabled>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="huggingfaceTemperature" class="form-label">Temperature</label>
+                                        <input type="number" step="0.01" class="form-control" id="huggingfaceTemperature" placeholder="0.7" disabled>
+                                    </div>
+                                    <div class="col-12">
+                                        <label for="huggingfaceModelKwargs" class="form-label">Advanced Generation Settings (JSON)</label>
+                                        <textarea class="form-control" id="huggingfaceModelKwargs" rows="2" placeholder='{"do_sample": true, "top_p": 0.9}' disabled></textarea>
+                                        <div class="form-text">Optional JSON passed to the pipeline call (max_new_tokens, do_sample, return_full_text, etc.).</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

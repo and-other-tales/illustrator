@@ -57,6 +57,7 @@ if _messages_module is not None:
     if hasattr(_messages_module, "BaseMessage"):
         setattr(_messages_module, "BaseMessage", BaseMessage)
 from huggingface_hub import InferenceClient
+from transformers import pipeline as hf_pipeline
 try:
     from requests.exceptions import ChunkedEncodingError
 except ImportError:
@@ -104,13 +105,17 @@ def _coerce_ai_message_instance(message: Any) -> Any:
 
 @dataclass(slots=True)
 class HuggingFaceConfig:
-    """Configuration for HuggingFace Inference Endpoints."""
+    """Configuration for HuggingFace inference endpoints and local pipelines."""
 
     endpoint_url: str | None = None
     max_new_tokens: int = 512
     temperature: float = 0.7
     timeout: float | None = None
     model_kwargs: dict[str, Any] | None = None
+    use_pipeline: bool = False
+    pipeline_task: str = "text-generation"
+    pipeline_device: str | int | None = None
+    pipeline_kwargs: dict[str, Any] | None = None
 
 
 class HuggingFaceEndpointChatWrapper:
@@ -451,6 +456,158 @@ class HuggingFaceEndpointChatWrapper:
         return await asyncio.to_thread(_run_endpoint)
 
 
+class HuggingFacePipelineChatWrapper:
+    """Wrapper that exposes transformers pipelines through the LangChain chat APIs."""
+
+    def __init__(
+        self,
+        pipe,
+        call_kwargs: dict[str, Any],
+        *,
+        stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        self._pipeline = pipe
+        self._call_kwargs = call_kwargs
+        self._stream_callback = stream_callback
+        self._session_id = session_id
+
+    def _extract_text(self, output: Any) -> str:
+        if output is None:
+            return ""
+
+        if isinstance(output, str):
+            return output
+
+        if isinstance(output, dict):
+            for key in ("generated_text", "text", "summary_text"):
+                value = output.get(key)
+                if value:
+                    return str(value)
+            return ""
+
+        if isinstance(output, Iterable):
+            first = next(iter(output), None)
+            if first is None:
+                return ""
+            if isinstance(first, dict):
+                for key in ("generated_text", "text", "summary_text"):
+                    value = first.get(key)
+                    if value:
+                        return str(value)
+            return str(first)
+
+        return str(output)
+
+    def _dispatch_stream_callback(self, text: str) -> Awaitable[None] | None:
+        if not text or not self._stream_callback:
+            return None
+
+        try:
+            result = self._stream_callback(text)
+        except Exception:  # pragma: no cover - defensive logging
+            logger.exception("Stream callback raised an exception for HuggingFace pipeline output")
+            return None
+
+        return result if inspect.isawaitable(result) else None
+
+    def invoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
+        prompt = _messages_to_prompt(messages)
+        output = self._pipeline(prompt, **self._call_kwargs)
+        text = self._extract_text(output).strip()
+
+        pending = self._dispatch_stream_callback(text)
+        if pending is not None:
+            try:
+                loop = asyncio.get_running_loop()
+                asyncio.run_coroutine_threadsafe(pending, loop)
+            except RuntimeError:
+                asyncio.run(pending)
+
+        return _coerce_ai_message_instance(AIMessage(content=text))
+
+    async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
+        prompt = _messages_to_prompt(messages)
+
+        def _run_pipeline() -> str:
+            output = self._pipeline(prompt, **self._call_kwargs)
+            return self._extract_text(output).strip()
+
+        text = await asyncio.to_thread(_run_pipeline)
+
+        pending = self._dispatch_stream_callback(text)
+        if pending is not None:
+            await pending
+
+        return _coerce_ai_message_instance(AIMessage(content=text))
+
+
+def _partition_pipeline_kwargs(
+    config: HuggingFaceConfig,
+    huggingface_api_key: str | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split configuration into pipeline init kwargs and generation kwargs."""
+
+    init_kwargs: dict[str, Any] = dict(config.pipeline_kwargs or {})
+    generation_kwargs: dict[str, Any] = {
+        "max_new_tokens": config.max_new_tokens,
+        "temperature": config.temperature,
+        "return_full_text": False,
+    }
+
+    extra_model_kwargs = dict(config.model_kwargs or {})
+
+    special_init_keys = {
+        "device_map",
+        "torch_dtype",
+        "trust_remote_code",
+        "revision",
+        "tokenizer",
+        "feature_extractor",
+        "image_processor",
+        "processor",
+        "framework",
+        "use_fast",
+    }
+
+    for key in list(extra_model_kwargs.keys()):
+        if key not in special_init_keys:
+            continue
+
+        value = extra_model_kwargs.pop(key)
+        if key == "torch_dtype" and isinstance(value, str):
+            try:
+                import torch  # type: ignore
+
+                if hasattr(torch, value):
+                    value = getattr(torch, value)
+            except ImportError:
+                logger.debug("torch not available; leaving torch_dtype value as string")
+            except AttributeError:
+                logger.debug("Unrecognised torch dtype '%s' provided", value)
+
+        init_kwargs[key] = value
+
+    device = config.pipeline_device
+    if device is not None:
+        if isinstance(device, str) and device.strip().lower() == "auto":
+            init_kwargs.setdefault("device_map", "auto")
+        else:
+            init_kwargs["device"] = device
+
+    if huggingface_api_key:
+        init_kwargs.setdefault("token", huggingface_api_key)
+
+    if extra_model_kwargs:
+        generation_kwargs.update(extra_model_kwargs)
+
+    # Ensure callers can override defaults explicitly
+    if "return_full_text" not in generation_kwargs:
+        generation_kwargs["return_full_text"] = False
+
+    return init_kwargs, generation_kwargs
+
+
 def _messages_to_prompt(messages: Sequence[BaseMessage]) -> str:
     """Convert chat messages to a single prompt string suitable for text-generation models."""
 
@@ -673,6 +830,36 @@ def create_chat_model(
         # Return a wrapper that mimics LangChain interface
         return AnthropicVertexWrapper(client, model)
 
+    config = huggingface_config or HuggingFaceConfig()
+
+    if resolved_provider == LLMProvider.HUGGINGFACE and config.use_pipeline:
+        init_kwargs, generation_kwargs = _partition_pipeline_kwargs(config, huggingface_api_key)
+
+        try:
+            pipeline_task = config.pipeline_task or "text-generation"
+            pipeline_model = model or init_kwargs.get("model")
+            pipeline_instance = hf_pipeline(
+                task=pipeline_task,
+                model=pipeline_model,
+                **{k: v for k, v in init_kwargs.items() if k != "model"},
+            )
+        except Exception as exc:
+            if _allow_offline_fallback():
+                logger.warning(
+                    "Failed to initialise HuggingFace pipeline (%s); using LocalLLM fallback",
+                    exc,
+                )
+                return LocalLLM("huggingface")
+
+            raise ValueError(f"Failed to initialize HuggingFace pipeline: {exc}") from exc
+
+        return HuggingFacePipelineChatWrapper(
+            pipeline_instance,
+            generation_kwargs,
+            stream_callback=stream_callback,
+            session_id=session_id,
+        )
+
     if not huggingface_api_key:
         if _allow_offline_fallback():
             logger.warning(
@@ -681,8 +868,6 @@ def create_chat_model(
             return LocalLLM("huggingface")
 
         raise ValueError("HuggingFace API key is required when using the HuggingFace provider")
-
-    config = huggingface_config or HuggingFaceConfig()
 
     endpoint_url = (config.endpoint_url or "").strip() or None
     default_endpoint = f"https://api-inference.huggingface.co/models/{model}".rstrip("/")
@@ -736,12 +921,28 @@ def create_chat_model(
 def huggingface_config_from_context(context: ManuscriptContext) -> HuggingFaceConfig:
     """Build HuggingFace configuration from runtime context."""
 
+    model_kwargs = getattr(context, "huggingface_model_kwargs", None)
+    if isinstance(model_kwargs, str):
+        try:
+            model_kwargs = json.loads(model_kwargs)
+        except json.JSONDecodeError:
+            model_kwargs = None
+    elif model_kwargs is not None and not isinstance(model_kwargs, dict):
+        # Last resort: attempt to coerce to dict for backwards compatibility
+        try:
+            model_kwargs = dict(model_kwargs)
+        except Exception:
+            model_kwargs = None
+
     return HuggingFaceConfig(
         endpoint_url=getattr(context, "huggingface_endpoint_url", None),
         max_new_tokens=getattr(context, "huggingface_max_new_tokens", 512),
         temperature=getattr(context, "huggingface_temperature", 0.7),
         timeout=getattr(context, "huggingface_timeout", None),
-        model_kwargs=getattr(context, "huggingface_model_kwargs", None),
+        model_kwargs=model_kwargs,
+        use_pipeline=bool(getattr(context, "huggingface_use_pipeline", False)),
+        pipeline_task=getattr(context, "huggingface_task", "text-generation"),
+        pipeline_device=getattr(context, "huggingface_device", None),
     )
 
 

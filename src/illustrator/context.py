@@ -1,10 +1,15 @@
 """Runtime context for the manuscript illustration workflow."""
 
+import json
+import logging
 from typing import Any, Dict
 
 from pydantic import BaseModel, Field
 
 from illustrator.models import ImageProvider, LLMProvider
+
+
+logger = logging.getLogger(__name__)
 
 
 class ManuscriptContext(BaseModel):
@@ -22,6 +27,10 @@ class ManuscriptContext(BaseModel):
     huggingface_task: str = Field(
         default="text-generation",
         description="HuggingFace pipeline task used for local inference",
+    )
+    huggingface_use_pipeline: bool = Field(
+        default=False,
+        description="Use HuggingFace pipelines instead of hosted endpoints for LLM interactions",
     )
     huggingface_device: str | int | None = Field(
         default=None,
@@ -190,6 +199,9 @@ def get_default_context() -> IllustratorContext:
         default_model = default_model.split("/", 1)[1]
 
     huggingface_task = os.getenv('HUGGINGFACE_PIPELINE_TASK', 'text-generation')
+    huggingface_use_pipeline = os.getenv('HUGGINGFACE_USE_PIPELINE', '').strip().lower() in {
+        '1', 'true', 'yes', 'on'
+    }
     huggingface_device: str | int | None
     device_env = os.getenv('HUGGINGFACE_DEVICE')
     if device_env is None:
@@ -207,6 +219,15 @@ def get_default_context() -> IllustratorContext:
         huggingface_temperature = float(hf_temp) if hf_temp is not None else 0.7
     except ValueError:
         huggingface_temperature = 0.7
+
+    huggingface_model_kwargs = None
+    hf_model_kwargs_env = os.getenv('HUGGINGFACE_MODEL_KWARGS')
+    if hf_model_kwargs_env:
+        try:
+            huggingface_model_kwargs = json.loads(hf_model_kwargs_env)
+        except json.JSONDecodeError as exc:
+            logger.warning("Invalid JSON in HUGGINGFACE_MODEL_KWARGS: %s", exc)
+            huggingface_model_kwargs = None
 
     hf_endpoint = hf_endpoint_env or None
     if not hf_endpoint and provider == LLMProvider.HUGGINGFACE:
@@ -242,9 +263,11 @@ def get_default_context() -> IllustratorContext:
         huggingface_api_key=os.getenv('HUGGINGFACE_API_KEY'),
         replicate_api_token=replicate_token,
         huggingface_task=huggingface_task,
+        huggingface_use_pipeline=huggingface_use_pipeline,
         huggingface_device=huggingface_device,
         huggingface_max_new_tokens=huggingface_max_new_tokens,
         huggingface_temperature=huggingface_temperature,
+        huggingface_model_kwargs=huggingface_model_kwargs,
         huggingface_endpoint_url=hf_endpoint,
         huggingface_timeout=huggingface_timeout,
         huggingface_flux_endpoint_url=hf_flux_endpoint,
