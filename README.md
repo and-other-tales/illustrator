@@ -195,7 +195,11 @@ illustrator_output/
 
 ## 🖥️ Flux Local Pipeline (Diffusers)
 
-![Sample Generation](./images/sample.png)
+## Samples
+
+![Sample Generation](./images/sample1.png)
+
+![Sample Generation](./images/sample2.png)
 
 The local pipeline mirrors Hugging Face's reference implementation and now installs `diffusers`, `accelerate`, `torch`, and `torchvision` via the project dependencies.
 
