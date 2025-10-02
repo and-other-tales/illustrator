@@ -2574,6 +2574,19 @@ class WebSocketIllustrationGenerator:
             }),
             self.session_id
         )
+        
+        # Check if processing has been cancelled before starting image generation
+        if hasattr(self, 'session_id') and self.session_id in connection_manager.sessions:
+            if connection_manager.sessions[self.session_id].cancel_requested:
+                await self.connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "warning",
+                        "message": "Image generation cancelled by user"
+                    }),
+                    self.session_id
+                )
+                return []
 
         for index, prompt in enumerate(prompts):
             prompt_obj: IllustrationPrompt
