@@ -245,6 +245,78 @@ class HuggingFaceConfig:
     pipeline_kwargs: dict[str, Any] | None = None
 
 
+class OpenAICompatibleChatWrapper:
+    """Wrapper for OpenAI-compatible HuggingFace endpoints."""
+
+    def __init__(
+        self,
+        client: Any,  # AsyncOpenAI client
+        model: str,
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        self._client = client
+        self._model = model
+        self._max_tokens = max_tokens
+        self._temperature = temperature
+        self._stream_callback = stream_callback
+        self._session_id = session_id
+
+    async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
+        """Generate a response using OpenAI-compatible API."""
+        import asyncio
+        import inspect
+        
+        # Convert LangChain messages to OpenAI format
+        openai_messages = []
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                openai_messages.append({"role": "system", "content": msg.content})
+            elif isinstance(msg, HumanMessage):
+                openai_messages.append({"role": "user", "content": msg.content})
+            elif isinstance(msg, AIMessage):
+                openai_messages.append({"role": "assistant", "content": msg.content})
+
+        try:
+            # Call the OpenAI-compatible endpoint
+            response = await self._client.chat.completions.create(
+                model=self._model,
+                messages=openai_messages,
+                max_tokens=self._max_tokens,
+                temperature=self._temperature,
+                stream=True
+            )
+
+            # Handle streaming response
+            content_parts = []
+            async for chunk in response:
+                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                    token = chunk.choices[0].delta.content
+                    content_parts.append(token)
+                    
+                    # Call stream callback if provided
+                    if self._stream_callback and token:
+                        try:
+                            result = self._stream_callback(token)
+                            if inspect.isawaitable(result):
+                                await result
+                        except Exception:
+                            logger.exception("Stream callback raised an exception")
+
+            final_content = "".join(content_parts)
+            return AIMessage(content=final_content)
+
+        except Exception as e:
+            logger.error(f"OpenAI-compatible endpoint error: {e}")
+            raise
+
+    def invoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
+        """Synchronous version - runs async method."""
+        return asyncio.run(self.ainvoke(messages))
+
+
 class HuggingFaceEndpointChatWrapper:
     """Async-friendly wrapper that mirrors LangChain chat behaviour for HF endpoints."""
 
@@ -1071,6 +1143,34 @@ def create_chat_model(
     if endpoint_url and endpoint_url.rstrip("/") == default_endpoint:
         # Treat the default HuggingFace inference endpoint as a standard model lookup
         endpoint_url = None
+
+    # Check if this is an OpenAI-compatible HuggingFace endpoint (has /v1 suffix)
+    is_openai_compatible = endpoint_url and endpoint_url.rstrip("/").endswith("/v1")
+    
+    if is_openai_compatible:
+        # Use OpenAI client for HuggingFace endpoints that follow OpenAI format
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            raise ValueError("openai package is required for OpenAI-compatible HuggingFace endpoints. Install with: pip install openai")
+        
+        # Create OpenAI client with HuggingFace endpoint
+        openai_client = AsyncOpenAI(
+            base_url=endpoint_url,
+            api_key=huggingface_api_key
+        )
+        
+        # Use "tgi" as model name for text generation inference endpoints
+        openai_model = "tgi"
+        
+        return OpenAICompatibleChatWrapper(
+            openai_client,
+            openai_model,
+            max_tokens=config.max_new_tokens,
+            temperature=config.temperature,
+            stream_callback=stream_callback,
+            session_id=session_id,
+        )
 
     client_kwargs: dict[str, Any] = {
         "token": huggingface_api_key,
