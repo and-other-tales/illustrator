@@ -244,7 +244,23 @@ def _ensure_indexes(db: Database) -> None:
 def create_tables() -> None:
     """Maintain backwards compatibility by ensuring Mongo indexes exist."""
 
-    _ensure_indexes(get_mongo_database())
+    try:
+        _ensure_indexes(get_mongo_database())
+    except Exception as e:
+        # If we can't connect to MongoDB and we're not in a test environment,
+        # log the error and continue, as some parts of the application can work without MongoDB
+        if not os.getenv("PYTEST_CURRENT_TEST"):
+            import logging
+            logging.getLogger(__name__).error(
+                f"Failed to create database tables: {e}. "
+                f"Some features requiring database access may not work correctly."
+            )
+            # If we're in development, provide a more helpful message about using mock mode
+            if os.getenv("FLASK_ENV") == "development" or os.getenv("FLASK_DEBUG") == "1":
+                print(f"\nWarning: Could not connect to MongoDB: {e}")
+                print("If you're developing locally and don't have MongoDB installed,")
+                print("you can set MONGO_USE_MOCK=true in your environment or .env file")
+                print("to use an in-memory MongoDB emulation.\n")
 
 
 def close_mongo_client() -> None:
