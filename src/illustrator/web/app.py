@@ -508,6 +508,9 @@ async def start_processing(
         llm_provider = os.getenv('LLM_PROVIDER', '').lower()
         llm_model = os.getenv('DEFAULT_LLM_MODEL', '').strip()
 
+        print(f"\n========== START_PROCESSING CALLED ==========")
+        print(f"start_processing: llm_provider from env = {llm_provider}")
+        print(f"start_processing: llm_model from env = {llm_model}")
         logger.info(f"start_processing: llm_provider from env = {llm_provider}")
         logger.info(f"start_processing: llm_model from env = {llm_model}")
 
@@ -957,7 +960,7 @@ async def run_processing_workflow(
 
             now = datetime.utcnow()
             manuscript_payload = {
-                "title": getattr(manuscript, "title", None) or manuscript.metadata.title,
+                "title": getattr(manuscript, "title", None) or getattr(manuscript.metadata, "title", "Untitled"),
                 "author": getattr(manuscript, "author", None) or getattr(manuscript.metadata, "author", None),
                 "genre": getattr(manuscript, "genre", None) or getattr(manuscript.metadata, "genre", None),
                 "total_chapters": len(chapters),
