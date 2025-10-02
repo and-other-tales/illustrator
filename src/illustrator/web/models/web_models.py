@@ -59,6 +59,9 @@ class StyleConfigRequest(BaseModel):
     replicate_model: Optional[str] = None
     huggingface_model_id: Optional[str] = None
     huggingface_provider: Optional[str] = None
+    llm_provider: Optional[str] = None  # LLM provider for text analysis (anthropic, huggingface, anthropic_vertex)
+    llm_model: Optional[str] = None  # LLM model name for text analysis
+    huggingface_endpoint_url: Optional[str] = None  # HuggingFace endpoint URL for LLM
 
 
 class StyleConfigSaveRequest(BaseModel):
