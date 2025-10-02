@@ -569,17 +569,28 @@ class FloatingStatusManager {
         if (!this.currentSessionId) return;
         
         try {
+            this.pauseBtn.disabled = true;
+            
             const response = await fetch(`/api/process/${this.currentSessionId}/pause`, {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
             });
             
-            if (response.ok) {
-                this.addLogEntry('warning', 'Session paused');
+            const result = await response.json();
+            
+            if (result.success || response.ok) {
+                this.addLogEntry('warning', 'Processing paused');
                 this.updateStatus('paused');
+            } else {
+                this.addLogEntry('error', result.detail || 'Failed to pause processing');
             }
         } catch (error) {
             console.error('Error pausing session:', error);
-            this.addLogEntry('error', 'Failed to pause session');
+            this.addLogEntry('error', 'Network error while pausing processing');
+        } finally {
+            this.pauseBtn.disabled = false;
         }
     }
     
@@ -587,17 +598,94 @@ class FloatingStatusManager {
         if (!this.currentSessionId) return;
         
         try {
+            this.resumeBtn.disabled = true;
+            
             const response = await fetch(`/api/process/${this.currentSessionId}/resume`, {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
             });
             
-            if (response.ok) {
-                this.addLogEntry('info', 'Session resumed');
+            const result = await response.json();
+            
+            if (result.success || response.ok) {
+                this.addLogEntry('info', 'Processing resumed');
                 this.updateStatus('processing');
+            } else {
+                this.addLogEntry('error', result.detail || 'Failed to resume processing');
             }
         } catch (error) {
             console.error('Error resuming session:', error);
-            this.addLogEntry('error', 'Failed to resume session');
+            this.addLogEntry('error', 'Network error while resuming processing');
+        } finally {
+            this.resumeBtn.disabled = false;
+        }
+    }
+    
+    async cancelSession() {
+        if (!this.currentSessionId) return;
+        
+        if (!confirm('Are you sure you want to cancel processing? This action cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            this.cancelBtn.disabled = true;
+            
+            const response = await fetch(`/api/process/${this.currentSessionId}/cancel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success || response.ok) {
+                this.addLogEntry('info', 'Processing cancelled');
+                this.updateStatus('completed');
+            } else {
+                this.addLogEntry('error', result.detail || 'Failed to cancel processing');
+            }
+        } catch (error) {
+            console.error('Error cancelling session:', error);
+            this.addLogEntry('error', 'Network error while cancelling processing');
+        } finally {
+            this.cancelBtn.disabled = false;
+        }
+    }
+    
+    async restartSession() {
+        if (!this.currentSessionId) return;
+        
+        if (!confirm('This will restart the processing from the beginning. Current progress will be lost. Are you sure?')) {
+            return;
+        }
+        
+        try {
+            this.restartBtn.disabled = true;
+            
+            const response = await fetch(`/api/process/${this.currentSessionId}/restart`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success || response.ok) {
+                this.addLogEntry('success', 'Processing restarted successfully');
+                this.updateStatus('processing');
+            } else {
+                this.addLogEntry('error', result.detail || 'Failed to restart processing');
+            }
+        } catch (error) {
+            console.error('Error restarting processing:', error);
+            this.addLogEntry('error', 'Network error while restarting processing');
+        } finally {
+            this.restartBtn.disabled = false;
         }
     }
     
