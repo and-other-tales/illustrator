@@ -139,6 +139,7 @@ class ManuscriptMetadata(BaseModel):
     """Metadata about the manuscript being processed."""
     title: str = Field(description="Manuscript title")
     author: str | None = Field(default=None, description="Author name")
+    description: str | None = Field(default=None, description="Manuscript description")
     genre: str | None = Field(default=None, description="Literary genre")
     total_chapters: int = Field(default=1, description="Total number of chapters")
     created_at: str = Field(default_factory=lambda: "2024-01-01T00:00:00Z", description="When processing started")
@@ -149,6 +150,7 @@ class OutputFormat(str, Enum):
     """Output format options."""
     PNG = "png"
     JPG = "jpg" 
+    JPEG = "jpeg"
     WEBP = "webp"
 
 
