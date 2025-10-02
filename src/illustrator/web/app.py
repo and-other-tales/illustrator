@@ -873,12 +873,9 @@ async def restart_processing(session_id: str, background_tasks: BackgroundTasks)
 
         session_data = connection_manager.sessions[session_id]
 
-        # Check if session is in a state that can be restarted
-        if session_data.status.status not in ["cancelled", "error", "completed"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot restart session in '{session_data.status.status}' state"
-            )
+        # Allow restarting from any state - users should be able to restart whenever they want
+        # Just log the current state for debugging
+        logger.info(f"Restarting session {session_id} from state: {session_data.status.status}")
 
         # Reset session state
         session_data.status.status = "started"
