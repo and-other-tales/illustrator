@@ -547,6 +547,7 @@ class IllustrationGenerator:
             huggingface_temperature=self.context.huggingface_temperature,
             huggingface_model_kwargs=self.context.huggingface_model_kwargs,
             huggingface_endpoint_url=self.context.huggingface_endpoint_url,
+            huggingface_flux_endpoint_url=getattr(self.context, 'huggingface_flux_endpoint_url', None),
             huggingface_timeout=self.context.huggingface_timeout,
             flux_dev_vertex_endpoint_url=getattr(self.context, 'flux_dev_vertex_endpoint_url', None),
         )
