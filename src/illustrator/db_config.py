@@ -122,7 +122,10 @@ def _initialise_mongo_client() -> MongoClient:
     client = MongoClient(
         MONGO_URL,
         appname="illustrator",
-        serverSelectionTimeoutMS=3000,
+        serverSelectionTimeoutMS=10000,  # Increased timeout to 10 seconds
+        retryWrites=True,
+        w="majority",  # Use majority write concern for Atlas
+        connectTimeoutMS=10000,
     )
 
     try:
