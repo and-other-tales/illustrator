@@ -873,6 +873,49 @@ async def restart_processing(session_id: str, background_tasks: BackgroundTasks)
             session_data.style_config
         )
 
+
+@app.post("/api/process/clear/{manuscript_id}")
+async def clear_manuscript_sessions(manuscript_id: str):
+    """Clear all sessions for a specific manuscript to force fresh processing."""
+    
+    cleared_sessions = []
+    
+    # Find and remove any existing sessions for this manuscript
+    for session_id, session_data in list(connection_manager.sessions.items()):
+        if session_data.manuscript_id == manuscript_id:
+            # Add to the list of cleared sessions
+            cleared_sessions.append({
+                "session_id": session_id,
+                "status": session_data.status.status if hasattr(session_data.status, "status") else "unknown"
+            })
+            
+            # Close any active websocket
+            if session_data.websocket:
+                try:
+                    await session_data.websocket.close()
+                except Exception:
+                    pass
+            
+            # Remove from connection manager
+            connection_manager.cleanup_session(session_id)
+    
+    # Try to clean up any database records (best effort)
+    try:
+        from illustrator.services.session_persistence import SessionPersistenceService
+        persistence = SessionPersistenceService()
+        # This would delete DB sessions based on manuscript ID, but we don't have a direct API
+        # So we'll log the intention instead
+        logger.info(f"Would delete database sessions for manuscript: {manuscript_id}")
+    except Exception as e:
+        logger.warning(f"Could not access session persistence service: {e}")
+    
+    return {
+        "success": True,
+        "manuscript_id": manuscript_id,
+        "cleared_sessions": cleared_sessions,
+        "message": f"Cleared {len(cleared_sessions)} sessions for manuscript {manuscript_id}"
+    }
+
         return {
             "success": True,
             "message": "Processing restarted successfully",
