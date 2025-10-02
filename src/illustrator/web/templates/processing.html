@@ -1161,13 +1161,41 @@ async function resumeProcessing() {
     }
 }
 
-function continueInBackground() {
+function restartProcessing() {
     // Show confirmation dialog
-    if (confirm('This will allow processing to continue in the background while you navigate to other pages. You can monitor progress via the floating status window. Continue?')) {
-        addLogMessage('info', 'Enabling background processing...');
-        enableBackgroundProcessing();
+    if (confirm('This will restart the processing from the beginning. Current progress will be lost. Are you sure?')) {
+        addLogMessage('info', 'Restarting processing...');
         
-        // Navigate to dashboard after a short delay
+        const restartBtn = document.getElementById('restartBtn');
+        restartBtn.disabled = true;
+        restartBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Restarting...';
+        
+        // Call the restart API endpoint
+        fetch(`/api/process/${currentSessionId}/restart`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                addLogMessage('success', 'Processing restarted successfully.');
+                restartBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Restart';
+                restartBtn.disabled = false;
+            } else {
+                addLogMessage('error', result.detail || 'Failed to restart processing.');
+                restartBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Restart';
+                restartBtn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error restarting processing:', error);
+            addLogMessage('error', 'Network error while restarting processing.');
+            restartBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Restart';
+            restartBtn.disabled = false;
+        });
+    }
         setTimeout(() => {
             window.location.href = '/';
         }, 1000);
