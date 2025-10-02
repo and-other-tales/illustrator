@@ -1159,8 +1159,8 @@ class StyleTranslator:
 
         # Base style with cinematic emphasis
         base_style = style_config.get('style_name', 'digital painting')
-        if base_style.lower() in vocabulary['artistic_styles']:
-            style_modifiers.append(vocabulary['artistic_styles'][base_style.lower()])
+        if (base_style or '').lower() in vocabulary['artistic_styles']:
+            style_modifiers.append(vocabulary['artistic_styles'][(base_style or '').lower()])
         else:
             base_modifiers = self._coerce_to_list(style_config.get('base_prompt_modifiers'))
             style_modifiers.extend(base_modifiers or [base_style])
