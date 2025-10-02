@@ -90,7 +90,7 @@ async def analyze_chapter(state: ManuscriptState, runtime: Runtime[ManuscriptCon
                 scene_awareness=True,
             )
 
-        # Generate literary analysis using Claude
+        # Generate literary analysis using the configured LLM (defaults to gpt-oss-120b)
         analysis_prompt = context.analysis_prompt.format(
             time=datetime.now().isoformat(),
             user_preferences=_format_user_preferences(context),

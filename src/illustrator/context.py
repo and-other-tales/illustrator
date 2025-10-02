@@ -23,7 +23,7 @@ class ManuscriptContext(BaseModel):
         default=LLMProvider.HUGGINGFACE,
         description="Language model provider for manuscript analysis",
     )
-    model: str = Field(default="anthropic/claude-3-5-sonnet-20241022", description="Primary analysis model")
+    model: str = Field(default="openai/gpt-oss-120b", description="Primary analysis model")
     huggingface_task: str = Field(
         default="text-generation",
         description="HuggingFace pipeline task used for local inference",
@@ -63,6 +63,30 @@ class ManuscriptContext(BaseModel):
     flux_dev_vertex_endpoint_url: str | None = Field(
         default=None,
         description="Google Vertex AI endpoint URL for Flux Dev model",
+    )
+    flux_use_pipeline: bool = Field(
+        default=False,
+        description="Run Flux locally using the diffusers pipeline instead of a remote endpoint",
+    )
+    flux_pipeline_model_id: str | None = Field(
+        default=None,
+        description="Flux pipeline model identifier (defaults to black-forest-labs/FLUX.1-dev)",
+    )
+    flux_pipeline_dtype: str | None = Field(
+        default=None,
+        description="Torch dtype for the Flux pipeline (e.g. float16, bfloat16, float32)",
+    )
+    flux_pipeline_variant: str | None = Field(
+        default=None,
+        description="Optional variant to load from HuggingFace when using the local Flux pipeline",
+    )
+    flux_pipeline_revision: str | None = Field(
+        default=None,
+        description="Optional revision to load from HuggingFace when using the local Flux pipeline",
+    )
+    flux_pipeline_device: str | None = Field(
+        default=None,
+        description="Target device for the Flux pipeline (e.g. cuda, cuda:0, cpu)",
     )
     huggingface_image_model: str | None = Field(
         default=None,
@@ -251,6 +275,15 @@ def get_default_context() -> IllustratorContext:
 
     replicate_token = os.getenv('REPLICATE_API_TOKEN')
 
+    flux_use_pipeline = os.getenv('FLUX_USE_PIPELINE', '').strip().lower() in {
+        '1', 'true', 'yes', 'on'
+    }
+    flux_pipeline_model_id = os.getenv('FLUX_PIPELINE_MODEL_ID')
+    flux_pipeline_dtype = os.getenv('FLUX_PIPELINE_DTYPE')
+    flux_pipeline_variant = os.getenv('FLUX_PIPELINE_VARIANT')
+    flux_pipeline_revision = os.getenv('FLUX_PIPELINE_REVISION')
+    flux_pipeline_device = os.getenv('FLUX_PIPELINE_DEVICE')
+
     return IllustratorContext(
         user_id="default_user",
         llm_provider=provider,
@@ -272,6 +305,12 @@ def get_default_context() -> IllustratorContext:
         huggingface_timeout=huggingface_timeout,
         huggingface_flux_endpoint_url=hf_flux_endpoint,
         flux_dev_vertex_endpoint_url=flux_dev_vertex_endpoint,
+        flux_use_pipeline=flux_use_pipeline,
+        flux_pipeline_model_id=flux_pipeline_model_id,
+        flux_pipeline_dtype=flux_pipeline_dtype,
+        flux_pipeline_variant=flux_pipeline_variant,
+        flux_pipeline_revision=flux_pipeline_revision,
+        flux_pipeline_device=flux_pipeline_device,
         huggingface_image_model=hf_image_model,
         huggingface_image_endpoint_url=hf_image_endpoint,
         huggingface_image_provider=hf_image_provider,

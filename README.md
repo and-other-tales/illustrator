@@ -8,9 +8,10 @@ A powerful LangGraph application that analyzes manuscript chapters using advance
 
 ## ✨ Features
 
-- **📖 Chapter-by-Chapter Analysis**: Process manuscripts one chapter at a time with detailed emotional and thematic analysis
-- **🧠 Emotional Resonance Engine**: Advanced NLP to identify the most emotionally impactful moments (defaults to 10 per chapter)
-- **🎨 Multi-Provider Support**: Generate illustrations using DALL-E 3, Vertex AI Imagen (Imagen 3), Flux 1.1 Pro, or Seedream 4 via Replicate
+- **🤖 GPT-OSS Native Analysis**: Ships with OpenAI's open-weight `gpt-oss-120b` (Harmony format) via HuggingFace for high-quality reasoning
+- **📖 Chapter-by-Chapter Analysis**: Process manuscripts one chapter at a time with detailed emotional and thematic breakdowns
+- **🧠 Emotional Resonance Engine**: Surface the most emotionally impactful moments (defaults to 10 per chapter)
+- **🎨 Multi-Provider Support**: Generate illustrations using DALL-E 3, Vertex AI Imagen (Imagen 3), Flux 1.1 Pro (remote endpoint or local diffusers pipeline), or Seedream 4 via Replicate
 - **🔄 Interactive CLI**: User-friendly command-line interface with CTRL+D input handling
 - **💾 Persistent Storage**: Save analysis results and generated images for future reference
 - **⚙️ Configurable Styles**: Customize artistic styles, color palettes, and creative influences
@@ -20,12 +21,14 @@ A powerful LangGraph application that analyzes manuscript chapters using advance
 ### Prerequisites
 
 - Python 3.11 or higher
-- API keys for your chosen image generation provider(s):
+- **LLM access**:
+  - HuggingFace API key (default `openai/gpt-oss-120b` reasoning model)
+  - Optional: Anthropic API key if you prefer Claude instead of gpt-oss
+- **Image generation providers** (pick the ones you plan to use):
   - **DALL-E**: OpenAI API key
   - **Imagen (Vertex AI)**: Google Cloud credentials and project ID, _or_ a Replicate API token
   - **Flux 1.1 Pro**: HuggingFace API key, _or_ a Replicate API token
   - **Seedream 4**: Replicate API token
-- **Claude API key** (Anthropic) for text analysis
 
 ### Installation
 
@@ -52,7 +55,12 @@ illustrator
 Create a `.env` file with the following variables:
 
 ```env
-# Required for Claude analysis
+# Default LLM: gpt-oss-120b on HuggingFace (Harmony format)
+HUGGINGFACE_API_KEY=your-huggingface-key
+DEFAULT_LLM_PROVIDER=huggingface
+DEFAULT_LLM_MODEL=openai/gpt-oss-120b
+
+# Optional Claude fallback
 ANTHROPIC_API_KEY=your-anthropic-key
 
 # For DALL-E (OpenAI)
@@ -63,8 +71,13 @@ GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 GOOGLE_PROJECT_ID=your-project-id
 
 # For Flux (HuggingFace)
-HUGGINGFACE_API_KEY=your-huggingface-key
 HUGGINGFACE_FLUX_ENDPOINT_URL=https://api.endpoints.huggingface.cloud/your-org/flux
+
+# Flux local pipeline (diffusers)
+#FLUX_USE_PIPELINE=true
+#FLUX_PIPELINE_MODEL_ID=black-forest-labs/FLUX.1-dev
+#FLUX_PIPELINE_DEVICE=cuda
+#FLUX_PIPELINE_DTYPE=bfloat16
 
 # For Replicate-hosted models (Flux, Imagen 4, Seedream 4)
 REPLICATE_API_TOKEN=your-replicate-token
@@ -74,6 +87,8 @@ DEFAULT_IMAGE_PROVIDER=dalle  # dalle, imagen4, flux, or seedream
 DEFAULT_ILLUSTRATION_STYLE=digital_painting
 ```
 
+> The app automatically renders prompts and parses responses using OpenAI's [Harmony format](https://github.com/openai/harmony) whenever a gpt-oss model is selected.
+
 ## 💡 How It Works
 
 ### 1. **Manuscript Input**
@@ -82,7 +97,7 @@ DEFAULT_ILLUSTRATION_STYLE=digital_painting
 - Support for large text blocks via copy/paste
 
 ### 2. **Emotional Analysis**
-- Claude analyzes text for emotional peaks and valleys
+- gpt-oss-120b (Harmony format) analyzes text for emotional peaks and valleys
 - Pattern matching for emotional intensity
 - Identification of up to 10 most resonant moments per chapter (scene-aware by default)
 
@@ -100,6 +115,19 @@ DEFAULT_ILLUSTRATION_STYLE=digital_painting
 - Generate actual illustrations using selected provider
 - Multiple style variations
 - High-quality output with metadata
+
+## 🖥️ Flux Local Pipeline (Diffusers)
+
+- Set `FLUX_USE_PIPELINE=true` in your environment (or `.env`) to route Flux jobs through a local [diffusers](https://github.com/huggingface/diffusers) pipeline instead of a remote HuggingFace endpoint.
+- Accept the [`FLUX.1 [dev]`](https://huggingface.co/black-forest-labs/FLUX.1-dev) license and run `huggingface-cli login` so the weights and README-gated metadata can be downloaded locally.
+- Install the Hugging Face reference stack exactly as shown in the model card: `pip install -U diffusers accelerate`.
+- The pipeline loader mirrors the documentation example, bootstrapping `FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", torch_dtype=torch.bfloat16)` and calling `enable_model_cpu_offload()` on CUDA devices to keep VRAM usage in check.
+- At runtime we default to the documented sampling settings—`guidance_scale=3.5`, `num_inference_steps=50`, `height=1024`, `width=1024`, and `max_sequence_length=512`—while still letting individual prompts override them through their `technical_params` payload.
+- Optional knobs:
+  - `FLUX_PIPELINE_DEVICE` (e.g. `cuda`, `cuda:0`, `mps`, `cpu`)
+  - `FLUX_PIPELINE_DTYPE` (`bfloat16`, `float16`, `float32`, or `auto`)
+  - `FLUX_PIPELINE_VARIANT` / `FLUX_PIPELINE_REVISION` to pin a specific bundle from the model card
+- The app falls back to remote HuggingFace or Replicate endpoints automatically if the pipeline is disabled or cannot be initialised.
 
 ## 🎨 Supported Image Providers
 
@@ -238,7 +266,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## 🙏 Acknowledgments
 
 - Built with [LangGraph](https://langchain-ai.github.io/langgraph/) by LangChain
-- Powered by [Claude](https://anthropic.com) for literary analysis
+- Powered by `gpt-oss-120b` (Harmony) for literary analysis, with optional Claude fallback
 - Supports [DALL-E](https://openai.com/dall-e-3), [Imagen](https://cloud.google.com/vertex-ai), [Flux 1.1 Pro](https://replicate.com/black-forest-labs/flux-1.1-pro), and [Seedream 4](https://replicate.com/bytedance/seedream-4)
 
 ---

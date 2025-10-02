@@ -70,6 +70,16 @@ import json
 
 logger = logging.getLogger(__name__)
 
+_HARMONY_VISIBLE_CHANNELS: set[str] = {
+    "assistant",
+    "final",
+    "default",
+    "response",
+    "completion",
+    "message",
+    "",
+}
+
 if TYPE_CHECKING:  # pragma: no cover - typing helpers
     from illustrator.context import ManuscriptContext
 
@@ -101,6 +111,119 @@ def _coerce_ai_message_instance(message: Any) -> Any:
                 return message
         return message
     return message
+
+
+def _coerce_message_content(content: Any) -> str:
+    """Convert LangChain message content (which may be structured) into text."""
+
+    if content is None:
+        return ""
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if item is None:
+                continue
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("content") or item.get("generated_text")
+                if text:
+                    parts.append(str(text))
+            else:
+                try:
+                    parts.append(str(item))
+                except Exception:
+                    continue
+        return "\n".join(part for part in parts if part)
+
+    try:
+        return str(content)
+    except Exception:
+        return ""
+
+
+def _render_harmony_prompt(messages: Sequence[BaseMessage]) -> str:
+    """Render chat messages into the harmony text format used by gpt-oss."""
+
+    segments: list[str] = []
+
+    for message in messages:
+        if _is_system_message(message):
+            role = "system"
+        elif getattr(message, "role", "") == "developer":
+            role = "developer"
+        elif _is_human_message(message):
+            role = "user"
+        elif _is_ai_message(message):
+            role = "assistant"
+        else:
+            role = str(getattr(message, "role", "assistant") or "assistant")
+
+        content = _coerce_message_content(getattr(message, "content", ""))
+        segment = f"<|start|>{role}<|message|>{content}<|end|>"
+        segments.append(segment)
+
+    segments.append("<|start|>assistant")
+    return "\n\n".join(seg.rstrip() for seg in segments)
+
+
+def _extract_text_from_content(content: Any, allowed_channels: set[str] | None = None) -> str:
+    """Extract textual content from structured chat completions."""
+
+    if content is None:
+        return ""
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, dict):
+        channel_value = content.get("channel") or content.get("role") or content.get("name")
+        if allowed_channels is not None and channel_value is not None:
+            normalized_allowed = {str(c).lower() for c in allowed_channels}
+            if normalized_allowed and str(channel_value).lower() not in normalized_allowed:
+                return ""
+
+        for key in ("text", "content", "generated_text", "value"):
+            value = content.get(key)
+            if value:
+                extracted = _extract_text_from_content(value, allowed_channels)
+                if extracted:
+                    return extracted
+
+        # Nested structures like {'delta': {...}}
+        for key in ("delta", "message"):
+            value = content.get(key)
+            if value:
+                extracted = _extract_text_from_content(value, allowed_channels)
+                if extracted:
+                    return extracted
+
+        # Lists stored under other keys
+        for key in ("messages", "choices", "tokens"):
+            value = content.get(key)
+            if value:
+                extracted = _extract_text_from_content(value, allowed_channels)
+                if extracted:
+                    return extracted
+
+        return ""
+
+    if isinstance(content, Iterable) and not isinstance(content, (str, bytes)):
+        parts: list[str] = []
+        for item in content:
+            extracted = _extract_text_from_content(item, allowed_channels)
+            if extracted:
+                parts.append(extracted)
+        return "".join(parts)
+
+    try:
+        return str(content)
+    except Exception:
+        return ""
 
 
 @dataclass(slots=True)
@@ -163,7 +286,7 @@ class HuggingFaceEndpointChatWrapper:
     async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
         """Generate a response asynchronously using the configured endpoint."""
 
-        prompt = _messages_to_prompt(messages)
+        prompt = _messages_to_prompt(messages, harmony=self._is_harmony)
         chat_payload = _messages_to_chat_messages(messages)
         use_stream = bool(self._generation_kwargs.get("stream"))
         loop = asyncio.get_running_loop()
@@ -188,16 +311,15 @@ class HuggingFaceEndpointChatWrapper:
 
             token = getattr(chunk, "token", None)
             if token is not None:
-                text = getattr(token, "text", None)
-                if text:
-                    return str(text)
+                extracted = _extract_text_from_content(token)
+                if extracted:
+                    return extracted
 
             if isinstance(chunk, dict):
                 token_dict = chunk.get("token")
-                if isinstance(token_dict, dict):
-                    text = token_dict.get("text")
-                    if text:
-                        return str(text)
+                extracted = _extract_text_from_content(token_dict)
+                if extracted:
+                    return extracted
 
             return ""
 
@@ -206,13 +328,15 @@ class HuggingFaceEndpointChatWrapper:
                 return ""
 
             generated_text = getattr(chunk, "generated_text", None)
-            if generated_text:
-                return str(generated_text)
+            extracted = _extract_text_from_content(generated_text)
+            if extracted:
+                return extracted
 
             if isinstance(chunk, dict):
                 text = chunk.get("generated_text")
-                if text:
-                    return str(text)
+                extracted = _extract_text_from_content(text)
+                if extracted:
+                    return extracted
 
             return ""
 
@@ -222,30 +346,22 @@ class HuggingFaceEndpointChatWrapper:
             if chunk is None:
                 return ""
 
-            # Harmony streaming chunks may be dicts with a 'harmony' key containing
-            # a nested delta/token structure. Be defensive about shapes.
             try:
-                if isinstance(chunk, dict) and "harmony" in chunk:
-                    h = chunk.get("harmony")
-                    if isinstance(h, dict):
-                        # common shapes: {'harmony': {'delta': {'content': '...'}}}
-                        delta = h.get("delta") or h.get("token") or {}
-                        if isinstance(delta, dict):
-                            text = delta.get("content") or delta.get("text")
-                            if text:
-                                return str(text)
-                        # other shape: {'harmony': {'tokens': [{'text': '...'}]}}
-                        tokens = h.get("tokens")
-                        if isinstance(tokens, list) and tokens:
-                            first = tokens[0]
-                            if isinstance(first, dict):
-                                return str(first.get("text", ""))
-                    if isinstance(h, str):
-                        return h
+                if isinstance(chunk, dict):
+                    harmony_payload = chunk.get("harmony")
+                    if harmony_payload is not None:
+                        for candidate_key in ("delta", "token", "tokens"):
+                            if candidate_key in harmony_payload:
+                                extracted = _extract_text_from_content(
+                                    harmony_payload[candidate_key],
+                                    _HARMONY_VISIBLE_CHANNELS,
+                                )
+                                if extracted:
+                                    return extracted
+
+                return ""
             except Exception:
                 return ""
-
-            return ""
 
 
         def _extract_harmony_full_text(chunk: Any) -> str:
@@ -255,24 +371,29 @@ class HuggingFaceEndpointChatWrapper:
 
             try:
                 if isinstance(chunk, dict) and "harmony" in chunk:
-                    h = chunk.get("harmony")
-                    if isinstance(h, dict):
-                        # try several common keys
-                        text = h.get("generated_text") or h.get("text")
-                        if text:
-                            return str(text)
-                        # nested message list
-                        messages = h.get("messages") or h.get("content")
-                        if isinstance(messages, list):
-                            parts = []
-                            for m in messages:
-                                if isinstance(m, dict):
-                                    parts.append(str(m.get("content", "")))
-                                else:
-                                    parts.append(str(m))
-                            return "".join(parts).strip()
-                        if isinstance(h, str):
-                            return h
+                    harmony_payload = chunk.get("harmony")
+                    if isinstance(harmony_payload, dict):
+                        for candidate_key in (
+                            "generated_text",
+                            "text",
+                            "messages",
+                            "content",
+                        ):
+                            if candidate_key in harmony_payload:
+                                extracted = _extract_text_from_content(
+                                    harmony_payload[candidate_key],
+                                    _HARMONY_VISIBLE_CHANNELS,
+                                )
+                                if extracted:
+                                    return extracted.strip()
+
+                        extracted = _extract_text_from_content(
+                            harmony_payload,
+                            _HARMONY_VISIBLE_CHANNELS,
+                        )
+                        if extracted:
+                            return extracted.strip()
+
                 # fallback to usual generated_text
                 return _extract_full_text(chunk)
             except Exception:
@@ -311,7 +432,10 @@ class HuggingFaceEndpointChatWrapper:
                             **chat_kwargs,
                         )
 
-                        generated_text = _extract_chat_completion_text(completion)
+                        generated_text = _extract_chat_completion_text(
+                            completion,
+                            is_harmony=self._is_harmony,
+                        )
 
                     if generated_text:
                         return _coerce_ai_message_instance(AIMessage(content=generated_text.strip()))
@@ -350,7 +474,10 @@ class HuggingFaceEndpointChatWrapper:
                                     **chat_kwargs,
                                 )
 
-                                generated_text = _extract_chat_completion_text(completion)
+                                generated_text = _extract_chat_completion_text(
+                                    completion,
+                                    is_harmony=self._is_harmony,
+                                )
 
                             if generated_text:
                                 return _coerce_ai_message_instance(AIMessage(content=generated_text.strip()))
@@ -466,11 +593,13 @@ class HuggingFacePipelineChatWrapper:
         *,
         stream_callback: Callable[[str], Awaitable[None] | None] | Callable[[str], None] | None = None,
         session_id: str | None = None,
+        is_harmony: bool = False,
     ) -> None:
         self._pipeline = pipe
         self._call_kwargs = call_kwargs
         self._stream_callback = stream_callback
         self._session_id = session_id
+        self._is_harmony = is_harmony
 
     def _extract_text(self, output: Any) -> str:
         if output is None:
@@ -512,7 +641,7 @@ class HuggingFacePipelineChatWrapper:
         return result if inspect.isawaitable(result) else None
 
     def invoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
-        prompt = _messages_to_prompt(messages)
+        prompt = _messages_to_prompt(messages, harmony=self._is_harmony)
         output = self._pipeline(prompt, **self._call_kwargs)
         text = self._extract_text(output).strip()
 
@@ -527,7 +656,7 @@ class HuggingFacePipelineChatWrapper:
         return _coerce_ai_message_instance(AIMessage(content=text))
 
     async def ainvoke(self, messages: Sequence[BaseMessage]) -> AIMessage:
-        prompt = _messages_to_prompt(messages)
+        prompt = _messages_to_prompt(messages, harmony=self._is_harmony)
 
         def _run_pipeline() -> str:
             output = self._pipeline(prompt, **self._call_kwargs)
@@ -608,8 +737,15 @@ def _partition_pipeline_kwargs(
     return init_kwargs, generation_kwargs
 
 
-def _messages_to_prompt(messages: Sequence[BaseMessage]) -> str:
+def _messages_to_prompt(
+    messages: Sequence[BaseMessage],
+    *,
+    harmony: bool = False,
+) -> str:
     """Convert chat messages to a single prompt string suitable for text-generation models."""
+
+    if harmony:
+        return _render_harmony_prompt(messages)
 
     lines: list[str] = []
     for message in messages:
@@ -619,7 +755,8 @@ def _messages_to_prompt(messages: Sequence[BaseMessage]) -> str:
             prefix = "User"
         else:
             prefix = "Assistant"
-        lines.append(f"{prefix}: {message.content}".strip())
+        normalized_content = _coerce_message_content(getattr(message, "content", ""))
+        lines.append(f"{prefix}: {normalized_content}".strip())
 
     # Encourage the model to respond in the assistant role
     lines.append("Assistant:")
@@ -668,12 +805,14 @@ def _extract_chat_chunk(chunk: Any) -> str:
             content = delta.get("content")
 
         if content:
-            collected.append(str(content))
+            extracted = _extract_text_from_content(content)
+            if extracted:
+                collected.append(extracted)
 
     return "".join(collected)
 
 
-def _extract_chat_completion_text(completion: Any) -> str:
+def _extract_chat_completion_text(completion: Any, *, is_harmony: bool = False) -> str:
     """Extract full text from a HuggingFace chat-completion response."""
 
     if completion is None:
@@ -696,7 +835,9 @@ def _extract_chat_completion_text(completion: Any) -> str:
     else:
         content = getattr(message, "content", None)
 
-    return str(content or "")
+    allowed_channels = _HARMONY_VISIBLE_CHANNELS if is_harmony else None
+    extracted = _extract_text_from_content(content, allowed_channels)
+    return extracted.strip() if extracted else ""
 
 
 class AnthropicVertexWrapper:
@@ -853,11 +994,21 @@ def create_chat_model(
 
             raise ValueError(f"Failed to initialize HuggingFace pipeline: {exc}") from exc
 
+        is_harmony_model = False
+        try:
+            model_identifier = (pipeline_model or "") if pipeline_model is not None else ""
+            is_harmony_model = "gpt-oss" in model_identifier.lower() or bool(
+                (config.model_kwargs or {}).get("harmony_format")
+            )
+        except Exception:
+            is_harmony_model = False
+
         return HuggingFacePipelineChatWrapper(
             pipeline_instance,
             generation_kwargs,
             stream_callback=stream_callback,
             session_id=session_id,
+            is_harmony=is_harmony_model,
         )
 
     if not huggingface_api_key:

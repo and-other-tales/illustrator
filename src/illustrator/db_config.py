@@ -2,6 +2,7 @@
 
 import os
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool, StaticPool
 
@@ -50,23 +51,37 @@ def _build_engine_kwargs(url: str) -> dict:
 # Engine keyword arguments shared across creation paths
 engine_kwargs = _build_engine_kwargs(effective_url)
 
-# Create engine
-try:
-    engine = create_engine(
-        effective_url,
-        **engine_kwargs,
-    )
-except ModuleNotFoundError as e:
-    # If the PostgreSQL driver is missing in environments that default to Postgres,
-    # fall back to in-memory SQLite to allow local/test execution.
-    if "psycopg2" in str(e):
-        fallback_url = "sqlite:///:memory:"
-        engine = create_engine(
-            fallback_url,
-            **_build_engine_kwargs(fallback_url),
-        )
-    else:
+
+def _initialise_engine(url: str, kwargs: dict) -> tuple[str, "Engine"]:
+    """Create a SQLAlchemy engine with graceful fallbacks for tests."""
+
+    try:
+        candidate_engine = create_engine(url, **kwargs)
+    except ModuleNotFoundError as exc:
+        if "psycopg2" in str(exc):
+            fallback_url = "sqlite:///:memory:"
+            return fallback_url, create_engine(
+                fallback_url,
+                **_build_engine_kwargs(fallback_url),
+            )
         raise
+
+    if url.startswith("postgresql") and os.getenv("PYTEST_CURRENT_TEST"):
+        try:
+            with candidate_engine.connect():
+                pass
+        except OperationalError:
+            candidate_engine.dispose()
+            fallback_url = "sqlite:///:memory:"
+            return fallback_url, create_engine(
+                fallback_url,
+                **_build_engine_kwargs(fallback_url),
+            )
+
+    return url, candidate_engine
+
+
+effective_url, engine = _initialise_engine(effective_url, engine_kwargs)
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

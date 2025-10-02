@@ -271,7 +271,7 @@ class TestHuggingFaceEndpointChatWrapper:
     async def test_ainvoke_chunked_encoding_error_handling(self):
         """Test ainvoke handling of ChunkedEncodingError."""
         from requests.exceptions import ChunkedEncodingError
-        
+
         mock_client = Mock()
         
         # Mock ChunkedEncodingError on chat_completion, should fall back to text_generation
@@ -287,10 +287,65 @@ class TestHuggingFaceEndpointChatWrapper:
         messages = [HumanMessage(content="Test")]
         
         result = await wrapper.ainvoke(messages)
-        
+
         # Should fall back to text_generation and return result
         assert isinstance(result, AIMessage)
         assert result.content == "Fallback response"
+
+    @pytest.mark.asyncio
+    async def test_ainvoke_harmony_streaming_filters_analysis(self):
+        """Harmony streaming responses should ignore analysis channel content."""
+        mock_client = Mock()
+        mock_client.chat_completion.return_value = [
+            {"harmony": {"delta": {"channel": "analysis", "text": "Reasoning..."}}},
+            {"harmony": {"delta": {"channel": "final", "text": "Hello"}}},
+            {"harmony": {"delta": {"channel": "final", "text": " world"}}},
+            {
+                "harmony": {
+                    "messages": [
+                        {"channel": "analysis", "content": "Full analysis"},
+                        {"channel": "final", "content": "Hello world"},
+                    ]
+                }
+            },
+        ]
+
+        wrapper = HuggingFaceEndpointChatWrapper(
+            client=mock_client,
+            generation_kwargs={"temperature": 0.7, "stream": True, "harmony_format": True},
+        )
+
+        result = await wrapper.ainvoke([HumanMessage(content="Hi")])
+
+        assert isinstance(result, AIMessage)
+        assert result.content == "Hello world"
+
+    @pytest.mark.asyncio
+    async def test_ainvoke_harmony_non_streaming_filters_analysis(self):
+        """Non-streaming harmony responses should only return final channel text."""
+        mock_client = Mock()
+        mock_client.chat_completion.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": [
+                            {"type": "output_text", "channel": "analysis", "text": "Reasoning"},
+                            {"type": "output_text", "channel": "final", "text": "Hello world"},
+                        ]
+                    }
+                }
+            ]
+        }
+
+        wrapper = HuggingFaceEndpointChatWrapper(
+            client=mock_client,
+            generation_kwargs={"temperature": 0.7, "stream": False, "harmony_format": True},
+        )
+
+        result = await wrapper.ainvoke([HumanMessage(content="Hi")])
+
+        assert isinstance(result, AIMessage)
+        assert result.content == "Hello world"
 
 
 class TestMessageConversion:
@@ -319,16 +374,29 @@ class TestMessageConversion:
             HumanMessage(content="Hello!"),
             AIMessage(content="Hi!")
         ]
-        
+
         chat_messages = _messages_to_chat_messages(messages)
-        
+
         expected = [
             {"role": "system", "content": "You are helpful."},
             {"role": "user", "content": "Hello!"},
             {"role": "assistant", "content": "Hi!"}
         ]
-        
+
         assert chat_messages == expected
+
+    def test_messages_to_prompt_harmony(self):
+        """Harmony prompts should render using the expected token markers."""
+        messages = [
+            SystemMessage(content="You are a helpful assistant."),
+            HumanMessage(content="Hello!"),
+        ]
+
+        prompt = _messages_to_prompt(messages, harmony=True)
+
+        assert "<|start|>system<|message|>You are a helpful assistant." in prompt
+        assert "<|start|>user<|message|>Hello!" in prompt
+        assert prompt.strip().endswith("<|start|>assistant")
 
 
 class TestProviderNormalization:
@@ -397,7 +465,7 @@ class TestCreateChatModel:
                 max_new_tokens=512,
                 temperature=0.7
             )
-            
+
             result = create_chat_model(
                 provider=LLMProvider.HUGGINGFACE,
                 model="test-model",
@@ -410,6 +478,31 @@ class TestCreateChatModel:
             assert result is mock_wrapper
             mock_client_class.assert_called_once()
             mock_wrapper_class.assert_called_once()
+
+    def test_create_huggingface_model_sets_harmony_flag(self):
+        """GPT-OSS models should automatically enable harmony parsing."""
+        with patch('illustrator.llm_factory.InferenceClient') as mock_client_class, \
+             patch('illustrator.llm_factory.HuggingFaceEndpointChatWrapper') as mock_wrapper_class:
+
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+            mock_wrapper = Mock()
+            mock_wrapper_class.return_value = mock_wrapper
+
+            result = create_chat_model(
+                provider=LLMProvider.HUGGINGFACE,
+                model="openai/gpt-oss-120b",
+                anthropic_api_key=None,
+                huggingface_api_key="hf_token",
+                huggingface_config=HuggingFaceConfig(),
+            )
+
+            assert result is mock_wrapper
+
+            args, kwargs = mock_wrapper_class.call_args
+            generation_kwargs = args[1]
+            assert generation_kwargs.get("harmony_format") is True
+            assert generation_kwargs.get("model") == "openai/gpt-oss-120b"
 
 
 class TestContextHelpers:

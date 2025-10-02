@@ -612,6 +612,12 @@ class FluxProvider(ImageGenerationProvider):
 
         sanitized_params = self._sanitize_parameters(prompt.technical_params)
 
+        sanitized_params.setdefault('guidance_scale', 3.5)
+        sanitized_params.setdefault('num_inference_steps', 50)
+        sanitized_params.setdefault('max_sequence_length', 512)
+        sanitized_params.setdefault('height', 1024)
+        sanitized_params.setdefault('width', 1024)
+
         truncated_prompt, prompt_truncated = self._truncate_text(prompt.prompt)
         truncated_negative, negative_truncated = self._truncate_text(prompt.negative_prompt)
 
@@ -670,12 +676,272 @@ class FluxProvider(ImageGenerationProvider):
                     except Exception:
                         error_message = f"HTTP {response.status}: {await response.text()}"
 
-                    return {
-                        'success': False,
-                        'error': error_message,
-                        'status_code': response.status
-                    }
+        return {
+            'success': False,
+            'error': error_message,
+            'status_code': response.status
+        }
 
+
+class FluxLocalPipelineProvider(ImageGenerationProvider):
+    """Local Flux pipeline provider backed by diffusers."""
+
+    def __init__(
+        self,
+        *,
+        prompt_engineer: PromptEngineer | None = None,
+        llm_provider: LLMProvider | str | None = None,
+        llm_model: str | None = None,
+        anthropic_api_key: str | None = None,
+        huggingface_api_key: str | None = None,
+        huggingface_config: HuggingFaceConfig | None = None,
+        gcp_project_id: str | None = None,
+        pipeline_model_id: str | None = None,
+        pipeline_dtype: str | None = None,
+        pipeline_variant: str | None = None,
+        pipeline_revision: str | None = None,
+        pipeline_device: str | None = None,
+    ) -> None:
+        """Initialise the local Flux pipeline."""
+
+        super().__init__(
+            prompt_engineer=prompt_engineer,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            anthropic_api_key=anthropic_api_key,
+            huggingface_api_key=huggingface_api_key,
+            huggingface_config=huggingface_config,
+            gcp_project_id=gcp_project_id,
+        )
+
+        self._huggingface_api_key = huggingface_api_key
+        self.model_id = pipeline_model_id or "black-forest-labs/FLUX.1-dev"
+        self.pipeline_dtype = (pipeline_dtype or "auto").strip()
+        self.pipeline_variant = pipeline_variant
+        self.pipeline_revision = pipeline_revision
+        self.pipeline_device = pipeline_device
+
+        self._pipeline = None
+        self._pipeline_device_runtime: str | None = None
+        self._pipeline_call_params: set[str] | None = None
+        self._pipeline_lock = asyncio.Lock()
+
+    def get_provider_type(self) -> ImageProvider:
+        return ImageProvider.FLUX
+
+    def _resolve_device(self) -> str:
+        import torch
+
+        if self.pipeline_device:
+            return self.pipeline_device
+        if torch.cuda.is_available():
+            return "cuda"
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():  # type: ignore[attr-defined]
+            return "mps"
+        return "cpu"
+
+    def _resolve_dtype(self, device: str):
+        import torch
+
+        dtype_name = self.pipeline_dtype.lower()
+        if dtype_name in {"", "auto"}:
+            if device.startswith("cuda"):
+                if hasattr(torch, "bfloat16"):
+                    return torch.bfloat16
+                if hasattr(torch, "float16"):
+                    return torch.float16
+                return torch.float32
+            if device == "mps":
+                return getattr(torch, "float16", torch.float32)
+            return torch.float32
+
+        if not hasattr(torch, dtype_name):
+            raise ValueError(f"Unsupported Flux pipeline dtype: {self.pipeline_dtype}")
+
+        dtype = getattr(torch, dtype_name)
+        if dtype in {getattr(torch, "float16", None), getattr(torch, "bfloat16", None)} and device == "cpu":
+            logger.warning(
+                "Flux pipeline dtype %s is not supported on CPU; falling back to float32",
+                dtype_name,
+            )
+            return torch.float32
+
+        return dtype
+
+    def _load_pipeline(self):
+        try:
+            from diffusers import FluxPipeline
+        except ImportError as exc:  # pragma: no cover - requires optional dependency
+            raise ValueError(
+                "diffusers is required to run the Flux pipeline locally. "
+                "Install with `pip install diffusers`."
+            ) from exc
+
+        import torch
+        import inspect
+
+        device = self._resolve_device()
+        dtype = self._resolve_dtype(device)
+
+        load_kwargs: dict[str, object] = {"torch_dtype": dtype}
+        if self.pipeline_variant:
+            load_kwargs["variant"] = self.pipeline_variant
+        if self.pipeline_revision:
+            load_kwargs["revision"] = self.pipeline_revision
+        if self._huggingface_api_key:
+            load_kwargs["token"] = self._huggingface_api_key
+
+        pipeline = FluxPipeline.from_pretrained(
+            self.model_id,
+            **load_kwargs,
+        )
+
+        if device.startswith("cuda"):
+            try:
+                # Mirrors the official FLUX.1 [dev] diffusers example for lower VRAM usage.
+                pipeline.enable_model_cpu_offload()
+            except Exception as exc:  # pragma: no cover - accelerate availability varies
+                logger.warning(
+                    "Falling back to moving Flux pipeline to %s; enable_model_cpu_offload failed: %s",
+                    device,
+                    exc,
+                )
+                pipeline.to(device)
+        else:
+            pipeline.to(device)
+
+        try:
+            pipeline.set_progress_bar_config(disable=True)
+        except Exception:  # pragma: no cover - best effort cosmetic
+            pass
+
+        call_signature = inspect.signature(pipeline.__call__)
+        self._pipeline_call_params = {
+            name
+            for name in call_signature.parameters
+            if name not in {"self"}
+        }
+
+        return pipeline, device
+
+    async def _ensure_pipeline(self):
+        if self._pipeline is not None:
+            return self._pipeline, self._pipeline_device_runtime
+
+        async with self._pipeline_lock:
+            if self._pipeline is not None:
+                return self._pipeline, self._pipeline_device_runtime
+
+            def _load():
+                return self._load_pipeline()
+
+            pipeline, device = await asyncio.to_thread(_load)
+            self._pipeline = pipeline
+            self._pipeline_device_runtime = device
+            return pipeline, device
+
+    @staticmethod
+    def _create_generator(device: str, seed: int | None):
+        if seed is None:
+            return None
+
+        import torch
+
+        generator_device = "cpu"
+        if device and not device.startswith("cuda") and device != "mps":
+            generator_device = device
+
+        generator = torch.Generator(device=generator_device)
+        generator.manual_seed(int(seed))
+        return generator
+
+    @resilient_async(
+        max_attempts=3,
+        fallback_functions={'simplified_processing': _async_generation_failure('flux_pipeline')}
+    )
+    async def generate_image(
+        self,
+        prompt: IllustrationPrompt,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Generate an image using a local Flux diffusers pipeline."""
+
+        sanitized_params = FluxProvider._sanitize_parameters(prompt.technical_params)
+
+        truncated_prompt, prompt_truncated = FluxProvider._truncate_text(prompt.prompt)
+        truncated_negative, negative_truncated = FluxProvider._truncate_text(prompt.negative_prompt)
+
+        pipeline, device = await self._ensure_pipeline()
+
+        seed = sanitized_params.get('seed')
+        generator = self._create_generator(device or "cpu", seed)
+
+        def _run_pipeline():
+            import io
+            import base64
+
+            parameter_names = self._pipeline_call_params or set()
+
+            guidance_scale = sanitized_params.get('guidance_scale', 3.5)
+            num_inference_steps = sanitized_params.get('num_inference_steps', 50)
+            height = sanitized_params.get('height', 1024)
+            width = sanitized_params.get('width', 1024)
+
+            call_kwargs: dict[str, Any] = {}
+            ignored_keys: set[str] = set()
+            for key, value in sanitized_params.items():
+                if key in {'guidance_scale', 'num_inference_steps', 'height', 'width', 'seed'}:
+                    continue
+                if key in parameter_names:
+                    call_kwargs[key] = value
+                else:
+                    ignored_keys.add(key)
+
+            if 'max_sequence_length' in parameter_names and 'max_sequence_length' not in call_kwargs:
+                call_kwargs['max_sequence_length'] = 512
+
+            if ignored_keys:
+                logger.debug(
+                    "Ignoring unsupported Flux pipeline parameters: %s",
+                    ", ".join(sorted(ignored_keys)),
+                )
+
+            result = pipeline(
+                prompt=truncated_prompt or "",
+                negative_prompt=truncated_negative,
+                num_inference_steps=num_inference_steps,
+                guidance_scale=guidance_scale,
+                height=height,
+                width=width,
+                generator=generator,
+                **call_kwargs,
+            )
+
+            images = getattr(result, 'images', None)
+            if not images:
+                raise ValueError("Flux pipeline returned no images")
+
+            image = images[0]
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            return base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+        image_b64 = await asyncio.to_thread(_run_pipeline)
+
+        return {
+            'success': True,
+            'image_data': image_b64,
+            'format': 'base64',
+            'metadata': {
+                'provider': 'flux_local_pipeline',
+                'model': self.model_id,
+                'prompt': truncated_prompt,
+                'prompt_truncated': prompt_truncated,
+                'negative_prompt': truncated_negative,
+                'negative_prompt_truncated': negative_truncated,
+                'parameters': sanitized_params,
+            }
+        }
 
 class FluxDevVertexProvider(ImageGenerationProvider):
     """Google Vertex AI Flux Dev model provider."""
@@ -1690,6 +1956,18 @@ class ProviderFactory:
             )
 
         elif provider_type == ImageProvider.FLUX:
+            flux_use_pipeline = _coerce_bool(credentials.get('flux_use_pipeline'))
+
+            if flux_use_pipeline:
+                return FluxLocalPipelineProvider(
+                    pipeline_model_id=credentials.get('flux_pipeline_model_id') or credentials.get('huggingface_image_model'),
+                    pipeline_dtype=credentials.get('flux_pipeline_dtype'),
+                    pipeline_variant=credentials.get('flux_pipeline_variant'),
+                    pipeline_revision=credentials.get('flux_pipeline_revision'),
+                    pipeline_device=credentials.get('flux_pipeline_device'),
+                    **common_llm_kwargs,
+                )
+
             if replicate_token:
                 try:
                     return ReplicateFluxProvider(
@@ -1708,6 +1986,15 @@ class ProviderFactory:
 
             api_key = credentials.get('huggingface_api_key')
             if not api_key:
+                if flux_use_pipeline:
+                    return FluxLocalPipelineProvider(
+                        pipeline_model_id=credentials.get('flux_pipeline_model_id') or credentials.get('huggingface_image_model'),
+                        pipeline_dtype=credentials.get('flux_pipeline_dtype'),
+                        pipeline_variant=credentials.get('flux_pipeline_variant'),
+                        pipeline_revision=credentials.get('flux_pipeline_revision'),
+                        pipeline_device=credentials.get('flux_pipeline_device'),
+                        **common_llm_kwargs,
+                    )
                 raise _credential_error(provider_type, "HuggingFace API key required for Flux provider")
             return FluxProvider(
                 api_key,
@@ -1847,6 +2134,12 @@ def get_image_provider(provider_type: str | ImageProvider, **credentials) -> Ima
             'huggingface_image_model': getattr(context, 'huggingface_image_model', None),
             'huggingface_image_endpoint_url': getattr(context, 'huggingface_image_endpoint_url', None),
             'huggingface_image_provider': getattr(context, 'huggingface_image_provider', None),
+            'flux_use_pipeline': getattr(context, 'flux_use_pipeline', None),
+            'flux_pipeline_model_id': getattr(context, 'flux_pipeline_model_id', None),
+            'flux_pipeline_dtype': getattr(context, 'flux_pipeline_dtype', None),
+            'flux_pipeline_variant': getattr(context, 'flux_pipeline_variant', None),
+            'flux_pipeline_revision': getattr(context, 'flux_pipeline_revision', None),
+            'flux_pipeline_device': getattr(context, 'flux_pipeline_device', None),
             'replicate_api_token': getattr(context, 'replicate_api_token', None),
             **credentials
         }.items() if value is not None
