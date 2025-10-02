@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "8df2d6e1-dd84-4ae0-a295-0a51e5716abe",
+  "session_id": "05443e44-acac-4dac-8f02-405bacb98f94",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 2,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 5,
+  "created_at": "2025-10-02T13:49:12.536186",
+  "checkpoint_data": {
+    "chapter_number": 2,
+    "chapter_title": "Portobello Road",
+    "chapter_word_count": 3461,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 25
+}
