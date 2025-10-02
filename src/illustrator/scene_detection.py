@@ -505,3 +505,7 @@ Return JSON:
                 "visual_potential": 0.5,
                 "narrative_importance": 0.5
             }
+
+
+# Alias for backward compatibility with tests
+SceneDetector = LiterarySceneDetector

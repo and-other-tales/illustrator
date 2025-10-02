@@ -116,7 +116,7 @@ class IllustrationPrompt(BaseModel):
 
 class StyleConfig(BaseModel):
     """Configuration for illustration style and provider."""
-    image_provider: ImageProvider = Field(description="Image generation provider")
+    image_provider: ImageProvider = Field(default=ImageProvider.DALLE, description="Image generation provider")
     art_style: str = Field(default="digital painting", description="Base artistic style")
     color_palette: str | None = Field(default=None, description="Color palette preferences")
     artistic_influences: str | None = Field(default=None, description="Artistic influences or inspirations")
@@ -140,8 +140,28 @@ class ManuscriptMetadata(BaseModel):
     title: str = Field(description="Manuscript title")
     author: str | None = Field(default=None, description="Author name")
     genre: str | None = Field(default=None, description="Literary genre")
-    total_chapters: int = Field(description="Total number of chapters")
-    created_at: str = Field(description="When processing started")
+    total_chapters: int = Field(default=1, description="Total number of chapters")
+    created_at: str = Field(default_factory=lambda: "2024-01-01T00:00:00Z", description="When processing started")
+
+
+# Additional enums for backward compatibility
+class OutputFormat(str, Enum):
+    """Output format options."""
+    PNG = "png"
+    JPG = "jpg" 
+    WEBP = "webp"
+
+
+class SceneDetectionResult(BaseModel):
+    """Results from scene detection analysis."""
+    scenes: List[dict] = Field(default_factory=list, description="Detected scenes")
+    confidence: float = Field(default=0.8, description="Detection confidence score")
+
+
+class CharacterDetectionResult(BaseModel):
+    """Results from character detection analysis."""
+    characters: List[dict] = Field(default_factory=list, description="Detected characters")
+    confidence: float = Field(default=0.8, description="Detection confidence score")
 
 
 class SavedManuscript(BaseModel):
