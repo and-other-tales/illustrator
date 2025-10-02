@@ -187,78 +187,106 @@ def _is_deepseek_model(model: str) -> bool:
 def _extract_final_response_from_deepseek(content: str) -> str:
     """Extract the final response from DeepSeek model output that includes thinking tokens.
     
-    DeepSeek models often return responses in a format like:
-    <thinking>
-    [reasoning content]
-    </thinking>
-    
-    [final response]
-    
-    This function extracts just the final response part.
+    DeepSeek models often return responses in a format with reasoning followed by the answer.
+    This function attempts to extract just the useful response part.
     """
     if not content:
         return content
     
-    # Look for thinking tags and extract content after them
+    original_content = content.strip()
+    
+    # First, look for thinking tags and extract content after them
     thinking_patterns = [
         r'<thinking>.*?</thinking>\s*',  # XML-style thinking tags
         r'<think>.*?</think>\s*',       # Alternative thinking tags  
         r'\*\*Thinking:\*\*.*?\n\n',    # Markdown-style thinking sections
         r'Thinking:.*?\n\n',            # Simple thinking sections
-        r'Let me think.*?\n\n',         # Natural language thinking
     ]
     
-    cleaned_content = content
+    cleaned_content = original_content
     for pattern in thinking_patterns:
         cleaned_content = re.sub(pattern, '', cleaned_content, flags=re.DOTALL | re.IGNORECASE)
     
-    # Also try to detect if the response has a clear structure where
-    # the first part is reasoning and the later part is the actual answer
-    lines = cleaned_content.split('\n')
+    # If content was cleaned by removing thinking tags, return that
+    if len(cleaned_content) < len(original_content) * 0.8:  # Significant reduction
+        return cleaned_content.strip()
     
-    # Look for common transition phrases that indicate the start of the final answer
-    answer_indicators = [
-        'in conclusion',
-        'therefore',
-        'so the answer is',
-        'the final answer is',
-        'to summarize',
-        'based on this analysis',
-        'the result is',
-        'final response:',
-        'answer:',
-    ]
+    # Look for structural indicators that separate reasoning from final answer
+    paragraphs = [p.strip() for p in cleaned_content.split('\n\n') if p.strip()]
     
-    for i, line in enumerate(lines):
-        line_lower = line.lower().strip()
-        for indicator in answer_indicators:
-            if indicator in line_lower:
-                # Return everything from this line onwards
-                return '\n'.join(lines[i:]).strip()
+    if len(paragraphs) > 1:
+        # Look for paragraphs that start with answer indicators
+        answer_indicators = [
+            'based on',
+            'looking at',
+            'analyzing',
+            'the text',
+            'here are',
+            'i can identify',
+            'the following',
+            '1.',  # Numbered lists often indicate structured answers
+            '*',   # Bullet points
+            '-',   # Dash lists
+            '{',   # JSON responses
+            'visual elements',
+            'emotional',
+            'primary',
+        ]
+        
+        for i, paragraph in enumerate(paragraphs):
+            paragraph_lower = paragraph.lower()
+            
+            # If paragraph starts with answer indicator, return from here onwards
+            for indicator in answer_indicators:
+                if paragraph_lower.startswith(indicator):
+                    return '\n\n'.join(paragraphs[i:]).strip()
+        
+        # Check for transitions that indicate the end of reasoning
+        reasoning_end_patterns = [
+            r'now\s*[,.]?\s*',
+            r'so\s*[,.]?\s*',
+            r'therefore\s*[,.]?\s*',
+            r'given this\s*[,.]?\s*',
+        ]
+        
+        for i, paragraph in enumerate(paragraphs):
+            for pattern in reasoning_end_patterns:
+                if re.search(pattern, paragraph.lower(), re.IGNORECASE):
+                    # Find where the actual answer starts in this paragraph
+                    sentences = paragraph.split('.')
+                    for j, sentence in enumerate(sentences):
+                        if re.search(pattern, sentence.lower(), re.IGNORECASE):
+                            # Return from the next sentence onwards
+                            remaining_sentences = sentences[j+1:]
+                            if remaining_sentences:
+                                current_para = '.'.join(remaining_sentences).strip()
+                                if current_para:
+                                    result_paragraphs = [current_para] + paragraphs[i+1:]
+                                    return '\n\n'.join(result_paragraphs).strip()
+                            # If nothing left in current paragraph, return remaining paragraphs
+                            if i + 1 < len(paragraphs):
+                                return '\n\n'.join(paragraphs[i+1:]).strip()
     
-    # If no clear structure is found, return the cleaned content
-    # but try to remove common reasoning prefixes
+    # Last resort: try to remove obvious reasoning prefixes from the start
     reasoning_prefixes = [
-        'alright, so i need to',
-        'okay, so the user',
-        'let me analyze',
-        'first, i need to',
-        'i need to',
-        'so i need to',
-        'the user wants me to',
-        'the user is asking',
+        r'^(alright|okay|well),?\s*(so\s+)?i\s+(need\s+to|should|will)\s+.*?\.\s*',
+        r'^the\s+user\s+(wants?|is\s+asking).*?\.\s*',
+        r'^let\s+me\s+(think|analyze).*?\.\s*',
+        r'^first,?\s+i\s+(need\s+to|should|will).*?\.\s*',
+        r'^first,?\s+.*?\.\s*',  # More general "First," removal
+        r'^i\s+(need\s+to|should|will)\s+.*?\.\s*',  # General "I need to" removal
     ]
     
-    cleaned_lower = cleaned_content.lower().strip()
-    for prefix in reasoning_prefixes:
-        if cleaned_lower.startswith(prefix):
-            # Try to find where the actual content starts
-            sentences = cleaned_content.split('. ')
-            if len(sentences) > 1:
-                # Skip the first reasoning sentence and return the rest
-                return '. '.join(sentences[1:]).strip()
+    for prefix_pattern in reasoning_prefixes:
+        match = re.search(prefix_pattern, cleaned_content, re.IGNORECASE | re.DOTALL)
+        if match:
+            # Remove the matched reasoning prefix
+            cleaned = cleaned_content[match.end():].strip()
+            if cleaned and len(cleaned) > 50:  # Ensure we have substantial content left
+                return cleaned
     
-    return cleaned_content.strip()
+    # If no patterns match, return the original cleaned content
+    return cleaned_content
 
 
 def _extract_text_from_content(content: Any, allowed_channels: set[str] | None = None) -> str:
@@ -780,6 +808,12 @@ class HuggingFaceEndpointChatWrapper:
 
             if generated_text.startswith(prompt):
                 generated_text = generated_text[len(prompt):]
+
+            # Extract final response if this is a DeepSeek model 
+            # Check both the client model and any model passed in generation kwargs
+            model_name = getattr(self._client, 'model', '') or self._generation_kwargs.get('model', '')
+            if _is_deepseek_model(str(model_name)):
+                generated_text = _extract_final_response_from_deepseek(generated_text)
 
             return _coerce_ai_message_instance(AIMessage(content=generated_text.strip()))
 
