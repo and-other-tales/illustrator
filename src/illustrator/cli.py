@@ -976,8 +976,16 @@ class ManuscriptCLI:
                 created_at=datetime.now().isoformat()
             )
 
-            # Get number of chapters
-            num_chapters = int(input("Number of chapters: "))
+            # Get number of chapters with retry logic for invalid input
+            num_chapters = None
+            while num_chapters is None:
+                try:
+                    num_chapters = int(input("Number of chapters: "))
+                    if num_chapters <= 0:
+                        raise ValueError("Number must be positive")
+                except ValueError:
+                    console.print("[red]Please enter a valid positive number[/red]")
+                    num_chapters = None
             
             # Get chapter information
             self.chapters = []
