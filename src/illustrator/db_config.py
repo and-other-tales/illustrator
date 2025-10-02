@@ -93,7 +93,12 @@ _env_mongo_uri = os.getenv("MONGODB_URI")
 MONGO_URL = _env_mongo_uri or os.getenv("MONGO_URL", DEFAULT_MONGO_URL)
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", DEFAULT_DB_NAME)
 
-USE_MOCK = os.getenv("MONGO_USE_MOCK", "false").lower() in {"1", "true", "yes"}
+# Use mock MongoDB if explicitly requested or if we're running in development and NO_DB is set
+USE_MOCK = (
+    os.getenv("MONGO_USE_MOCK", "false").lower() in {"1", "true", "yes"} or 
+    os.getenv("NO_DB", "false").lower() in {"1", "true", "yes"} or
+    (os.getenv("FLASK_ENV") == "development" and os.getenv("USE_REAL_DB", "").lower() not in {"1", "true", "yes"})
+)
 
 _mongo_client: MongoClient | None = None
 
@@ -143,16 +148,11 @@ def _initialise_mongo_client() -> MongoClient:
                     "retryReads": True,
                 })
                 
-                # Ensure required parameters are in URI for Atlas
+                # Don't modify the URI for Atlas connections - Atlas URIs already have the correct parameters
                 mongo_url = MONGO_URL
-                if "replicaSet=" not in mongo_url and "?replicaSet=" not in mongo_url and "&replicaSet=" not in mongo_url:
-                    if "?" in mongo_url:
-                        mongo_url += "&replicaSet=atlas-" + (MONGO_DB_NAME or "db") + "-shard-0"
-                    else:
-                        mongo_url += "?replicaSet=atlas-" + (MONGO_DB_NAME or "db") + "-shard-0"
                 
-                # Always ensure SSL is enabled for Atlas
-                if "ssl=true" not in mongo_url and "&ssl=true" not in mongo_url:
+                # Just ensure SSL is enabled for Atlas if not already specified
+                if "ssl=true" not in mongo_url.lower() and "&ssl=true" not in mongo_url.lower() and "tls=true" not in mongo_url.lower():
                     mongo_url += "&ssl=true" if "?" in mongo_url else "?ssl=true"
             else:
                 mongo_url = MONGO_URL
