@@ -942,10 +942,8 @@ class ManuscriptCLI:
             # Create LLM for analysis
             llm = create_chat_model_from_context(self.context)
 
-            # Import scene detector
-            from illustrator.scene_detection import LiterarySceneDetector
-            
-            detector = LiterarySceneDetector(llm=llm)
+            # Use module level import for test compatibility (SceneDetector is aliased to LiterarySceneDetector)
+            detector = SceneDetector(llm=llm)
 
             # Analyze first chapter as example
             chapter = self.chapters[0]
