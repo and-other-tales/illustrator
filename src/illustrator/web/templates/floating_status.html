@@ -46,6 +46,14 @@
                     <span class="material-icons-outlined me-1">play_arrow</span>
                     Resume
                 </button>
+                <button class="btn btn-sm btn-danger flex-fill" id="cancelSessionBtn">
+                    <span class="material-icons-outlined me-1">stop</span>
+                    Cancel
+                </button>
+                <button class="btn btn-sm btn-primary flex-fill" id="restartSessionBtn">
+                    <span class="material-icons-outlined me-1">restart_alt</span>
+                    Restart
+                </button>
             </div>
         </div>
     </div>
@@ -327,6 +335,8 @@ class FloatingStatusManager {
         this.statusDot = document.getElementById('statusDot');
         this.pauseBtn = document.getElementById('pauseSessionBtn');
         this.resumeBtn = document.getElementById('resumeSessionBtn');
+        this.cancelBtn = document.getElementById('cancelSessionBtn');
+        this.restartBtn = document.getElementById('restartSessionBtn');
         this.openFullBtn = document.getElementById('openFullSession');
         this.minimizeBtn = document.getElementById('minimizeStatus');
     }
