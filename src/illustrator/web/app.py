@@ -776,6 +776,83 @@ async def resume_processing(session_id: str):
             detail=f"Error resuming processing: {str(e)}"
         )
 
+@app.post("/api/process/{session_id}/restart")
+async def restart_processing(session_id: str, background_tasks: BackgroundTasks):
+    """Restart a cancelled processing session."""
+    try:
+        # Check if session exists
+        if session_id not in connection_manager.sessions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Processing session {session_id} not found"
+            )
+
+        session_data = connection_manager.sessions[session_id]
+
+        # Check if session is in a state that can be restarted
+        if session_data.status.status not in ["cancelled", "error", "completed"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot restart session in '{session_data.status.status}' state"
+            )
+
+        # Reset session state
+        session_data.status.status = "started"
+        session_data.status.message = "Processing restarted..."
+        session_data.status.progress = 0
+        session_data.pause_requested = False
+
+        # Clear any error state
+        if hasattr(session_data.status, 'error'):
+            session_data.status.error = None
+
+        # Send restart message to client
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "log",
+                "level": "success",
+                "message": "Processing restarted"
+            }),
+            session_id
+        )
+
+        # Send updated status
+        await connection_manager.send_personal_message(
+            json.dumps({
+                "type": "progress",
+                "progress": 0,
+                "message": "Processing restarted...",
+                "current_chapter": None,
+                "chapters_processed": 0,
+                "images_generated": 0,
+                "total_chapters": getattr(session_data.status, 'total_chapters', 0)
+            }),
+            session_id
+        )
+
+        # Start the processing workflow in the background
+        background_tasks.add_task(
+            run_processing_workflow,
+            session_id,
+            session_data.manuscript_id,
+            session_data.chapter_ids,
+            session_data.style_config
+        )
+
+        return {
+            "success": True,
+            "message": "Processing restarted successfully",
+            "session_id": session_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error restarting processing: {str(e)}"
+        )
+
 async def run_processing_workflow(
     session_id: str,
     manuscript_id: str,
