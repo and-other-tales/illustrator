@@ -96,10 +96,16 @@ def truncate_text(text: str, max_length: int) -> str:
     if len(text) <= max_length:
         return text
 
-    truncated = text[:max_length]
+    # If max_length is very small, just truncate
+    if max_length < 4:
+        return text[:max_length]
+
+    # Reserve space for ellipsis
+    target_length = max_length - 3
+    truncated = text[:target_length]
     last_space = truncated.rfind(' ')
 
-    if last_space > max_length * 0.8:  # If we can preserve most of the text
+    if last_space > target_length * 0.8:  # If we can preserve most of the text
         return truncated[:last_space] + "..."
     else:
         return truncated + "..."
@@ -267,9 +273,17 @@ def enforce_prompt_length(provider: str, prompt: str) -> str:
     max_len = limits.get(provider.lower(), 2000)
     if len(prompt) <= max_len:
         return prompt
+    
+    # Reserve space for ellipsis
+    target_length = max_len - 3
+    
+    # For very long single words, hard truncate
+    if ' ' not in prompt:
+        return prompt[:target_length] + '...'
+    
     # Trim on word boundary when possible
-    cut = prompt[:max_len]
+    cut = prompt[:target_length]
     sp = cut.rfind(' ')
-    if sp > max_len * 0.6:
+    if sp > target_length * 0.6:
         return cut[:sp] + '...'
     return cut + '...'
