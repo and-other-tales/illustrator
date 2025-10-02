@@ -127,7 +127,7 @@ def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
         db_count = sum(
             1
             for ill in illustrations
-            if getattr(ill, "chapter", None) and getattr(ill.chapter, "number", None) == chapter_number
+            if ill.get("chapter_number") == chapter_number
         )
     except Exception:
         db_count = 0

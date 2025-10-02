@@ -283,6 +283,24 @@
                                     <div class="form-text">Required for Google Cloud services including Anthropic[Vertex].</div>
                                 </div>
                             </div>
+                            <div class="row g-3 mt-3">
+                                <div class="col-lg-8">
+                                    <label for="mongoUrl" class="form-label">MongoDB Connection URI</label>
+                                    <input type="text" class="form-control" id="mongoUrl" placeholder="mongodb://localhost:27017">
+                                    <div class="form-text">Stores manuscripts, session history, and illustration metadata.</div>
+                                </div>
+                                <div class="col-lg-4">
+                                    <label for="mongoDbName" class="form-label">Database Name</label>
+                                    <input type="text" class="form-control" id="mongoDbName" placeholder="illustrator">
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="mongoUseMock">
+                                        <label class="form-check-label" for="mongoUseMock">Use in-memory Mongo mock (mongomock)</label>
+                                        <div class="form-text">Enable for development or tests when a MongoDB instance is unavailable.</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </form>
                 </div>

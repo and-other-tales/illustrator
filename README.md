@@ -21,6 +21,7 @@ A powerful LangGraph application that analyzes manuscript chapters using advance
 ### Prerequisites
 
 - Python 3.11 or higher
+- **Database**: MongoDB 5+ (local or managed). Set `MONGODB_URI` (or `MONGO_URL`) and `MONGO_DB_NAME` to point at your instance. For local development and automated tests you can enable the embedded mock driver by setting `MONGO_USE_MOCK=1`.
 - **LLM access**:
   - HuggingFace API key (default `openai/gpt-oss-120b` reasoning model)
   - Optional: Anthropic API key if you prefer Claude instead of gpt-oss
@@ -85,6 +86,12 @@ REPLICATE_API_TOKEN=your-replicate-token
 # Optional: Customize defaults
 DEFAULT_IMAGE_PROVIDER=dalle  # dalle, imagen4, flux, or seedream
 DEFAULT_ILLUSTRATION_STYLE=digital_painting
+
+# Database
+MONGODB_URI=mongodb://localhost:27017
+MONGO_URL=mongodb://localhost:27017
+MONGO_DB_NAME=illustrator
+MONGO_USE_MOCK=false
 ```
 
 > The app automatically renders prompts and parses responses using OpenAI's [Harmony format](https://github.com/openai/harmony) whenever a gpt-oss model is selected.

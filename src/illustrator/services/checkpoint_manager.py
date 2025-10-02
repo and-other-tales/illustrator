@@ -3,7 +3,6 @@ Checkpoint manager for handling processing milestones and recovery points.
 Provides high-level checkpoint creation and resume functionality.
 """
 
-import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
@@ -94,7 +93,7 @@ class CheckpointManager:
             message=f"Session started for manuscript: {manuscript_title} ({total_chapters} chapters)"
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def create_manuscript_loaded_checkpoint(self,
                                           session_id: str,
@@ -131,7 +130,7 @@ class CheckpointManager:
             message=f"Manuscript loaded successfully with {len(chapters_info)} chapters"
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def create_chapter_start_checkpoint(self,
                                       session_id: str,
@@ -177,7 +176,7 @@ class CheckpointManager:
             step_name=ProcessingStep.ANALYZING_CHAPTERS.value
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def create_chapter_analyzed_checkpoint(self,
                                          session_id: str,
@@ -237,7 +236,7 @@ class CheckpointManager:
             step_name=ProcessingStep.ANALYZING_CHAPTERS.value
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def create_prompts_generated_checkpoint(self,
                                           session_id: str,
@@ -284,7 +283,7 @@ class CheckpointManager:
             step_name=ProcessingStep.GENERATING_PROMPTS.value
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def create_images_generating_checkpoint(self,
                                           session_id: str,
@@ -323,7 +322,7 @@ class CheckpointManager:
             next_action=f"generate_image_{current_image_index}"
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def create_chapter_completed_checkpoint(self,
                                           session_id: str,
@@ -370,7 +369,7 @@ class CheckpointManager:
             step_name=ProcessingStep.GENERATING_IMAGES.value
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def create_session_completed_checkpoint(self,
                                           session_id: str,
@@ -411,7 +410,7 @@ class CheckpointManager:
             message=f"Session completed successfully! Generated {total_images_generated} images across {total_chapters_processed} chapters"
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def create_pause_checkpoint(self,
                                session_id: str,
@@ -458,7 +457,7 @@ class CheckpointManager:
             step_name=current_step.value
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def create_error_checkpoint(self,
                                session_id: str,
@@ -509,7 +508,7 @@ class CheckpointManager:
             step_name=current_step.value
         )
 
-        return str(checkpoint.id)
+        return str(checkpoint["id"])
 
     def get_resume_info(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get information needed to resume a session.
@@ -544,27 +543,30 @@ class CheckpointManager:
         }
 
         if latest_checkpoint:
-            checkpoint_data = json.loads(latest_checkpoint.checkpoint_data) if latest_checkpoint.checkpoint_data else {}
+            checkpoint_data = latest_checkpoint.get("checkpoint_data") or {}
             resume_info.update({
-                "latest_checkpoint_id": str(latest_checkpoint.id),
-                "latest_checkpoint_type": latest_checkpoint.checkpoint_type,
-                "next_action": latest_checkpoint.next_action,
-                "checkpoint_data": checkpoint_data
+                "latest_checkpoint_id": latest_checkpoint["id"],
+                "latest_checkpoint_type": latest_checkpoint.get("checkpoint_type"),
+                "next_action": latest_checkpoint.get("next_action"),
+                "checkpoint_data": checkpoint_data,
             })
 
-            # Add specific resume instructions based on checkpoint type
-            if latest_checkpoint.checkpoint_type == CheckpointType.CHAPTER_ANALYZED.value:
+            checkpoint_type = latest_checkpoint.get("checkpoint_type")
+            emotional_moments_data = latest_checkpoint.get("emotional_moments_data") or []
+            generated_prompts = latest_checkpoint.get("generated_prompts") or []
+
+            if checkpoint_type == CheckpointType.CHAPTER_ANALYZED.value:
                 resume_info["resume_at"] = "prompts_generation"
-                resume_info["emotional_moments"] = json.loads(latest_checkpoint.emotional_moments_data) if latest_checkpoint.emotional_moments_data else []
-            elif latest_checkpoint.checkpoint_type == CheckpointType.PROMPTS_GENERATED.value:
+                resume_info["emotional_moments"] = emotional_moments_data
+            elif checkpoint_type == CheckpointType.PROMPTS_GENERATED.value:
                 resume_info["resume_at"] = "image_generation"
-                resume_info["generated_prompts"] = json.loads(latest_checkpoint.generated_prompts) if latest_checkpoint.generated_prompts else []
-            elif latest_checkpoint.checkpoint_type == CheckpointType.IMAGES_GENERATING.value:
+                resume_info["generated_prompts"] = generated_prompts
+            elif checkpoint_type == CheckpointType.IMAGES_GENERATING.value:
                 resume_info["resume_at"] = "continue_image_generation"
                 resume_info["current_image_index"] = checkpoint_data.get("current_image_index", 0)
-            elif latest_checkpoint.checkpoint_type == CheckpointType.CHAPTER_COMPLETED.value:
+            elif checkpoint_type == CheckpointType.CHAPTER_COMPLETED.value:
                 resume_info["resume_at"] = "next_chapter"
-            elif latest_checkpoint.checkpoint_type == CheckpointType.ERROR_OCCURRED.value:
+            elif checkpoint_type == CheckpointType.ERROR_OCCURRED.value:
                 resume_info["resume_at"] = "retry_from_error"
                 resume_info["error_details"] = checkpoint_data
 

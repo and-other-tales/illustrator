@@ -213,6 +213,10 @@ CREDENTIAL_ENV_KEYS = [
     "REPLICATE_API_TOKEN",
     "GOOGLE_APPLICATION_CREDENTIALS",
     "GOOGLE_PROJECT_ID",
+    "MONGODB_URI",
+    "MONGO_URL",
+    "MONGO_DB_NAME",
+    "MONGO_USE_MOCK",
     "HUGGINGFACE_TIMEOUT",
     "LLM_PROVIDER",
     "DEFAULT_LLM_MODEL",
@@ -301,6 +305,13 @@ def _current_env_snapshot() -> Dict[str, str]:
         legacy_provider = os.getenv("DEFAULT_LLM_PROVIDER") or env_values.get("DEFAULT_LLM_PROVIDER")
         if legacy_provider:
             snapshot["LLM_PROVIDER"] = legacy_provider
+
+    if not snapshot.get("MONGO_URL"):
+        snapshot["MONGO_URL"] = "mongodb://localhost:27017"
+    if not snapshot.get("MONGO_DB_NAME"):
+        snapshot["MONGO_DB_NAME"] = "illustrator"
+    if not snapshot.get("MONGODB_URI"):
+        snapshot["MONGODB_URI"] = snapshot.get("MONGO_URL") or "mongodb://localhost:27017"
 
     return snapshot
 
@@ -614,18 +625,21 @@ async def get_resumable_sessions():
 
         session_info = []
         for session in resumable_sessions:
+            started_at = session.get("started_at")
+            paused_at = session.get("paused_at")
+
             session_info.append({
-                "session_id": str(session.id),
-                "manuscript_id": str(session.manuscript_id),
-                "external_session_id": session.external_session_id,
-                "status": session.status,
-                "progress_percent": session.progress_percent,
-                "total_chapters": session.total_chapters,
-                "last_completed_chapter": session.last_completed_chapter,
-                "total_images_generated": session.total_images_generated,
-                "started_at": session.started_at.isoformat() if session.started_at else None,
-                "paused_at": session.paused_at.isoformat() if session.paused_at else None,
-                "error_message": session.error_message
+                "session_id": session["id"],
+                "manuscript_id": session.get("manuscript_id"),
+                "external_session_id": session.get("external_session_id"),
+                "status": session.get("status"),
+                "progress_percent": session.get("progress_percent"),
+                "total_chapters": session.get("total_chapters"),
+                "last_completed_chapter": session.get("last_completed_chapter"),
+                "total_images_generated": session.get("total_images_generated"),
+                "started_at": started_at.isoformat() if isinstance(started_at, datetime) else started_at,
+                "paused_at": paused_at.isoformat() if isinstance(paused_at, datetime) else paused_at,
+                "error_message": session.get("error_message"),
             })
 
         persistence_service.close()
@@ -916,44 +930,50 @@ async def run_processing_workflow(
         # This prevents FK violations when inserting into processing_sessions.
         try:
             from illustrator.db_config import get_db
-            from illustrator.db_models import Manuscript as DBManuscript, Chapter as DBChapter
+            from illustrator.db_models import CHAPTERS_COLLECTION, MANUSCRIPTS_COLLECTION
 
             db = get_db()
+            manuscripts_col = db[MANUSCRIPTS_COLLECTION]
+            chapters_col = db[CHAPTERS_COLLECTION]
 
-            # Ensure Manuscript row exists
-            db_manuscript = db.query(DBManuscript).filter(DBManuscript.id == uuid.UUID(manuscript_id)).first()
-            if not db_manuscript:
-                db_manuscript = DBManuscript(
-                    id=uuid.UUID(manuscript_id),
-                    title=manuscript.title if hasattr(manuscript, 'title') else manuscript.metadata.title,
-                    author=(getattr(manuscript, 'author', None) or getattr(getattr(manuscript, 'metadata', None), 'author', None)),
-                    genre=(getattr(manuscript, 'genre', None) or getattr(getattr(manuscript, 'metadata', None), 'genre', None)),
-                    total_chapters=len(chapters)
-                )
-                db.add(db_manuscript)
-                db.commit()
+            now = datetime.utcnow()
+            manuscript_payload = {
+                "title": getattr(manuscript, "title", None) or manuscript.metadata.title,
+                "author": getattr(manuscript, "author", None) or getattr(manuscript.metadata, "author", None),
+                "genre": getattr(manuscript, "genre", None) or getattr(manuscript.metadata, "genre", None),
+                "total_chapters": len(chapters),
+                "updated_at": now,
+            }
+            manuscripts_col.update_one(
+                {"_id": manuscript_id},
+                {
+                    "$set": manuscript_payload,
+                    "$setOnInsert": {"created_at": now},
+                },
+                upsert=True,
+            )
 
-            # Ensure Chapter rows exist (IDs derived deterministically from manuscript_id, number, title)
             for ch in chapters:
                 try:
-                    chapter_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, f"{manuscript_id}_{ch.number}_{ch.title}")
-                    existing_ch = db.query(DBChapter).filter(DBChapter.id == chapter_uuid).first()
-                    if not existing_ch:
-                        db_chapter = DBChapter(
-                            id=chapter_uuid,
-                            manuscript_id=db_manuscript.id,
-                            title=ch.title,
-                            content=ch.content,
-                            number=ch.number,
-                            word_count=getattr(ch, 'word_count', 0) or 0
-                        )
-                        db.add(db_chapter)
+                    chapter_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{manuscript_id}_{ch.number}_{ch.title}"))
+                    chapter_payload = {
+                        "manuscript_id": manuscript_id,
+                        "number": ch.number,
+                        "title": ch.title,
+                        "content": ch.content,
+                        "word_count": getattr(ch, "word_count", 0) or 0,
+                        "updated_at": now,
+                    }
+                    chapters_col.update_one(
+                        {"_id": chapter_uuid},
+                        {
+                            "$set": chapter_payload,
+                            "$setOnInsert": {"created_at": now},
+                        },
+                        upsert=True,
+                    )
                 except Exception:
-                    # Don't let a single chapter creation failure block the run; continue
                     pass
-
-            db.commit()
-            db.close()
         except Exception as ensure_db_err:
             # Log but continue; create_session below will still raise if manuscript truly missing
             await connection_manager.send_personal_message(
@@ -979,7 +999,7 @@ async def run_processing_workflow(
                         max_emotional_moments=max_emotional_moments,
                         total_chapters=len(chapters)
                     )
-                    db_session_id_for_persistence = str(db_session.id)
+                    db_session_id_for_persistence = db_session["id"]
                     checkpoint_manager.create_session_start_checkpoint(
                         session_id=db_session_id_for_persistence,
                         manuscript_id=manuscript_id,
@@ -2604,6 +2624,9 @@ def create_web_client_app() -> FastAPI:
     # Get remote API configuration
     remote_api_url = os.getenv('ILLUSTRATOR_REMOTE_API_URL', 'http://127.0.0.1:8000')
     api_key = os.getenv('ILLUSTRATOR_API_KEY')
+    mongo_url = os.getenv('MONGODB_URI') or os.getenv('MONGO_URL', 'mongodb://localhost:27017')
+    mongo_db_name = os.getenv('MONGO_DB_NAME', 'illustrator')
+    mongo_use_mock = os.getenv('MONGO_USE_MOCK', '').lower() in {'1', 'true', 'yes', 'on'}
 
     # Mount static files (same as main app)
     web_app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -2623,10 +2646,20 @@ def create_web_client_app() -> FastAPI:
     # Client setup endpoint for saving configuration
     @web_app.post("/api/client-setup")
     async def save_client_setup(request: Request):
+        nonlocal remote_api_url, api_key, mongo_url, mongo_db_name, mongo_use_mock
         try:
             data = await request.json()
-            server_url = data.get('server_url', '').strip()
-            new_api_key = data.get('api_key', '').strip()
+            server_url = (data.get('server_url') or '').strip()
+            new_api_key = (data.get('api_key') or '').strip()
+            mongo_url_value = (data.get('mongo_url') or '').strip()
+            mongo_db_name_value = (data.get('mongo_db_name') or '').strip()
+            mongo_use_mock_raw = data.get('mongo_use_mock')
+            if isinstance(mongo_use_mock_raw, bool):
+                mongo_use_mock_value = mongo_use_mock_raw
+            elif isinstance(mongo_use_mock_raw, str):
+                mongo_use_mock_value = mongo_use_mock_raw.lower() in {'1', 'true', 'yes', 'on'}
+            else:
+                mongo_use_mock_value = False
             
             if not server_url:
                 raise HTTPException(status_code=400, detail="Server URL is required")
@@ -2642,13 +2675,50 @@ def create_web_client_app() -> FastAPI:
             
             # Update configuration
             set_key(env_file, 'ILLUSTRATOR_REMOTE_API_URL', server_url)
+            os.environ['ILLUSTRATOR_REMOTE_API_URL'] = server_url
+            remote_api_url = server_url
             if new_api_key:
                 set_key(env_file, 'ILLUSTRATOR_API_KEY', new_api_key)
+                os.environ['ILLUSTRATOR_API_KEY'] = new_api_key
+                api_key = new_api_key
             else:
                 unset_key(env_file, 'ILLUSTRATOR_API_KEY')
+                os.environ.pop('ILLUSTRATOR_API_KEY', None)
+                api_key = None
+
+            if mongo_url_value:
+                set_key(env_file, 'MONGO_URL', mongo_url_value)
+                set_key(env_file, 'MONGODB_URI', mongo_url_value)
+                os.environ['MONGO_URL'] = mongo_url_value
+                os.environ['MONGODB_URI'] = mongo_url_value
+                mongo_url = mongo_url_value
+            else:
+                unset_key(env_file, 'MONGO_URL')
+                unset_key(env_file, 'MONGODB_URI')
+                os.environ.pop('MONGO_URL', None)
+                os.environ.pop('MONGODB_URI', None)
+                mongo_url = 'mongodb://localhost:27017'
+
+            if mongo_db_name_value:
+                set_key(env_file, 'MONGO_DB_NAME', mongo_db_name_value)
+                os.environ['MONGO_DB_NAME'] = mongo_db_name_value
+                mongo_db_name = mongo_db_name_value
+            else:
+                unset_key(env_file, 'MONGO_DB_NAME')
+                os.environ.pop('MONGO_DB_NAME', None)
+                mongo_db_name = 'illustrator'
+
+            if mongo_use_mock_value:
+                set_key(env_file, 'MONGO_USE_MOCK', 'true')
+                os.environ['MONGO_USE_MOCK'] = 'true'
+                mongo_use_mock = True
+            else:
+                unset_key(env_file, 'MONGO_USE_MOCK')
+                os.environ.pop('MONGO_USE_MOCK', None)
+                mongo_use_mock = False
             
             return {"success": True, "message": "Configuration saved successfully"}
-            
+        
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -2806,7 +2876,10 @@ def create_web_client_app() -> FastAPI:
                 "title": "Dashboard", 
                 "remote_mode": True, 
                 "remote_api_url": remote_api_url,
-                "needs_setup": needs_client_setup()
+                "needs_setup": needs_client_setup(),
+                "mongo_url": mongo_url,
+                "mongo_db_name": mongo_db_name,
+                "mongo_use_mock": mongo_use_mock,
             }
         )
 

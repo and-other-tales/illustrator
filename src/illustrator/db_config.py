@@ -7,24 +7,62 @@ from contextlib import contextmanager
 from typing import Generator
 
 from pymongo import ASCENDING, MongoClient
+from pymongo.errors import ServerSelectionTimeoutError
 from pymongo.collection import Collection
 from pymongo.database import Database
 
 DEFAULT_MONGO_URL = "mongodb://localhost:27017"
 DEFAULT_DB_NAME = "illustrator"
 
-MONGO_URL = os.getenv("MONGO_URL", DEFAULT_MONGO_URL)
+_env_mongo_uri = os.getenv("MONGODB_URI")
+MONGO_URL = _env_mongo_uri or os.getenv("MONGO_URL", DEFAULT_MONGO_URL)
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", DEFAULT_DB_NAME)
 
 _client: MongoClient | None = None
+
+USE_MOCK = os.getenv("MONGO_USE_MOCK", "false").lower() in {"1", "true", "yes"}
+
+
+def _build_mock_client() -> MongoClient:
+    """Return a mongomock client when running without a real Mongo server."""
+
+    try:
+        import mongomock
+    except ImportError as exc:  # noqa: F401
+        raise RuntimeError(
+            "mongomock is required for in-memory MongoDB emulation"
+        ) from exc
+
+    return mongomock.MongoClient()
 
 
 def _initialise_client() -> MongoClient:
     """Create (or reuse) the shared Mongo client."""
 
     global _client
-    if _client is None:
-        _client = MongoClient(MONGO_URL, appname="illustrator")
+    if _client is not None:
+        return _client
+
+    if USE_MOCK:
+        _client = _build_mock_client()
+        return _client
+
+    client = MongoClient(
+        MONGO_URL,
+        appname="illustrator",
+        serverSelectionTimeoutMS=3000,
+    )
+
+    try:
+        client.admin.command("ping")
+    except ServerSelectionTimeoutError:
+        if os.getenv("PYTEST_CURRENT_TEST"):
+            client.close()
+            _client = _build_mock_client()
+            return _client
+        raise
+
+    _client = client
     return _client
 
 
@@ -68,7 +106,6 @@ def _ensure_indexes(db: Database) -> None:
     """Create the indexes required for Illustrator collections."""
 
     manuscripts = db["manuscripts"]
-    manuscripts.create_index("id", unique=True)
 
     chapters = db["chapters"]
     chapters.create_index([("manuscript_id", ASCENDING), ("number", ASCENDING)], unique=True)

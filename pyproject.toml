@@ -18,7 +18,8 @@ dependencies = [
     "langchain-anthropic>=0.2.0",
     "python-dotenv>=1.0.1",
     # Persistence and data access
-    "sqlalchemy>=2.0.30",
+    "pymongo>=4.7.0",
+    "mongomock>=4.1.2",
     # NLP and text processing
     "spacy>=3.7.0",
     "textblob>=0.17.1",
@@ -57,9 +58,6 @@ web = [
     "python-docx>=1.1.0",
     "reportlab>=4.2.0",
     "weasyprint>=61.0",
-]
-db = [
-    "psycopg2-binary>=2.9.9"
 ]
 dev = [
     "beautifulsoup4>=4.12.0",

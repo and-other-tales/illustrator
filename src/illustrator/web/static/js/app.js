@@ -20,6 +20,10 @@ window.illustratorApp = {
         REPLICATE_API_TOKEN: '',
         GOOGLE_APPLICATION_CREDENTIALS: '',
         GOOGLE_PROJECT_ID: '',
+        MONGODB_URI: '',
+        MONGO_URL: '',
+        MONGO_DB_NAME: '',
+        MONGO_USE_MOCK: '',
         LLM_PROVIDER: '',
         DEFAULT_LLM_PROVIDER: '',
         DEFAULT_LLM_MODEL: ''
@@ -279,6 +283,10 @@ function saveApiKeys() {
     const huggingfaceTemperature = pipelineEnabled && pipelineTemperatureInput ? pipelineTemperatureInput.value.trim() : '';
     const huggingfaceModelKwargs = pipelineEnabled && pipelineKwargsInput ? pipelineKwargsInput.value.trim() : '';
 
+    const mongoUrlInput = document.getElementById('mongoUrl');
+    const mongoDbNameInput = document.getElementById('mongoDbName');
+    const mongoUseMockInput = document.getElementById('mongoUseMock');
+
     const credentials = {
         ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
         OPENAI_API_KEY: document.getElementById('openaiApiKey').value.trim(),
@@ -295,15 +303,19 @@ function saveApiKeys() {
         REPLICATE_API_TOKEN: document.getElementById('replicateApiToken').value.trim(),
         GOOGLE_APPLICATION_CREDENTIALS: document.getElementById('googleCredentials').value.trim(),
         GOOGLE_PROJECT_ID: document.getElementById('googleProjectId').value.trim(),
+        MONGODB_URI: mongoUrlInput ? mongoUrlInput.value.trim() : '',
+        MONGO_URL: mongoUrlInput ? mongoUrlInput.value.trim() : '',
+        MONGO_DB_NAME: mongoDbNameInput ? mongoDbNameInput.value.trim() : '',
+        MONGO_USE_MOCK: mongoUseMockInput && mongoUseMockInput.checked ? 'true' : '',
         LLM_PROVIDER: selectedProvider,
         DEFAULT_LLM_PROVIDER: '',
         DEFAULT_LLM_MODEL: preferredModel
     };
 
-    // Validate at least one key is provided
+    // Validate at least one credential or database setting is provided
     const hasAnyKey = Object.values(credentials).some(value => value.length > 0);
     if (!hasAnyKey) {
-        showError('Please provide at least one API key');
+        showError('Please provide at least one API key or MongoDB connection setting');
         return;
     }
 
@@ -368,6 +380,18 @@ function populateApiKeyForm() {
     if (keys.REPLICATE_API_TOKEN) document.getElementById('replicateApiToken').value = keys.REPLICATE_API_TOKEN;
     if (keys.GOOGLE_APPLICATION_CREDENTIALS) document.getElementById('googleCredentials').value = keys.GOOGLE_APPLICATION_CREDENTIALS;
     if (keys.GOOGLE_PROJECT_ID) document.getElementById('googleProjectId').value = keys.GOOGLE_PROJECT_ID;
+    const mongoUrlInput = document.getElementById('mongoUrl');
+    if (mongoUrlInput) {
+        const effectiveMongoUrl = keys.MONGODB_URI || keys.MONGO_URL || 'mongodb://localhost:27017';
+        mongoUrlInput.value = effectiveMongoUrl;
+    }
+    const mongoDbNameInput = document.getElementById('mongoDbName');
+    if (mongoDbNameInput) mongoDbNameInput.value = keys.MONGO_DB_NAME || 'illustrator';
+    const mongoUseMockToggle = document.getElementById('mongoUseMock');
+    if (mongoUseMockToggle) {
+        const normalized = (keys.MONGO_USE_MOCK || '').toString().toLowerCase();
+        mongoUseMockToggle.checked = ['1', 'true', 'yes', 'on'].includes(normalized);
+    }
     const providerSelect = document.getElementById('llmProviderSelect');
     if (providerSelect) {
         const providerValue = (keys.LLM_PROVIDER || keys.DEFAULT_LLM_PROVIDER || '').toLowerCase();

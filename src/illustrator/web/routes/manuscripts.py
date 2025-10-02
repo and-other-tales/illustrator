@@ -1133,27 +1133,40 @@ async def list_manuscript_images(manuscript_id: str) -> Dict[str, Any]:
             # Convert to API format
             images = []
             for illustration in illustrations:
-                # Get chapter information
-                chapter_info = f"Chapter {illustration.chapter.number}" if illustration.chapter else "Unknown Chapter"
+                chapter_number = illustration.get("chapter_number")
+                chapter_title = illustration.get("chapter_title")
+                if chapter_number is not None:
+                    base_chapter = f"Chapter {chapter_number}"
+                    chapter_info = f"{base_chapter}: {chapter_title}" if chapter_title else base_chapter
+                else:
+                    chapter_info = "Unknown Chapter"
+
+                created_at = illustration.get("created_at")
+                if isinstance(created_at, datetime):
+                    created_at_str = created_at.isoformat()
+                else:
+                    created_at_str = created_at
 
                 image_data = {
-                    "id": str(illustration.id),
-                    "url": illustration.web_url,
-                    "filename": illustration.filename,
-                    "title": illustration.title or f"{chapter_info} - Scene {illustration.scene_number}",
-                    "description": illustration.description or f"Generated illustration for {chapter_info}, Scene {illustration.scene_number}",
+                    "id": str(illustration.get("id")),
+                    "url": illustration.get("web_url"),
+                    "filename": illustration.get("filename"),
+                    "title": illustration.get("title") or f"{chapter_info} - Scene {illustration.get('scene_number')}",
+                    "description": illustration.get("description") or (
+                        f"Generated illustration for {chapter_info}, Scene {illustration.get('scene_number')}"
+                    ),
                     "chapter": chapter_info,
-                    "scene": f"Scene {illustration.scene_number}",
-                    "style": illustration.image_provider,
-                    "emotional_tones": illustration.emotional_tones.split(",") if illustration.emotional_tones else [],
-                    "intensity_score": illustration.intensity_score,
-                    "prompt": illustration.prompt,
-                    "text_excerpt": illustration.text_excerpt,
-                    "size": illustration.file_size,
-                    "width": illustration.width,
-                    "height": illustration.height,
-                    "created_at": illustration.created_at.isoformat() if illustration.created_at else None,
-                    "generation_status": illustration.generation_status
+                    "scene": f"Scene {illustration.get('scene_number')}",
+                    "style": illustration.get("image_provider"),
+                    "emotional_tones": illustration.get("emotional_tones", []),
+                    "intensity_score": illustration.get("intensity_score"),
+                    "prompt": illustration.get("prompt"),
+                    "text_excerpt": illustration.get("text_excerpt"),
+                    "size": illustration.get("file_size"),
+                    "width": illustration.get("width"),
+                    "height": illustration.get("height"),
+                    "created_at": created_at_str,
+                    "generation_status": illustration.get("generation_status", "completed"),
                 }
                 images.append(image_data)
 
@@ -1287,15 +1300,16 @@ async def delete_manuscript_image(manuscript_id: str, image_id: str) -> SuccessR
                 )
 
             # Verify the image belongs to the correct manuscript
-            if str(illustration.manuscript_id) != manuscript_id:
+            if str(illustration.get("manuscript_id")) != manuscript_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Image does not belong to this manuscript"
                 )
 
             # Delete the physical file
-            if illustration.file_path and Path(illustration.file_path).exists():
-                Path(illustration.file_path).unlink()
+            file_path = illustration.get("file_path")
+            if file_path and Path(file_path).exists():
+                Path(file_path).unlink()
 
             # Delete from database
             illustration_service.delete_illustration(image_id)

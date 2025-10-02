@@ -1,26 +1,56 @@
-"""Service layer for managing illustrations in the database."""
+"""Service layer for managing illustrations stored in MongoDB."""
+
+from __future__ import annotations
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-from uuid import UUID
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from pymongo import ASCENDING
+from pymongo.collection import Collection
+from pymongo.database import Database
 
 from ..db_config import get_db
-from ..db_models import Illustration, Manuscript, Chapter, ProcessingSession
+from ..db_models import CHAPTERS_COLLECTION, ILLUSTRATIONS_COLLECTION
 from ..models import EmotionalMoment, ImageProvider
+
+IllustrationRecord = Dict[str, Any]
 
 
 class IllustrationService:
-    """Service for managing illustrations in the database."""
+    """Service for managing illustration metadata stored in MongoDB."""
 
-    def __init__(self, db: Optional[Session] = None):
-        """Initialize the service with an optional database session."""
-        self.db = db or get_db()
+    def __init__(self, db: Optional[Database] = None):
+        """Initialise the service with an optional Mongo database instance."""
+
+        self.db: Database = db or get_db()
+        self.illustrations: Collection = self.db[ILLUSTRATIONS_COLLECTION]
+        self.chapters: Collection = self.db[CHAPTERS_COLLECTION]
+
+    @staticmethod
+    def _to_record(document: Dict[str, Any]) -> IllustrationRecord:
+        """Convert a Mongo document into an application-friendly record."""
+
+        record = dict(document)
+        record["id"] = str(record.pop("_id"))
+
+        # Normalise optional JSON fields to native structures
+        if isinstance(record.get("style_config"), str):
+            try:
+                record["style_config"] = json.loads(record["style_config"])
+            except json.JSONDecodeError:
+                record["style_config"] = {}
+        record.setdefault("style_config", {})
+
+        emotional = record.get("emotional_tones")
+        if isinstance(emotional, str):
+            record["emotional_tones"] = [tone for tone in emotional.split(",") if tone]
+        else:
+            record["emotional_tones"] = emotional or []
+
+        return record
 
     def save_illustration(
         self,
@@ -37,180 +67,159 @@ class IllustrationService:
         description: Optional[str] = None,
         file_size: Optional[int] = None,
         width: Optional[int] = None,
-        height: Optional[int] = None
-    ) -> Illustration:
-        """Save an illustration to the database.
+        height: Optional[int] = None,
+        chapter_number: Optional[int] = None,
+    ) -> IllustrationRecord:
+        """Persist an illustration document and return the stored record."""
 
-        Args:
-            manuscript_id: UUID of the manuscript
-            chapter_id: UUID of the chapter
-            scene_number: Scene number within the chapter
-            filename: Name of the image file
-            file_path: Full path to the image file
-            prompt: The prompt used to generate the image
-            image_provider: The AI provider used to generate the image
-            emotional_moment: The emotional moment this image represents
-            style_config: Style configuration used for generation
-            title: Optional title for the illustration
-            description: Optional description
-            file_size: File size in bytes
-            width: Image width in pixels
-            height: Image height in pixels
-
-        Returns:
-            The created Illustration object
-        """
-        # Generate web URL
+        illustration_id = str(uuid4())
         web_url = f"/generated/{filename}"
 
-        # Prepare emotional tones
-        emotional_tones = None
-        intensity_score = None
-        text_excerpt = None
+        emotional_tones: List[str] | None = None
+        intensity_score: float | None = None
+        text_excerpt: str | None = None
 
         if emotional_moment:
-            emotional_tones = ",".join([tone.value for tone in emotional_moment.emotional_tones])
+            emotional_tones = [tone.value for tone in emotional_moment.emotional_tones]
             intensity_score = emotional_moment.intensity_score
             text_excerpt = emotional_moment.text_excerpt
 
-            # Generate title and description from emotional moment if not provided
             if not title:
                 title = f"Chapter Scene {scene_number}"
             if not description:
-                primary_tone = emotional_moment.emotional_tones[0].value if emotional_moment.emotional_tones else "neutral"
-                description = f"Illustration depicting: {emotional_moment.text_excerpt[:100]}... (Tone: {primary_tone})"
+                first_tone = emotional_moment.emotional_tones[0].value if emotional_moment.emotional_tones else "neutral"
+                excerpt = (emotional_moment.text_excerpt or "").strip()
+                snippet = f"{excerpt[:100]}..." if len(excerpt) > 100 else excerpt
+                description = f"Illustration depicting: {snippet} (Tone: {first_tone})"
 
-        # Create illustration record
-        illustration = Illustration(
-            manuscript_id=UUID(manuscript_id),
-            chapter_id=UUID(chapter_id),
-            filename=filename,
-            file_path=file_path,
-            web_url=web_url,
-            scene_number=scene_number,
-            title=title or f"Scene {scene_number}",
-            description=description,
-            prompt=prompt,
-            style_config=json.dumps(style_config) if style_config else None,
-            image_provider=image_provider.value,
-            emotional_tones=emotional_tones,
-            intensity_score=intensity_score,
-            text_excerpt=text_excerpt,
-            file_size=file_size,
-            width=width,
-            height=height,
-            generation_status="completed"
+        document = {
+            "_id": illustration_id,
+            "manuscript_id": manuscript_id,
+            "chapter_id": chapter_id,
+            "chapter_number": chapter_number,
+            "filename": filename,
+            "file_path": file_path,
+            "web_url": web_url,
+            "scene_number": scene_number,
+            "title": title or f"Scene {scene_number}",
+            "description": description,
+            "prompt": prompt,
+            "negative_prompt": emotional_moment.negative_prompt if hasattr(emotional_moment, "negative_prompt") else None,
+            "style_config": style_config or {},
+            "image_provider": image_provider.value,
+            "emotional_tones": emotional_tones or [],
+            "intensity_score": intensity_score,
+            "text_excerpt": text_excerpt,
+            "file_size": file_size,
+            "width": width,
+            "height": height,
+            "generation_status": "completed",
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+
+        self.illustrations.insert_one(document)
+        stored = self._to_record(document)
+
+        # Enrich with chapter metadata when available
+        chapter_doc = self.chapters.find_one({"_id": chapter_id})
+        if chapter_doc:
+            stored["chapter_title"] = chapter_doc.get("title")
+            stored.setdefault("chapter_number", chapter_doc.get("number"))
+
+        return stored
+
+    def get_illustrations_by_manuscript(self, manuscript_id: str) -> List[IllustrationRecord]:
+        """Return all illustrations for a manuscript, ordered by chapter then scene."""
+
+        docs = list(
+            self.illustrations.find({"manuscript_id": manuscript_id}).sort([
+                ("chapter_number", ASCENDING),
+                ("scene_number", ASCENDING),
+                ("created_at", ASCENDING),
+            ])
         )
+        records = [self._to_record(doc) for doc in docs]
 
-        self.db.add(illustration)
-        self.db.commit()
-        self.db.refresh(illustration)
+        if not records:
+            return records
 
-        return illustration
+        # Attach chapter metadata for convenience
+        chapter_ids = {record["chapter_id"] for record in records if record.get("chapter_id")}
+        if chapter_ids:
+            chapter_docs = self.chapters.find({"_id": {"$in": list(chapter_ids)}})
+            chapter_map = {doc["_id"]: doc for doc in chapter_docs}
+            for record in records:
+                chapter_doc = chapter_map.get(record.get("chapter_id"))
+                if chapter_doc:
+                    record.setdefault("chapter_number", chapter_doc.get("number"))
+                    record.setdefault("chapter_title", chapter_doc.get("title"))
 
-    def get_illustrations_by_manuscript(self, manuscript_id: str) -> List[Illustration]:
-        """Get all illustrations for a manuscript.
+        return records
 
-        Args:
-            manuscript_id: UUID of the manuscript
+    def get_illustrations_by_chapter(self, chapter_id: str) -> List[IllustrationRecord]:
+        """Return all illustrations for a specific chapter."""
 
-        Returns:
-            List of Illustration objects ordered by chapter number and scene number
-        """
-        return (
-            self.db.query(Illustration)
-            .join(Chapter)
-            .filter(Illustration.manuscript_id == UUID(manuscript_id))
-            .order_by(Chapter.number, Illustration.scene_number)
-            .all()
+        docs = list(
+            self.illustrations.find({"chapter_id": chapter_id}).sort([
+                ("scene_number", ASCENDING),
+                ("created_at", ASCENDING),
+            ])
         )
+        records = [self._to_record(doc) for doc in docs]
 
-    def get_illustrations_by_chapter(self, chapter_id: str) -> List[Illustration]:
-        """Get all illustrations for a chapter.
+        chapter_doc = self.chapters.find_one({"_id": chapter_id})
+        if chapter_doc:
+            for record in records:
+                record.setdefault("chapter_number", chapter_doc.get("number"))
+                record.setdefault("chapter_title", chapter_doc.get("title"))
+        return records
 
-        Args:
-            chapter_id: UUID of the chapter
+    def get_illustration_by_id(self, illustration_id: str) -> Optional[IllustrationRecord]:
+        """Fetch a single illustration by its identifier."""
 
-        Returns:
-            List of Illustration objects ordered by scene number
-        """
-        return (
-            self.db.query(Illustration)
-            .filter(Illustration.chapter_id == UUID(chapter_id))
-            .order_by(Illustration.scene_number)
-            .all()
-        )
-
-    def get_illustration_by_id(self, illustration_id: str) -> Optional[Illustration]:
-        """Get an illustration by its ID.
-
-        Args:
-            illustration_id: UUID of the illustration
-
-        Returns:
-            Illustration object or None if not found
-        """
-        return (
-            self.db.query(Illustration)
-            .filter(Illustration.id == UUID(illustration_id))
-            .first()
-        )
+        doc = self.illustrations.find_one({"_id": illustration_id})
+        if not doc:
+            return None
+        record = self._to_record(doc)
+        chapter_doc = self.chapters.find_one({"_id": record.get("chapter_id")})
+        if chapter_doc:
+            record.setdefault("chapter_number", chapter_doc.get("number"))
+            record.setdefault("chapter_title", chapter_doc.get("title"))
+        return record
 
     def delete_illustration(self, illustration_id: str) -> bool:
-        """Delete a single illustration record and its underlying file.
+        """Delete a single illustration record and remove its associated file."""
 
-        Args:
-            illustration_id: UUID of the illustration to delete
-
-        Returns:
-            True if the illustration existed and was removed, False otherwise
-        """
-
-        illustration = self.get_illustration_by_id(illustration_id)
-        if not illustration:
+        record = self.get_illustration_by_id(illustration_id)
+        if not record:
             return False
 
-        if illustration.file_path:
+        if record.get("file_path"):
             try:
-                Path(illustration.file_path).unlink(missing_ok=True)
+                Path(record["file_path"]).unlink(missing_ok=True)
             except TypeError:
-                # Python versions <3.8 don't support missing_ok; fall back to manual check
-                file_path = Path(illustration.file_path)
+                file_path = Path(record["file_path"])
                 if file_path.exists():
                     file_path.unlink()
             except FileNotFoundError:
                 pass
             except OSError:
-                # Ignore filesystem issues so database record is still removed
                 pass
 
-        self.db.delete(illustration)
-        self.db.commit()
+        self.illustrations.delete_one({"_id": illustration_id})
         return True
 
     def delete_illustrations_for_manuscript(self, manuscript_id: str) -> int:
-        """Delete all illustrations (and their files) for a manuscript.
+        """Remove all illustrations for a manuscript and delete their files."""
 
-        Args:
-            manuscript_id: UUID of the manuscript whose images should be removed
-
-        Returns:
-            Number of illustration records deleted
-        """
-
-        illustrations = (
-            self.db.query(Illustration)
-            .filter(Illustration.manuscript_id == UUID(manuscript_id))
-            .all()
-        )
-
-        deleted_count = 0
-        for illustration in illustrations:
-            if illustration.file_path:
+        records = self.get_illustrations_by_manuscript(manuscript_id)
+        for record in records:
+            if record.get("file_path"):
                 try:
-                    Path(illustration.file_path).unlink(missing_ok=True)
+                    Path(record["file_path"]).unlink(missing_ok=True)
                 except TypeError:
-                    file_path = Path(illustration.file_path)
+                    file_path = Path(record["file_path"])
                     if file_path.exists():
                         file_path.unlink()
                 except FileNotFoundError:
@@ -218,15 +227,14 @@ class IllustrationService:
                 except OSError:
                     pass
 
-            self.db.delete(illustration)
-            deleted_count += 1
+        if not records:
+            return 0
 
-        if deleted_count:
-            self.db.commit()
+        ids = [record["id"] for record in records]
+        result = self.illustrations.delete_many({"_id": {"$in": ids}})
+        return int(result.deleted_count)
 
-        return deleted_count
+    def close(self) -> None:
+        """MongoDB connections are pooled globally; nothing to close."""
 
-    def close(self):
-        """Close the database session."""
-        if self.db:
-            self.db.close()
+        pass
