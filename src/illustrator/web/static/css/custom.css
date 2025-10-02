@@ -85,9 +85,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Readex+Pro:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons+Outlined');
 
+/* Custom font declarations */
+@font-face {
+    font-family: 'Mundial';
+    src: url('../fonts/MundialLight.otf') format('opentype');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-weight: 400;
+    font-family: 'Mundial', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 300;
     line-height: 1.6;
     background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
     color: #1e293b;
@@ -726,6 +735,18 @@ h5, h6 { font: var(--md-type-scale-label); }
     }
 }
 
+/* Dashboard container headers styling - Readex Pro Bold */
+.card-header .card-title,
+.card-header h1,
+.card-header h2,
+.card-header h3,
+.card-header h4,
+.card-header h5,
+.card-header h6 {
+    font-family: 'Readex Pro', 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+}
+
 .stats-icon {
     display: flex;
     align-items: center;
@@ -1282,6 +1303,17 @@ h5, h6 { font: var(--md-type-scale-label); }
 /* Dashboard specific styles */
 .recent-manuscripts-section {
     margin-top: 3rem;
+}
+
+/* Ensure stats cards container doesn't extend beyond Recent Manuscripts width */
+.row.mb-5.g-4 > .col-lg-10.offset-lg-1.col-xl-8.offset-xl-2 > .row.g-4 {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.row.mb-5.g-4 > .col-lg-10.offset-lg-1.col-xl-8.offset-xl-2 > .row.g-4 > [class*="col-"] {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
 }
 
 @media (max-width: 768px) {
