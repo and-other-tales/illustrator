@@ -1803,7 +1803,10 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                     text_excerpt=option_data.get('detailed_scene_elements', option_data['visual_focus']),
                     context=f"Chapter header for '{chapter.title}' - {option_data['description']}",
                     emotional_tones=[EmotionalTone(option_data.get('emotional_tone', 'anticipation').upper()) if option_data.get('emotional_tone', 'anticipation').upper() in [e.name for e in EmotionalTone] else EmotionalTone.ANTICIPATION],
-                    intensity_score=0.7
+                    intensity_score=0.7,
+                    characters_present=option_data.get('characters', []),
+                    setting_description=option_data.get('setting', ''),
+                    narrative_context=option_data.get('narrative_context', '')
                 )
 
                 # Create enhanced style preferences for this specific header
@@ -1876,7 +1879,10 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 text_excerpt=content_themes[focuses[i]],
                 context=f"Chapter header for '{chapter.title}' with {focuses[i]} focus",
                 emotional_tones=[EmotionalTone.ANTICIPATION],
-                intensity_score=0.6
+                intensity_score=0.6,
+                characters_present=[],
+                setting_description="",
+                narrative_context=""
             )
 
             # Use the main prompt engineering system even for fallback
