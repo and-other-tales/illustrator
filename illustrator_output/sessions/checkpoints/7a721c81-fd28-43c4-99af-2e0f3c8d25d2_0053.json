@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "5b938114-26e6-4998-a168-0cdc4f1daf7b",
+  "session_id": "7a721c81-fd28-43c4-99af-2e0f3c8d25d2",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 14,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 53,
+  "created_at": "2025-10-02T13:38:25.190712",
+  "checkpoint_data": {
+    "chapter_number": 14,
+    "chapter_title": "Fortunes Told",
+    "chapter_word_count": 4158,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 85
+}

@@ -507,11 +507,17 @@ async def start_processing(
         enhanced_style_config = dict(request.style_config)
         llm_provider = os.getenv('LLM_PROVIDER', '').lower()
         llm_model = os.getenv('DEFAULT_LLM_MODEL', '').strip()
-        
+
+        logger.info(f"start_processing: llm_provider from env = {llm_provider}")
+        logger.info(f"start_processing: llm_model from env = {llm_model}")
+
         if llm_provider:
             enhanced_style_config['llm_provider'] = llm_provider
         if llm_model:
             enhanced_style_config['llm_model'] = llm_model
+
+        logger.info(f"start_processing: enhanced_style_config keys = {list(enhanced_style_config.keys())}")
+        logger.info(f"start_processing: About to launch background task for session {session_id}")
 
         # Start the actual processing in the background
         background_tasks.add_task(
@@ -522,6 +528,8 @@ async def start_processing(
             max_emotional_moments=getattr(request, 'max_emotional_moments', 10),
             resume_from_checkpoint=False
         )
+
+        logger.info(f"start_processing: Background task launched for session {session_id}")
 
         return {
             "success": True,
@@ -773,6 +781,11 @@ async def run_processing_workflow(
     resume_from_checkpoint: bool = False
 ):
     """Run the actual processing workflow with WebSocket updates and checkpoint support."""
+    logger.info(f"========== run_processing_workflow STARTED for session {session_id} ==========")
+    logger.info(f"run_processing_workflow: manuscript_id = {manuscript_id}")
+    logger.info(f"run_processing_workflow: style_config keys = {list(style_config.keys())}")
+    logger.info(f"run_processing_workflow: llm_provider = {style_config.get('llm_provider')}")
+    logger.info(f"run_processing_workflow: llm_model = {style_config.get('llm_model')}")
     try:
         # Import the processing logic
         import sys
@@ -911,19 +924,25 @@ async def run_processing_workflow(
         )
 
         # Find manuscript by ID (using the same logic as manuscripts.py)
+        logger.info(f"run_processing_workflow: Loading manuscript {manuscript_id}")
         manuscripts = get_saved_manuscripts()
+        logger.info(f"run_processing_workflow: Found {len(manuscripts)} total manuscripts")
         manuscript = None
         for saved_manuscript in manuscripts:
             generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, saved_manuscript.file_path))
             if generated_id == manuscript_id:
                 manuscript = saved_manuscript
+                logger.info(f"run_processing_workflow: Found matching manuscript: {manuscript.title}")
                 break
 
         if not manuscript:
+            logger.error(f"run_processing_workflow: Manuscript {manuscript_id} not found!")
             raise Exception(f"Manuscript {manuscript_id} not found")
 
         chapters = manuscript.chapters
+        logger.info(f"run_processing_workflow: Manuscript has {len(chapters)} chapters")
         if not chapters:
+            logger.error(f"run_processing_workflow: No chapters found for manuscript!")
             raise Exception(f"No chapters found for manuscript {manuscript_id}")
 
         # Ensure the manuscript and chapters exist in the database before creating a session

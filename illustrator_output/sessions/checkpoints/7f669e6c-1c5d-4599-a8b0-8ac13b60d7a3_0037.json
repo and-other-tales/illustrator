@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "e0849b36-87b7-4b44-8903-9420acd64e8b",
+  "session_id": "7f669e6c-1c5d-4599-a8b0-8ac13b60d7a3",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 10,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 37,
+  "created_at": "2025-10-02T13:37:53.199132",
+  "checkpoint_data": {
+    "chapter_number": 10,
+    "chapter_title": "The Tower Falls",
+    "chapter_word_count": 4706,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 65
+}
