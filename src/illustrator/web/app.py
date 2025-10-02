@@ -1999,19 +1999,19 @@ class WebSocketComprehensiveSceneAnalyzer:
                 # Multi-criteria scoring with timeout protection
                 try:
                     emotional_score = await asyncio.wait_for(
-                        self.analyzer._score_emotional_intensity(segment['text']), 
+                        self.analyzer._score_emotional_intensity(segment), 
                         timeout=30.0
                     )
                     visual_score = await asyncio.wait_for(
-                        self.analyzer._score_visual_potential(segment['text']), 
+                        self.analyzer._score_visual_potential(segment), 
                         timeout=30.0
                     )
                     narrative_score = await asyncio.wait_for(
-                        self.analyzer._score_narrative_significance(segment['text']), 
+                        self.analyzer._score_narrative_significance(segment), 
                         timeout=30.0
                     )
                     dialogue_score = await asyncio.wait_for(
-                        self.analyzer._score_dialogue_richness(segment['text']), 
+                        self.analyzer._score_dialogue_richness(segment), 
                         timeout=30.0
                     )
                 except asyncio.TimeoutError:
@@ -2040,7 +2040,7 @@ class WebSocketComprehensiveSceneAnalyzer:
                 if combined_score >= 0.4:  # Lower threshold for more candidates
                     try:
                         moment = await asyncio.wait_for(
-                            self.analyzer._create_detailed_moment(segment['text'], combined_score, chapter),
+                            self.analyzer._create_detailed_moment(segment, combined_score, chapter),
                             timeout=15.0
                         )
                         all_scored_moments.append((moment, combined_score))
