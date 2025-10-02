@@ -352,6 +352,16 @@ class FloatingStatusManager {
     }
     
     async checkForActiveSession() {
+        // Skip initializing on processing pages
+        const currentPath = window.location.pathname;
+        if (currentPath.startsWith('/process/') || 
+            currentPath.startsWith('/processing/') || 
+            currentPath === '/process' || 
+            currentPath === '/processing') {
+            console.log('On processing page, skipping floating status window initialization');
+            return;
+        }
+
         try {
             const response = await fetch('/api/sessions/active');
             if (response.ok) {
@@ -674,7 +684,17 @@ class FloatingStatusManager {
 
 // Initialize the floating status manager when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    window.floatingStatusManager = new FloatingStatusManager();
+    // Check if we're on a processing page
+    const currentPath = window.location.pathname;
+    if (!currentPath.startsWith('/process/') && 
+        !currentPath.startsWith('/processing/') && 
+        currentPath !== '/process' && 
+        currentPath !== '/processing') {
+        // Only initialize on non-processing pages
+        window.floatingStatusManager = new FloatingStatusManager();
+    } else {
+        console.log('On processing page, skipping floating status window initialization');
+    }
 });
 
 // Expose global function for other pages to attach to sessions
