@@ -486,6 +486,13 @@ async def start_processing(
                     "started_at": datetime.now().isoformat(),
                     "is_existing": True
                 }
+        
+        # Check if a specific starting chapter was requested
+        start_from_chapter = getattr(request, 'start_from_chapter', 0)
+        if start_from_chapter and start_from_chapter > 0:
+            logger.info(f"User requested to start processing from chapter {start_from_chapter}")
+        else:
+            start_from_chapter = 0
 
         # Generate a session ID for tracking
         session_id = str(uuid.uuid4())
@@ -547,7 +554,8 @@ async def start_processing(
             manuscript_id=request.manuscript_id,
             style_config=enhanced_style_config,
             max_emotional_moments=getattr(request, 'max_emotional_moments', 10),
-            resume_from_checkpoint=False
+            resume_from_checkpoint=False,
+            start_from_chapter=start_from_chapter
         )
 
         logger.info(f"start_processing: Background task launched for session {session_id}")
@@ -876,7 +884,8 @@ async def run_processing_workflow(
     manuscript_id: str,
     style_config: dict,
     max_emotional_moments: int = 10,
-    resume_from_checkpoint: bool = False
+    resume_from_checkpoint: bool = False,
+    start_from_chapter: int = 0
 ):
     """Run the actual processing workflow with WebSocket updates and checkpoint support."""
     logger.info(f"========== run_processing_workflow STARTED for session {session_id} ==========")
@@ -1221,12 +1230,49 @@ async def run_processing_workflow(
 
         total_images = 0
         progress_per_chapter = 70 // len(chapters) if len(chapters) > 0 else 0
+        # Initialize processing variables with safe defaults
         start_chapter_index = 0
-        if resume_info and resume_info.get("last_completed_chapter", 0) > 0:
-            start_chapter_index = resume_info["last_completed_chapter"]
-            total_images = resume_info.get("total_images_generated", 0)
-
-        # Validate start_chapter_index to prevent skipping all chapters
+        total_images = 0
+        
+        # Check if this is a new processing request (not resuming)
+        is_new_request = not resume_from_checkpoint and not resume_info
+        
+        # If this is a new request with a specified starting chapter
+        if is_new_request:
+            if start_from_chapter > 0:
+                logger.info(f"Starting new processing request for manuscript {manuscript_id} from chapter {start_from_chapter}")
+                # Convert from 1-based chapter number to 0-based index
+                start_chapter_index = start_from_chapter - 1
+                if start_chapter_index >= len(chapters):
+                    logger.warning(f"Requested start chapter {start_from_chapter} exceeds total chapters {len(chapters)}. Starting from chapter 1.")
+                    start_chapter_index = 0
+            else:
+                logger.info(f"Starting new processing request for manuscript {manuscript_id} from chapter 1")
+                start_chapter_index = 0
+            total_images = 0
+        # If we're resuming and have valid checkpoint data, use it
+        elif resume_info and resume_info.get("last_completed_chapter", 0) > 0:
+            stored_chapter = resume_info["last_completed_chapter"]
+            # Perform additional validation on the resume data
+            if stored_chapter >= len(chapters):
+                logger.warning(f"Invalid checkpoint data: chapter {stored_chapter} >= {len(chapters)} total chapters. Starting from beginning.")
+                start_chapter_index = 0
+            else:
+                logger.info(f"Resuming from chapter {stored_chapter + 1} (completed through chapter {stored_chapter})")
+                start_chapter_index = stored_chapter
+                total_images = resume_info.get("total_images_generated", 0)
+                
+                # Notify user about resuming
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "info",
+                        "message": f"Resuming from chapter {stored_chapter + 1} (completed {stored_chapter} out of {len(chapters)} chapters)"
+                    }),
+                    session_id
+                )
+        
+        # Final validation to ensure start_chapter_index is valid
         if start_chapter_index >= len(chapters):
             logger.warning(f"Invalid start_chapter_index {start_chapter_index} >= {len(chapters)} chapters. Resetting to 0.")
             start_chapter_index = 0
