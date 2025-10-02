@@ -1991,7 +1991,7 @@ class WebSocketComprehensiveSceneAnalyzer:
                     json.dumps({
                         "type": "log",
                         "level": "debug",
-                        "message": f"      Processing segment {i+1}/{total_segments}: {segment[:100]}..."
+                        "message": f"      Processing segment {i+1}/{total_segments}: {segment['text'][:100]}..."
                     }),
                     self.session_id
                 )
@@ -1999,19 +1999,19 @@ class WebSocketComprehensiveSceneAnalyzer:
                 # Multi-criteria scoring with timeout protection
                 try:
                     emotional_score = await asyncio.wait_for(
-                        self.analyzer._score_emotional_intensity(segment), 
+                        self.analyzer._score_emotional_intensity(segment['text']), 
                         timeout=30.0
                     )
                     visual_score = await asyncio.wait_for(
-                        self.analyzer._score_visual_potential(segment), 
+                        self.analyzer._score_visual_potential(segment['text']), 
                         timeout=30.0
                     )
                     narrative_score = await asyncio.wait_for(
-                        self.analyzer._score_narrative_significance(segment), 
+                        self.analyzer._score_narrative_significance(segment['text']), 
                         timeout=30.0
                     )
                     dialogue_score = await asyncio.wait_for(
-                        self.analyzer._score_dialogue_richness(segment), 
+                        self.analyzer._score_dialogue_richness(segment['text']), 
                         timeout=30.0
                     )
                 except asyncio.TimeoutError:
@@ -2040,14 +2040,14 @@ class WebSocketComprehensiveSceneAnalyzer:
                 if combined_score >= 0.4:  # Lower threshold for more candidates
                     try:
                         moment = await asyncio.wait_for(
-                            self.analyzer._create_detailed_moment(segment, combined_score, chapter),
+                            self.analyzer._create_detailed_moment(segment['text'], combined_score, chapter),
                             timeout=15.0
                         )
                         all_scored_moments.append((moment, combined_score))
 
                         # Log high-scoring moments as they're discovered (only show very high scores to avoid spam)
                         if combined_score >= 0.7:
-                            segment_preview = segment[:100] + "..." if len(segment) > 100 else segment
+                            segment_preview = segment['text'][:100] + "..." if len(segment['text']) > 100 else segment['text']
                             await self.connection_manager.send_personal_message(
                                 json.dumps({
                                     "type": "log",
