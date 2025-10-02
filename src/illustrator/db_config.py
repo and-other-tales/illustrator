@@ -1,106 +1,107 @@
-"""Database configuration and connection management."""
+"""MongoDB configuration and connection management for Illustrator."""
+
+from __future__ import annotations
 
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import NullPool, StaticPool
+from contextlib import contextmanager
+from typing import Generator
 
-from .db_models import Base
+from pymongo import ASCENDING, MongoClient
+from pymongo.collection import Collection
+from pymongo.database import Database
 
-# Database configuration
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://illustrator:illustrator@localhost:5432/illustrator",
-)
+DEFAULT_MONGO_URL = "mongodb://localhost:27017"
+DEFAULT_DB_NAME = "illustrator"
 
-# Determine effective URL for engine creation.
-# Keep DATABASE_URL constant (for tests that assert the default),
-# but when running under pytest and the PostgreSQL driver isn't installed,
-# fall back to SQLite to avoid hard dependency on psycopg2 during test runs.
-effective_url = DATABASE_URL
-try:
-    # Heuristic: if running tests and using Postgres URL, ensure driver availability
-    if os.getenv("PYTEST_CURRENT_TEST") and DATABASE_URL.startswith("postgresql"):
-        try:
-            import psycopg2  # noqa: F401
-        except Exception:
-            # Graceful fallback for local/test environments without psycopg2
-            effective_url = "sqlite:///:memory:"
-except Exception:
-    # Never allow environment probing to break imports
-    pass
+MONGO_URL = os.getenv("MONGO_URL", DEFAULT_MONGO_URL)
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", DEFAULT_DB_NAME)
 
-def _build_engine_kwargs(url: str) -> dict:
-    """Construct engine kwargs appropriate for the target database URL."""
-
-    kwargs = {
-        "echo": os.getenv("DB_ECHO", "false").lower() == "true",
-    }
-
-    if url.startswith("sqlite"):
-        is_memory_db = ":memory:" in url or "mode=memory" in url
-        kwargs["poolclass"] = StaticPool if is_memory_db else NullPool
-        kwargs["connect_args"] = {"check_same_thread": False}
-    else:
-        kwargs["poolclass"] = NullPool
-
-    return kwargs
+_client: MongoClient | None = None
 
 
-# Engine keyword arguments shared across creation paths
-engine_kwargs = _build_engine_kwargs(effective_url)
+def _initialise_client() -> MongoClient:
+    """Create (or reuse) the shared Mongo client."""
+
+    global _client
+    if _client is None:
+        _client = MongoClient(MONGO_URL, appname="illustrator")
+    return _client
 
 
-def _initialise_engine(url: str, kwargs: dict) -> tuple[str, "Engine"]:
-    """Create a SQLAlchemy engine with graceful fallbacks for tests."""
+def get_client() -> MongoClient:
+    """Return the shared Mongo client."""
 
-    try:
-        candidate_engine = create_engine(url, **kwargs)
-    except ModuleNotFoundError as exc:
-        if "psycopg2" in str(exc):
-            fallback_url = "sqlite:///:memory:"
-            return fallback_url, create_engine(
-                fallback_url,
-                **_build_engine_kwargs(fallback_url),
-            )
-        raise
-
-    if url.startswith("postgresql") and os.getenv("PYTEST_CURRENT_TEST"):
-        try:
-            with candidate_engine.connect():
-                pass
-        except OperationalError:
-            candidate_engine.dispose()
-            fallback_url = "sqlite:///:memory:"
-            return fallback_url, create_engine(
-                fallback_url,
-                **_build_engine_kwargs(fallback_url),
-            )
-
-    return url, candidate_engine
+    return _initialise_client()
 
 
-effective_url, engine = _initialise_engine(effective_url, engine_kwargs)
+def get_database() -> Database:
+    """Return the configured Mongo database."""
 
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def create_tables():
-    """Create all database tables."""
-    Base.metadata.create_all(bind=engine)
+    return get_client()[MONGO_DB_NAME]
 
 
-def get_db_session():
-    """Get a database session."""
-    db = SessionLocal()
+def get_collection(name: str) -> Collection:
+    """Return a specific collection from the configured database."""
+
+    return get_database()[name]
+
+
+@contextmanager
+def get_db_session() -> Generator[Database, None, None]:
+    """Yield the Mongo database to mirror the old SQLAlchemy session helper."""
+
+    db = get_database()
     try:
         yield db
     finally:
-        db.close()
+        # Mongo connections are pooled; no teardown is required.
+        pass
 
 
-def get_db():
-    """Get a database session (for direct use)."""
-    return SessionLocal()
+def get_db() -> Database:
+    """Backward-compatible helper returning the Mongo database instance."""
+
+    return get_database()
+
+
+def _ensure_indexes(db: Database) -> None:
+    """Create the indexes required for Illustrator collections."""
+
+    manuscripts = db["manuscripts"]
+    manuscripts.create_index("id", unique=True)
+
+    chapters = db["chapters"]
+    chapters.create_index([("manuscript_id", ASCENDING), ("number", ASCENDING)], unique=True)
+
+    illustrations = db["illustrations"]
+    illustrations.create_index([("manuscript_id", ASCENDING), ("chapter_id", ASCENDING), ("scene_number", ASCENDING)], unique=True)
+    illustrations.create_index("chapter_id")
+
+    sessions = db["processing_sessions"]
+    sessions.create_index("external_session_id", unique=True, sparse=True)
+    sessions.create_index("updated_at")
+
+    checkpoints = db["processing_checkpoints"]
+    checkpoints.create_index([("session_id", ASCENDING), ("sequence_number", ASCENDING)], unique=True)
+
+    session_images = db["session_images"]
+    session_images.create_index([("session_id", ASCENDING), ("generation_order", ASCENDING)])
+
+    logs = db["processing_logs"]
+    logs.create_index("session_id")
+    logs.create_index("timestamp")
+
+
+def create_tables() -> None:
+    """Maintain compatibility with the former SQL setup by creating indexes."""
+
+    _ensure_indexes(get_database())
+
+
+def close_client() -> None:
+    """Close the shared Mongo client (primarily for tests)."""
+
+    global _client
+    if _client is not None:
+        _client.close()
+        _client = None
