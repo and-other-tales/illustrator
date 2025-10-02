@@ -10,6 +10,8 @@ Maintained by **David James Lennon** (PI & Other Tales, Inc.) · david@othertale
 
 ---
 
+![Dashboard](./images/dashboard.png)
+
 ## ✨ Feature Highlights
 
 - **LangGraph orchestration** – resilient, node-based pipelines for manuscript ingestion, emotional analysis, prompt engineering, generation, and persistence
@@ -166,6 +168,8 @@ The CLI automatically validates credentials for the selected provider and guides
 
 ## 🧠 Workflow Overview
 
+![Process](./images/process.png)
+
 1. **Chapter ingestion** – paste chapters or load saved manuscripts (CTRL+D ends input)
 2. **Emotional resonance scoring** – extracts up to 10 high-impact moments per chapter with intensity, characters, themes, and setting context
 3. **Prompt engineering** – provider-specific prompt rewriting with stylistic preferences and technical parameters
@@ -190,6 +194,8 @@ illustrator_output/
 ---
 
 ## 🖥️ Flux Local Pipeline (Diffusers)
+
+![Sample Generation](./images/sample.png)
 
 The local pipeline mirrors Hugging Face's reference implementation and now installs `diffusers`, `accelerate`, `torch`, and `torchvision` via the project dependencies.
 
