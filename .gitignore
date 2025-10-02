@@ -1,8 +1,10 @@
 # Byte-compiled / optimized / DLL files
+.mdgen_cache.json
 __pycache__/
 *.py[codz]
 *$py.class
 test*
+mdgen.py
 # C extensions
 *.so
 vertex.json
