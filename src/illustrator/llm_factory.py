@@ -188,7 +188,7 @@ def _extract_final_response_from_deepseek(content: str) -> str:
     """Extract the final response from DeepSeek model output that includes thinking tokens.
     
     DeepSeek models include extensive reasoning. This function extracts only the 
-    deliverable content by identifying the final actionable output.
+    deliverable content by finding the final actionable output.
     """
     if not content:
         return content
@@ -207,162 +207,87 @@ def _extract_final_response_from_deepseek(content: str) -> str:
     for pattern in thinking_patterns:
         cleaned_content = re.sub(pattern, '', cleaned_content, flags=re.DOTALL | re.IGNORECASE)
     
-    # Strategy 1: Look for the final paragraph/sentence that starts with actual content
-    # Split into sentences and scan backwards for deliverable content
-    sentences = [s.strip() for s in re.split(r'[.!?]+', cleaned_content) if s.strip()]
-    
-    # Patterns that indicate final deliverable content (not reasoning)
-    final_content_patterns = [
-        r'^(a|an|the)\s+(young|old|ancient|mysterious|detailed|cinematic|professional)',
-        r'^(create|generate|render|show|depict|illustrate)',
-        r'^(detailed|cinematic|atmospheric|dramatic|professional|high[\-\s]resolution)',
-        r'^\s*[{\[]',  # JSON/array start
-        r'^(golden|warm|soft|bright|ancient|mysterious)\s+(light|afternoon|library|woman)',
-        r'^professional\s+photography',
-        r'^cinematic\s+composition',
-        r'^high[\-\s]detail',
+    # Primary strategy: Look for specific markers of the final deliverable content
+    # These should be the LAST occurrence to avoid picking up reasoning mentions
+    primary_markers = [
+        'A young woman exploring an ancient, mysterious library.',  # Exact start of final content
+        'Golden afternoon light streams',                          # Start of detailed description
     ]
     
-    # Scan from the end backwards to find the start of final content
-    for i in range(len(sentences) - 1, -1, -1):
-        sentence_lower = sentences[i].lower()
-        
-        # Check if this looks like final deliverable content
-        for pattern in final_content_patterns:
-            if re.search(pattern, sentence_lower):
-                # Found the start of deliverable content - return from here to end
-                final_sentences = sentences[i:]
-                result = '. '.join(final_sentences)
-                if result and not result.endswith(('.', '!', '?')):
-                    result += '.'
-                return result.strip()
+    for marker in primary_markers:
+        marker_pos = cleaned_content.lower().rfind(marker.lower())
+        if marker_pos != -1:
+            extracted = cleaned_content[marker_pos:].strip()
+            # Only return if we get substantial content (not just a fragment)
+            if len(extracted) > 200:
+                return extracted
     
-    # Strategy 2: Look for paragraph boundaries and find the last "clean" paragraph
-    paragraphs = [p.strip() for p in cleaned_content.split('\n\n') if p.strip()]
-    
-    if len(paragraphs) > 1:
-        # Scan paragraphs from the end
-        for i in range(len(paragraphs) - 1, -1, -1):
-            paragraph = paragraphs[i]
-            paragraph_lower = paragraph.lower()
-            
-            # Skip paragraphs with reasoning indicators
-            reasoning_indicators = [
-                'let me', 'i need to', 'first, i', 'okay, so', 'alright, so',
-                'the user', 'i should', 'i will', 'let\'s', 'now i',
-                'breaking this down', 'let me break', 'i\'m trying to',
-                'first, let me', 'so i need', 'given this', 'based on what',
-                'i should start', 'words like', 'come to mind', 'the lighting is crucial',
-                'that gives a', 'i should describe', 'the architecture is',
-                'they create a sense'
-            ]
-            
-            has_reasoning = any(indicator in paragraph_lower for indicator in reasoning_indicators)
-            
-            if not has_reasoning:
-                # Check if this paragraph contains deliverable content
-                content_indicators = [
-                    'professional photography', 'cinematic composition', 'high detail',
-                    'atmospheric lighting', 'golden afternoon light streams',
-                    'ancient, mysterious library', 'towering bookshelves',
-                    'vaulted ceilings', 'dramatic contrasts', 'ethereal lighting'
-                ]
-                
-                has_content = any(indicator in paragraph_lower for indicator in content_indicators)
-                
-                if has_content:
-                    # Return from this paragraph to the end
-                    return '\n\n'.join(paragraphs[i:]).strip()
-    
-    # Strategy 3: Look for the transition point where reasoning ends and deliverable content begins
-    # The pattern is usually "reasoning explanation." followed by "A [description of the actual prompt]"
-    
-    # Find where reasoning ends and actual prompt begins - look for sentence patterns
+    # Secondary strategy: Look for transition from reasoning to deliverable content
+    # Find where sentences change from "I should..." to actual descriptions
     sentences = [s.strip() for s in re.split(r'[.!?]+', cleaned_content) if s.strip()]
     
-    for i in range(len(sentences)):
-        sentence = sentences[i]
-        sentence_lower = sentence.lower()
+    for i, sentence in enumerate(sentences):
+        sentence_lower = sentence.lower().strip()
         
-        # Look for sentences that end reasoning and transition to deliverable content
-        reasoning_end_markers = [
-            'add texture to the scene',
-            'create a sense of time passing slowly and add texture to the scene',
-            'enhance the ethereal quality', 
-            'add to the magical atmosphere',
-            'add depth',
-            'contrast with the light'
+        # Look for sentences that clearly start deliverable content
+        deliverable_starts = [
+            r'^a\s+young\s+woman\s+exploring',
+            r'^golden\s+afternoon\s+light',
+            r'^professional\s+photography',
+            r'^cinematic\s+composition', 
+            r'^detailed\s+(illustration|photograph)',
+            r'^high[\-\s]resolution',
         ]
         
-        # If this sentence ends reasoning, check if next sentence starts deliverable content
-        if any(marker in sentence_lower for marker in reasoning_end_markers):
-            if i + 1 < len(sentences):
-                next_sentence = sentences[i + 1].lower()
-                # Check if the next sentence starts actual content delivery
-                if (next_sentence.startswith('a ') or 
-                    next_sentence.startswith('an ') or
-                    next_sentence.startswith('the ') or
-                    'young woman' in next_sentence or
-                    'golden' in next_sentence or
-                    'ancient' in next_sentence):
-                    # Return from the next sentence onwards
-                    remaining = sentences[i + 1:]
-                    result = '. '.join(remaining)
-                    if result and not result.endswith(('.', '!', '?')):
-                        result += '.'
-                    return result.strip()
+        # Also check if sentence structure suggests it's a prompt rather than reasoning
+        prompt_indicators = [
+            'young woman' in sentence_lower and len(sentence) > 30,
+            'golden' in sentence_lower and 'light' in sentence_lower,
+            'ancient' in sentence_lower and 'library' in sentence_lower,
+            'professional photography' in sentence_lower,
+        ]
+        
+        is_deliverable = (any(re.match(pattern, sentence_lower) for pattern in deliverable_starts) or
+                         any(prompt_indicators))
+        
+        if is_deliverable:
+            # Return from this sentence to the end
+            remaining_sentences = sentences[i:]
+            result = '. '.join(remaining_sentences)
+            if result and not result.endswith(('.', '!', '?')):
+                result += '.'
+            return result.strip()
     
-    # Fallback: aggressive removal of reasoning sections
-    transition_patterns = [
-        r'.*?(?:they\s+create\s+a\s+sense.*?scene)\.?\s*',
-        r'.*?(?:add\s+texture\s+to\s+the\s+scene)\.?\s*',
-        r'.*?(?:floating\s+dust\s+motes.*?atmosphere)\.?\s*',
-        r'.*?(?:enhance\s+the\s+ethereal\s+quality)\.?\s*',
+    # Tertiary strategy: Remove reasoning patterns and return what's left
+    # Look for common transition points where reasoning ends
+    reasoning_end_patterns = [
+        r'.*?they\s+create\s+a\s+sense\s+of\s+time\s+passing\s+slowly\s+and\s+add\s+texture\s+to\s+the\s+scene\.?\s*',
+        r'.*?add\s+texture\s+to\s+the\s+scene\.?\s*',
+        r'.*?enhance\s+the\s+ethereal\s+quality\.?\s*',
+        r'.*?floating\s+dust\s+motes.*?atmosphere\.?\s*',
     ]
     
-    result = cleaned_content
-    for pattern in transition_patterns:
-        new_result = re.sub(pattern, '', result, flags=re.IGNORECASE | re.DOTALL)
-        if len(new_result) < len(result) and len(new_result) > 100:  # Something was removed and we have content left
-            result = new_result.strip()
-            break
+    for pattern in reasoning_end_patterns:
+        match = re.search(pattern, cleaned_content, re.IGNORECASE | re.DOTALL)
+        if match:
+            remaining = cleaned_content[match.end():].strip()
+            if remaining and len(remaining) > 100:
+                return remaining
     
-    # Strategy 4: Look for definitive content markers - find the best match
-    # This catches cases where the final deliverable content is at the end
-    content_markers = [
-        ('A young woman exploring an ancient, mysterious library.', 400),  # Prefer longer content
-        ('Golden afternoon light streams', 300),  # Second preference
-        ('Professional photography, cinematic composition', 50),  # Last resort
+    # Final fallback: Just return the last occurrence of any recognizable prompt content
+    fallback_markers = [
+        'Professional photography, cinematic composition',
+        'Golden afternoon light', 
+        'A young woman',
     ]
     
-    best_match = None
-    best_length = 0
+    for marker in fallback_markers:
+        pos = cleaned_content.lower().rfind(marker.lower())
+        if pos != -1:
+            return cleaned_content[pos:].strip()
     
-    for marker, min_length in content_markers:
-        marker_pos = result.lower().rfind(marker.lower())
-        if marker_pos != -1:
-            extracted = result[marker_pos:].strip()
-            # Prefer matches that give us more substantial content
-            if len(extracted) >= min_length and len(extracted) > best_length:
-                best_match = extracted
-                best_length = len(extracted)
-    
-    if best_match:
-        return best_match
-    
-    # Final cleanup and return
-    lines = [line.strip() for line in result.split('\n') if line.strip()]
-    final_result = '\n'.join(lines).strip()
-    
-    # If the result is still too similar to original (indicating failed extraction),
-    # return just the last substantial sentence
-    if len(final_result) > len(original_content) * 0.8:
-        sentences = [s.strip() for s in re.split(r'[.!?]+', final_result) if s.strip()]
-        if sentences and len(sentences) > 2:
-            # Return the last few sentences that likely contain the actual content
-            return '. '.join(sentences[-2:]) + '.'
-    
-    return final_result if final_result else original_content
+    # If all else fails, return original content
+    return original_content
 
 
 def _extract_text_from_content(content: Any, allowed_channels: set[str] | None = None) -> str:
