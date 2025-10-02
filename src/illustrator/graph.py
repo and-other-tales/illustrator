@@ -140,8 +140,16 @@ Return your analysis in JSON format with these fields:
 
             for character, emotions in raw_character_emotions.items():
                 if isinstance(emotions, list):
-                    # Filter out invalid emotion strings
-                    valid_emotions = [EmotionalTone(emotion) for emotion in emotions if emotion in valid_tones]
+                    # Filter out invalid emotion strings with proper error handling
+                    valid_emotions = []
+                    for emotion in emotions:
+                        try:
+                            if emotion in valid_tones:
+                                valid_emotions.append(EmotionalTone(emotion))
+                        except (ValueError, KeyError):
+                            # Skip invalid emotions
+                            pass
+                    
                     if valid_emotions:
                         character_emotions[character] = valid_emotions
 

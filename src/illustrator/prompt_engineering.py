@@ -1802,7 +1802,8 @@ Return JSON: {"characters": [{"name": "character_name", "description": "physical
                 header_emotional_moment = EmotionalMoment(
                     text_excerpt=option_data.get('detailed_scene_elements', option_data['visual_focus']),
                     context=f"Chapter header for '{chapter.title}' - {option_data['description']}",
-                    emotional_tones=[EmotionalTone(option_data.get('emotional_tone', 'anticipation').upper()) if option_data.get('emotional_tone', 'anticipation').upper() in [e.name for e in EmotionalTone] else EmotionalTone.ANTICIPATION],
+                    emotional_tones=self._get_valid_emotional_tones(option_data.get('emotional_tone', 'anticipation')),
+
                     intensity_score=0.7,
                     characters_present=option_data.get('characters', []),
                     setting_description=option_data.get('setting', ''),
