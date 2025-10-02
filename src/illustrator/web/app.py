@@ -2087,11 +2087,11 @@ class WebSocketComprehensiveSceneAnalyzer:
                         self.session_id
                     )
 
-                # Add debug logging for the current segment
+                # Add info logging for the current segment to make content visible
                 await self.connection_manager.send_personal_message(
                     json.dumps({
                         "type": "log",
-                        "level": "debug",
+                        "level": "info",
                         "message": f"      Processing segment {i+1}/{total_segments}: {segment['text'][:100]}..."
                     }),
                     self.session_id
