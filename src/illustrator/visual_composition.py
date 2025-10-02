@@ -487,6 +487,9 @@ class AdvancedVisualComposer:
             emotional_tones=[emotional_tone],
             intensity_score=float(context.get("intensity", 0.6)),
             context=context.get("chapter", "") or "scene_preview",
+            characters_present=context.get("characters", []),
+            setting_description=context.get("setting", ""),
+            narrative_context=context.get("narrative_context", "")
         )
 
         composition = await self.design_advanced_composition(
@@ -854,7 +857,10 @@ class AdvancedVisualComposer:
         if isinstance(context, dict):
             em = EmotionalMoment(text_excerpt='', start_position=0, end_position=0,
                                  emotional_tones=[context.get('emotional_tone')] if context.get('emotional_tone') else [],
-                                 intensity_score=float(context.get('intensity', 0.5)), context=context.get('scene_type', ''))
+                                 intensity_score=float(context.get('intensity', 0.5)), context=context.get('scene_type', ''),
+                                 characters_present=context.get('characters', []),
+                                 setting_description=context.get('setting', ''),
+                                 narrative_context=context.get('narrative_context', ''))
             return self._determine_lighting(em, {})
         else:
             return self._determine_lighting(context, {})

@@ -388,7 +388,9 @@ class EmotionalAnalyzer:
                         emotional_tones=emotional_tones,
                         intensity_score=min(1.0, opportunity.get('priority', 0.7)),
                         context=self._build_narrative_context(opportunity, narrative_structure),
-                        narrative_significance=opportunity.get('priority', 0.7)
+                        characters_present=opportunity.get('characters', []),
+                        setting_description=opportunity.get('setting', ''),
+                        narrative_context=opportunity.get('context', '')
                     )
 
                     candidate_moments.append((moment, opportunity.get('priority', 0.7)))
@@ -417,7 +419,9 @@ class EmotionalAnalyzer:
                         emotional_tones=arc.emotional_trajectory or [EmotionalTone.ANTICIPATION],
                         intensity_score=arc.intensity,
                         context=f"Narrative {arc.element.value}: {'; '.join(arc.key_events[:2])}",
-                        narrative_significance=arc.significance_score
+                        characters_present=[],
+                        setting_description='',
+                        narrative_context='; '.join(arc.key_events)
                     )
 
                     candidate_moments.append((moment, arc.intensity * arc.significance_score))
@@ -781,6 +785,9 @@ Respond in JSON format:
             emotional_tones=emotional_tones,
             intensity_score=intensity,
             context=context,
+            characters_present=[],  # Empty list as we don't have character extraction here
+            setting_description="",  # Empty as we don't have setting extraction here
+            narrative_context=""     # Empty as we don't have narrative context extraction here
         )
 
     def _identify_primary_emotion(self, text: str) -> EmotionalTone:

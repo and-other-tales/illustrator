@@ -90,6 +90,10 @@ class EmotionalMoment(BaseModel):
     emotional_tones: List[EmotionalTone] = Field(default_factory=list, description="Detected emotional tones")
     intensity_score: float = Field(default=0.0, description="Emotional intensity from 0.0 to 1.0")
     context: str = Field(default="", description="Surrounding context for the moment")
+    # Adding missing attributes needed by CheckpointManager
+    characters_present: List[str] = Field(default_factory=list, description="Characters present in the moment")
+    setting_description: str = Field(default="", description="Description of the setting")
+    narrative_context: str = Field(default="", description="Narrative context of the moment")
 
 
 class IllustrationPrompt(BaseModel):

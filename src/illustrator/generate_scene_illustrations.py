@@ -13,11 +13,15 @@ import json
 import os
 import sys
 from datetime import datetime
+import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 from dotenv import load_dotenv
 from rich.console import Console
+
+# Configure logging
+logger = logging.getLogger(__name__)
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 
 # Import the illustrator modules
@@ -386,13 +390,19 @@ Return only a decimal number 0.0-1.0."""
 2. A detailed description of the visual scene for illustration
 3. Key visual elements that should be emphasized
 4. The emotional/atmospheric context
+5. Characters present in the scene (list their names only)
+6. A brief description of the setting (location, time, environment)
+7. A brief narrative context (what's happening in the story at this point)
 
 Respond in JSON format:
 {
     "emotional_tones": ["emotion1", "emotion2", "emotion3"],
     "visual_description": "Detailed description of the scene for illustration",
     "key_visual_elements": ["element1", "element2", "element3"],
-    "context": "Emotional and atmospheric context for illustration"
+    "context": "Emotional and atmospheric context for illustration",
+    "characters_present": ["character1", "character2"],
+    "setting_description": "Brief description of the physical setting",
+    "narrative_context": "Brief description of what's happening in the story"
 }"""
 
         try:
@@ -408,11 +418,20 @@ Respond in JSON format:
 
             emotional_tones = [EmotionalTone(tone) for tone in analysis.get('emotional_tones', ['anticipation'])]
             context = analysis.get('context', 'Significant narrative moment with visual potential')
+            
+            # Extract additional information
+            characters_present = analysis.get('characters_present', [])
+            setting_description = analysis.get('setting_description', 'Scene setting')
+            narrative_context = analysis.get('narrative_context', 'Story progression')
 
-        except Exception:
-            # Fallback
+        except Exception as e:
+            # Fallback with more detailed error logging
+            logger.error(f"Error creating detailed moment: {str(e)}")
             emotional_tones = [EmotionalTone.ANTICIPATION]
             context = "Visually compelling scene with narrative significance"
+            characters_present = []
+            setting_description = "Unknown setting"
+            narrative_context = "Narrative progression"
 
         # Extract most visually rich excerpt
         excerpt = self._extract_visual_excerpt(segment['text'])
@@ -423,7 +442,10 @@ Respond in JSON format:
             end_position=segment['end_pos'],
             emotional_tones=emotional_tones,
             intensity_score=score,
-            context=context
+            context=context,
+            characters_present=characters_present,
+            setting_description=setting_description,
+            narrative_context=narrative_context
         )
 
     def _extract_visual_excerpt(self, text: str, max_length: int = 250) -> str:
