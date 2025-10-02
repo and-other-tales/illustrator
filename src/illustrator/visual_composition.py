@@ -740,7 +740,10 @@ class AdvancedVisualComposer:
             context = emotional_moment_or_context
             emotional_moment = EmotionalMoment(text_excerpt='', start_position=0, end_position=0,
                                                emotional_tones=[context.get('emotional_tone')] if context.get('emotional_tone') else [],
-                                               intensity_score=float(context.get('emotional_intensity', 0.5)), context=context.get('scene_type', ''))
+                                               intensity_score=float(context.get('emotional_intensity', 0.5)), context=context.get('scene_type', ''),
+                                               characters_present=context.get('characters', []),
+                                               setting_description=context.get('setting', ''),
+                                               narrative_context=context.get('narrative_context', ''))
             visual_analysis = visual_analysis or {}
         else:
             emotional_moment = emotional_moment_or_context
