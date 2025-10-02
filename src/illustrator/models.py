@@ -150,3 +150,8 @@ class SavedManuscript(BaseModel):
     chapters: List[Chapter] = Field(description="List of chapters")
     saved_at: str = Field(description="When the manuscript was saved")
     file_path: str = Field(description="Path to the saved file")
+
+    @property
+    def title(self) -> str:
+        """Convenience access to the manuscript title."""
+        return self.metadata.title
