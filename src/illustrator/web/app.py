@@ -872,6 +872,20 @@ async def restart_processing(session_id: str, background_tasks: BackgroundTasks)
             session_data.chapter_ids,
             session_data.style_config
         )
+        
+        return {
+            "success": True,
+            "message": "Processing restarted successfully",
+            "session_id": session_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error restarting processing: {str(e)}"
+        )
 
 
 @app.post("/api/process/clear/{manuscript_id}")
@@ -915,20 +929,6 @@ async def clear_manuscript_sessions(manuscript_id: str):
         "cleared_sessions": cleared_sessions,
         "message": f"Cleared {len(cleared_sessions)} sessions for manuscript {manuscript_id}"
     }
-
-        return {
-            "success": True,
-            "message": "Processing restarted successfully",
-            "session_id": session_id
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error restarting processing: {str(e)}"
-        )
 
 async def run_processing_workflow(
     session_id: str,
