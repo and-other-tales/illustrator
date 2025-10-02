@@ -104,6 +104,12 @@ body {
     min-height: 100vh;
 }
 
+/* Ensure all paragraph text uses Mundial Light */
+p, div, span, li, td, th, button, a, small, label, input, textarea, select {
+    font-family: 'Mundial', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 300;
+}
+
 [data-bs-theme="dark"] body {
     background: var(--dark-gradient-surface);
     color: var(--dark-text-primary);
@@ -742,7 +748,16 @@ h5, h6 { font: var(--md-type-scale-label); }
 .card-header h3,
 .card-header h4,
 .card-header h5,
-.card-header h6 {
+.card-header h6,
+.card-title, /* All card titles */
+h1.section-title, 
+h2.section-title, 
+h3.section-title, 
+h4.section-title,
+h5.section-title,
+h6.section-title,
+.processing-section-title, /* For specific processing page sections */
+.fw-bold.section-header {
     font-family: 'Readex Pro', 'Inter', sans-serif !important;
     font-weight: 700 !important;
 }
