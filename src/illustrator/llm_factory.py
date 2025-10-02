@@ -205,7 +205,15 @@ def _extract_final_response_from_deepseek(content: str) -> str:
     
     cleaned_content = original_content
     for pattern in thinking_patterns:
-        cleaned_content = re.sub(pattern, '', cleaned_content, flags=re.DOTALL | re.IGNORECASE)
+        cleaned_content = re.sub(pattern, '', cleaned_content, flags=re.DOTALL | re.IGNORECASE).strip()
+    
+    # If we successfully removed thinking tags and have clean content, return it
+    if len(cleaned_content) < len(original_content) and cleaned_content:
+        # Check if the cleaned content looks like a proper response
+        if ('based on' in cleaned_content.lower() or 
+            'the primary' in cleaned_content.lower() or
+            'image generation prompt' in cleaned_content.lower()):
+            return cleaned_content
     
     # Primary strategy: Look for specific markers of the final deliverable content
     # These should be the LAST occurrence to avoid picking up reasoning mentions
