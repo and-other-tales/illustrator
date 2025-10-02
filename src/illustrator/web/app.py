@@ -475,17 +475,22 @@ async def start_processing(
 ):
     """Start manuscript processing and illustration generation."""
     try:
-        # Check if there's already an active session for this manuscript (exclude completed/error sessions)
-        for session_id, session_data in connection_manager.sessions.items():
-            if (session_data.manuscript_id == request.manuscript_id and 
-                session_data.status.status not in ['completed', 'error']):
-                return {
-                    "success": True,
-                    "session_id": session_id,
-                    "message": "Reconnecting to existing processing session",
-                    "started_at": datetime.now().isoformat(),
-                    "is_existing": True
-                }
+        # Check for force_reset flag that ensures a completely new session
+        force_new_session = getattr(request, 'force_new_session', False)
+        if force_new_session:
+            logger.info(f"Forcing new session for manuscript {request.manuscript_id} - ignoring any existing sessions")
+        else:
+            # Check if there's already an active session for this manuscript (exclude completed/error sessions)
+            for session_id, session_data in connection_manager.sessions.items():
+                if (session_data.manuscript_id == request.manuscript_id and 
+                    session_data.status.status not in ['completed', 'error']):
+                    return {
+                        "success": True,
+                        "session_id": session_id,
+                        "message": "Reconnecting to existing processing session",
+                        "started_at": datetime.now().isoformat(),
+                        "is_existing": True
+                    }
         
         # Check if a specific starting chapter was requested
         start_from_chapter = getattr(request, 'start_from_chapter', 0)
@@ -930,17 +935,37 @@ async def run_processing_workflow(
 
         # Check if we're resuming from a checkpoint
         resume_info = None
-        if resume_from_checkpoint and checkpoint_manager:
+        # Check if a force_new_session parameter was passed to the function
+        force_new_session = style_config.get('force_new_session', False)
+        
+        if force_new_session:
+            # If forcing a new session, clear any existing checkpoint data
+            logger.info(f"Force new session requested - ignoring checkpoint data for {session_id}")
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "info",
+                    "message": "Starting new processing session (forced reset)"
+                }),
+                session_id
+            )
+        elif resume_from_checkpoint and checkpoint_manager:
+            # Normal checkpoint resumption
             resume_info = checkpoint_manager.get_resume_info(session_id)
             if resume_info:
-                await connection_manager.send_personal_message(
-                    json.dumps({
-                        "type": "log",
-                        "level": "info",
-                        "message": f"Resuming session from checkpoint: {resume_info['latest_checkpoint_type']}"
-                    }),
-                    session_id
-                )
+                # Add an extra check to make sure resume info is valid
+                if resume_info.get("last_completed_chapter", 0) >= 0:
+                    await connection_manager.send_personal_message(
+                        json.dumps({
+                            "type": "log",
+                            "level": "info",
+                            "message": f"Resuming session from checkpoint: {resume_info['latest_checkpoint_type']}"
+                        }),
+                        session_id
+                    )
+                else:
+                    logger.warning(f"Invalid resume info for session {session_id} - forcing clean start")
+                    resume_info = None
 
         # Ensure connection manager has a mutable session store (supports tests with mocks)
         sessions = getattr(connection_manager, "sessions", None)
