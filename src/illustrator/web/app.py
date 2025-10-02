@@ -268,10 +268,28 @@ async def _cleanup_completed_session_after_delay(session_id: str, delay_seconds:
 @app.on_event("startup")
 async def _ensure_tables():
     try:
+        from illustrator.db_config import create_tables, MONGO_URL, USE_MOCK
+        
+        if USE_MOCK:
+            console.log("Using mock MongoDB for development")
+        else:
+            console.log(f"Connecting to MongoDB at {MONGO_URL.split('@')[-1] if '@' in MONGO_URL else MONGO_URL.split('/')[-1]}")
+        
         create_tables()
         console.log("Database tables ensured/created")
     except Exception as e:
         console.log(f"Failed to create tables: {e}")
+        
+        # Check if we have MongoDB Atlas connection strings and suggest fixes
+        from illustrator.db_config import MONGO_URL
+        if "mongodb.net" in MONGO_URL:
+            console.log("MongoDB Atlas connection detected. Possible solutions:")
+            console.log("1. Check your network connection to MongoDB Atlas")
+            console.log("2. Verify your MongoDB Atlas username and password")
+            console.log("3. Ensure your IP address is whitelisted in MongoDB Atlas")
+            console.log("4. For local development, consider setting MONGO_USE_MOCK=true")
+        else:
+            console.log("For local development without MongoDB, set MONGO_USE_MOCK=true")
 
 # Include routers
 app.include_router(manuscripts.router, prefix="/api/manuscripts", tags=["manuscripts"])
