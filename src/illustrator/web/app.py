@@ -724,6 +724,38 @@ async def pause_processing(session_id: str):
         # Set pause flag
         session_data.pause_requested = True
 
+@app.post("/api/process/{session_id}/cancel")
+async def cancel_processing(session_id: str):
+    """Cancel an active processing session."""
+    try:
+        # Check if session exists
+        if session_id not in connection_manager.sessions:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Processing session {session_id} not found"
+            )
+
+        session_data = connection_manager.sessions[session_id]
+
+        # Set cancel flag and update status
+        session_data.cancel_requested = True
+        session_data.status = ProcessingStatus(status="cancelled", message="Cancelled by user")
+        
+        # Send notification
+        if session_data.websocket:
+            try:
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "status",
+                        "status": "cancelled",
+                        "message": "Processing cancelled by user"
+                    }),
+                    session_id
+                )
+            except:
+                # WebSocket might be closed, ignore errors
+                pass
+
         # Send pause message to client
         await connection_manager.send_personal_message(
             json.dumps({

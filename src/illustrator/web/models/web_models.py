@@ -158,6 +158,7 @@ class ProcessingSessionData(BaseModel):
     started_at: Optional[str] = None  # ISO timestamp when session started
     step_status: Dict[int, str] = {}  # Track which steps are completed/in-progress
     pause_requested: bool = False  # Flag to request pausing the processing
+    cancel_requested: bool = False  # Flag to request cancelling the processing
 
     class Config:
         arbitrary_types_allowed = True
