@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "3d496cd2-b48f-44ef-8dd8-682ea7f06d8a",
+  "session_id": "e71b5c55-e7e7-47f3-bb44-0c782c6065c5",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 8,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 29,
+  "created_at": "2025-10-02T13:57:29.227308",
+  "checkpoint_data": {
+    "chapter_number": 8,
+    "chapter_title": "The Hermit's Shadow",
+    "chapter_word_count": 3479,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 55
+}
