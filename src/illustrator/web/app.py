@@ -1262,11 +1262,11 @@ async def run_processing_workflow(
         start_chapter_index = 0
         total_images = 0
         
-        # Check if this is a new processing request (not resuming)
-        is_new_request = not resume_from_checkpoint and not resume_info
-        
-        # If this is a new request with a specified starting chapter
-        if is_new_request:
+        # Check if forcing a clean start or starting from a specific chapter
+        if force_new_session or start_from_chapter > 0:
+            # Force clean start - ignore any checkpoint data
+            resume_info = None
+            
             if start_from_chapter > 0:
                 logger.info(f"Starting new processing request for manuscript {manuscript_id} from chapter {start_from_chapter}")
                 # Convert from 1-based chapter number to 0-based index
@@ -1275,9 +1275,34 @@ async def run_processing_workflow(
                     logger.warning(f"Requested start chapter {start_from_chapter} exceeds total chapters {len(chapters)}. Starting from chapter 1.")
                     start_chapter_index = 0
             else:
-                logger.info(f"Starting new processing request for manuscript {manuscript_id} from chapter 1")
+                logger.info(f"Starting new processing request for manuscript {manuscript_id} from chapter 1 (forced clean start)")
                 start_chapter_index = 0
-            total_images = 0
+            
+            # Log the decision
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "info",
+                    "message": f"Starting new processing from Chapter {start_chapter_index + 1}/{len(chapters)}"
+                }),
+                session_id
+            )
+            
+        # Check if this is a new processing request (not resuming)
+        elif not resume_from_checkpoint and not resume_info:
+            logger.info(f"Starting new processing request for manuscript {manuscript_id} from chapter 1")
+            start_chapter_index = 0
+            
+            # Log the decision
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "info",
+                    "message": f"Starting new processing from Chapter 1/{len(chapters)}"
+                }),
+                session_id
+            )
+            
         # If we're resuming and have valid checkpoint data, use it
         elif resume_info and resume_info.get("last_completed_chapter", 0) > 0:
             stored_chapter = resume_info["last_completed_chapter"]
@@ -1285,6 +1310,16 @@ async def run_processing_workflow(
             if stored_chapter >= len(chapters):
                 logger.warning(f"Invalid checkpoint data: chapter {stored_chapter} >= {len(chapters)} total chapters. Starting from beginning.")
                 start_chapter_index = 0
+                
+                # Log the problem
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "warning",
+                        "message": f"Invalid checkpoint data detected. Starting from Chapter 1/{len(chapters)}"
+                    }),
+                    session_id
+                )
             else:
                 logger.info(f"Resuming from chapter {stored_chapter + 1} (completed through chapter {stored_chapter})")
                 start_chapter_index = stored_chapter
@@ -1295,7 +1330,7 @@ async def run_processing_workflow(
                     json.dumps({
                         "type": "log",
                         "level": "info",
-                        "message": f"Resuming from chapter {stored_chapter + 1} (completed {stored_chapter} out of {len(chapters)} chapters)"
+                        "message": f"Resuming from Chapter {stored_chapter + 1}/{len(chapters)} (completed {stored_chapter} chapters)"
                     }),
                     session_id
                 )
