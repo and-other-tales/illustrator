@@ -723,6 +723,13 @@ async def pause_processing(session_id: str):
 
         # Set pause flag
         session_data.pause_requested = True
+        return {"status": "success", "message": "Processing paused"}
+    except Exception as e:
+        logger.error(f"Error pausing session: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error pausing session: {str(e)}"
+        )
 
 @app.post("/api/process/{session_id}/cancel")
 async def cancel_processing(session_id: str):
