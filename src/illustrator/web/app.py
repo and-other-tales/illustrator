@@ -1031,6 +1031,8 @@ async def run_processing_workflow(
         # Initialize components with WebSocket-enabled analyzer
         # Pass LLM model and style config for proper provider detection
         llm_model = style_config.get("llm_model")
+        logger.info(f"Processing session {session_id}: llm_model from style_config = {llm_model}")
+        logger.info(f"Processing session {session_id}: style_config keys = {list(style_config.keys())}")
         analyzer = WebSocketComprehensiveSceneAnalyzer(connection_manager, session_id, llm_model, style_config)
         from illustrator.models import ImageProvider
 
@@ -1585,6 +1587,13 @@ class WebSocketComprehensiveSceneAnalyzer:
         ComprehensiveSceneAnalyzer = _scene_tools.ComprehensiveSceneAnalyzer
 
         context: ManuscriptContext = get_default_context()
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"WebSocketComprehensiveSceneAnalyzer init: llm_model={llm_model}")
+        logger.info(f"WebSocketComprehensiveSceneAnalyzer init: context.llm_provider={context.llm_provider}")
+        logger.info(f"WebSocketComprehensiveSceneAnalyzer init: context.model={context.model}")
+        logger.info(f"WebSocketComprehensiveSceneAnalyzer init: context.huggingface_endpoint_url={getattr(context, 'huggingface_endpoint_url', None)}")
 
         # Apply LLM provider from style config if available
         if style_config and 'llm_provider' in style_config:
