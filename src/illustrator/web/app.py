@@ -739,7 +739,8 @@ async def cancel_processing(session_id: str):
 
         # Set cancel flag and update status
         session_data.cancel_requested = True
-        session_data.status = ProcessingStatus(status="cancelled", message="Cancelled by user")
+        session_data.status.status = "cancelled"
+        session_data.status.message = "Cancelled by user"
         
         # Send notification
         if session_data.websocket:
@@ -752,9 +753,19 @@ async def cancel_processing(session_id: str):
                     }),
                     session_id
                 )
-            except:
+            except Exception as e:
                 # WebSocket might be closed, ignore errors
-                pass
+                logger.warning(f"Failed to send cancellation message: {str(e)}")
+                
+        return {"success": True, "message": "Processing cancelled"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cancelling processing: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error cancelling processing: {str(e)}"
+        )
 
         # Send pause message to client
         await connection_manager.send_personal_message(
@@ -1474,6 +1485,19 @@ async def run_processing_workflow(
             session_data.status.current_chapter = chapter.number
             session_data.status.chapters_processed = i
 
+            # Check for cancel request before processing each chapter
+            if connection_manager.sessions[session_id].cancel_requested:
+                logger.info(f"Processing for session {session_id} cancelled by user during chapter processing")
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "warning",
+                        "message": "Processing cancelled by user"
+                    }),
+                    session_id
+                )
+                return
+            
             # Check for pause request before processing each chapter
             if connection_manager.sessions[session_id].pause_requested:
                 # Create pause checkpoint
@@ -2006,6 +2030,19 @@ class WebSocketComprehensiveSceneAnalyzer:
 
         for i, segment in enumerate(segments):
             try:
+                # Check for cancellation request
+                if hasattr(self, 'session_id') and self.session_id in connection_manager.sessions:
+                    if connection_manager.sessions[self.session_id].cancel_requested:
+                        await self.connection_manager.send_personal_message(
+                            json.dumps({
+                                "type": "log",
+                                "level": "warning",
+                                "message": "Segment analysis cancelled by user"
+                            }),
+                            self.session_id
+                        )
+                        return []
+                
                 # Validate segment structure before processing
                 if not isinstance(segment, dict) or 'text' not in segment:
                     await self.connection_manager.send_personal_message(
@@ -2877,7 +2914,8 @@ async def get_session_status(session_id: str):
             "scene_number": img.scene_number,
             "timestamp": img.timestamp
         } for img in session_data.images],
-        "pause_requested": getattr(session_data, 'pause_requested', False)
+        "pause_requested": getattr(session_data, 'pause_requested', False),
+        "cancel_requested": getattr(session_data, 'cancel_requested', False)
     }
 
 

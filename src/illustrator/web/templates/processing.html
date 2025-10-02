@@ -1174,13 +1174,39 @@ function continueInBackground() {
     }
 }
 
-function cancelProcessing() {
+async function cancelProcessing() {
     if (confirm('Are you sure you want to cancel processing? This action cannot be undone.')) {
-        if (websocket) {
-            websocket.close();
+        try {
+            // First call the API to cancel processing on the server
+            const response = await fetch(`/api/process/${sessionId}/cancel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to cancel processing');
+            }
+            
+            // Close the websocket after the cancel request is sent
+            if (websocket) {
+                websocket.close();
+            }
+            
+            // Update UI
+            updateProcessingStatus('cancelled', 'Cancelled');
+            addLogMessage('warning', 'Processing cancelled by user');
+            
+            // Disable cancel button and enable restart
+            document.getElementById('cancelBtn').disabled = true;
+            document.getElementById('restartBtn').classList.remove('d-none');
+            
+        } catch (error) {
+            console.error('Error cancelling processing:', error);
+            addLogMessage('error', `Failed to cancel processing: ${error.message}`);
         }
-        updateProcessingStatus('cancelled', 'Cancelled');
-        addLogMessage('warning', 'Processing cancelled by user');
     }
 }
 
