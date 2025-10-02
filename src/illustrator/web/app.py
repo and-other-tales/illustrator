@@ -2191,7 +2191,8 @@ class WebSocketIllustrationGenerator:
 
     async def generate_images(self, prompts, chapter):
         """Generate images with WebSocket progress updates."""
-        generated_images = []
+
+        generated_images: list[dict[str, Any]] = []
         total_prompts = len(prompts)
 
         await self.connection_manager.send_personal_message(
@@ -2203,146 +2204,158 @@ class WebSocketIllustrationGenerator:
             self.session_id
         )
 
-        for i, prompt in enumerate(prompts):
-            try:
-                # Send progress update with more detail
-                progress = int(((i + 1) / total_prompts) * 100)
-                # Extract scene description from prompt for logging
-                prompt_preview = str(prompt)
-                await self.connection_manager.send_personal_message(
-                    json.dumps({
-                        "type": "log",
-                        "level": "info",
-                        "message": f"🖼️ Generating image {i+1}/{total_prompts} ({progress}%): {prompt_preview}"
-                    }),
-                    self.session_id
+        for index, prompt in enumerate(prompts):
+            prompt_obj: IllustrationPrompt
+            if isinstance(prompt, str):
+                prompt_obj = IllustrationPrompt(
+                    provider=self.generator.provider,
+                    prompt=prompt,
+                    style_modifiers=[],
+                    negative_prompt="",
+                    technical_params={}
                 )
+            else:
+                prompt_obj = prompt
 
-                # Convert string prompt to IllustrationPrompt object if necessary
-                if isinstance(prompt, str):
-                    prompt_obj = IllustrationPrompt(
-                        provider=self.generator.provider,
-                        prompt=prompt,
-                        style_modifiers=[],
-                        negative_prompt="",
-                        technical_params={}
-                    )
-                else:
-                    prompt_obj = prompt
+            prompt_text = prompt_obj.prompt
+            scene_number = index + 1
+            progress = int(((scene_number) / total_prompts) * 100) if total_prompts else 100
 
+            await self.connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "log",
+                    "level": "info",
+                    "message": f"🖼️ Generating image {scene_number}/{total_prompts} ({progress}%): {prompt_text}"
+                }),
+                self.session_id
+            )
+
+            result_entry: dict[str, Any] = {
+                'success': False,
+                'file_path': None,
+                'prompt': prompt_text,
+                'scene_number': scene_number,
+                'chapter_number': chapter.number,
+                'provider': self.generator.provider.value,
+            }
+
+            try:
                 result = await self.generator.image_provider.generate_image(prompt_obj)
-
-                if result.get('success'):
-                    # Save the image
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"chapter_{chapter.number}_scene_{i+1}_{timestamp}.png"
-                    file_path = self.generator.output_dir / filename
-
-                    # Ensure output directory exists
-                    self.generator.output_dir.mkdir(parents=True, exist_ok=True)
-
-                    # Save image based on result type
-                    if 'base64_image' in result:
-                        image_data = base64.b64decode(result['base64_image'])
-                        with open(file_path, 'wb') as f:
-                            f.write(image_data)
-                    elif 'image_data' in result:
-                        try:
-                            image_data = result['image_data']
-                            if isinstance(image_data, str):
-                                image_bytes = base64.b64decode(image_data)
-                            else:
-                                image_bytes = image_data
-                            with open(file_path, 'wb') as f:
-                                f.write(image_bytes)
-                        except Exception as decode_error:
-                            await self.connection_manager.send_personal_message(
-                                json.dumps({
-                                    "type": "log",
-                                    "level": "warning",
-                                    "message": f"⚠️ Failed to decode Imagen data for image {i+1}: {decode_error}"
-                                }),
-                                self.session_id
-                            )
-                            file_path = None
-                    elif 'url' in result:
-                        # Download the image from URL
-                        try:
-                            import aiohttp
-                            async with aiohttp.ClientSession() as session:
-                                async with session.get(result['url']) as response:
-                                    if response.status == 200:
-                                        image_data = await response.read()
-                                        with open(file_path, 'wb') as f:
-                                            f.write(image_data)
-                                        await self.connection_manager.send_personal_message(
-                                            json.dumps({
-                                                "type": "log",
-                                                "level": "info",
-                                                "message": f"✅ Downloaded and saved image {i+1}"
-                                            }),
-                                            self.session_id
-                                        )
-                                    else:
-                                        raise Exception(f"Failed to download image: HTTP {response.status}")
-                        except Exception as download_error:
-                            await self.connection_manager.send_personal_message(
-                                json.dumps({
-                                    "type": "log",
-                                    "level": "warning",
-                                    "message": f"⚠️ Failed to download image {i+1}: {download_error}. URL: {result['url']}"
-                                }),
-                                self.session_id
-                            )
-                            # Set file_path to None to indicate no file was saved
-                            file_path = None
-
-                    # Only add to results if we successfully saved a file
-                    if file_path is not None:
-                        result_info = {
-                            'success': True,
-                            'file_path': str(file_path),
-                            'prompt': str(prompt),
-                            'chapter_number': chapter.number,
-                            'scene_number': i + 1,
-                            'provider': str(self.generator.provider),
-                            'generated_at': timestamp
-                        }
-                        generated_images.append(result_info)
-
-                    await self.connection_manager.send_personal_message(
-                        json.dumps({
-                            "type": "log",
-                            "level": "success",
-                            "message": f"✅ Successfully generated image {i+1}/{total_prompts}"
-                        }),
-                        self.session_id
-                    )
-                else:
-                    await self.connection_manager.send_personal_message(
-                        json.dumps({
-                            "type": "log",
-                            "level": "warning",
-                            "message": f"❌ Failed to generate image {i+1}/{total_prompts}: {result.get('error', 'Unknown error')}"
-                        }),
-                        self.session_id
-                    )
-
-            except Exception as e:
+            except Exception as generation_error:
+                error_message = str(generation_error)
+                result_entry['error'] = error_message
+                generated_images.append(result_entry)
                 await self.connection_manager.send_personal_message(
                     json.dumps({
                         "type": "log",
                         "level": "error",
-                        "message": f"❌ Error generating image {i+1}/{total_prompts}: {str(e)}"
+                        "message": f"❌ Error generating image {scene_number}/{total_prompts}: {error_message}"
                     }),
                     self.session_id
                 )
+                continue
+
+            success = bool(result.get('success'))
+            error_message = result.get('error') if not success else None
+            file_path: Path | None = None
+            metadata: dict[str, Any] | None = None
+
+            if success:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"chapter_{chapter.number}_scene_{scene_number}_{timestamp}.png"
+                file_path = self.generator.output_dir / filename
+
+                # Ensure output directory exists
+                self.generator.output_dir.mkdir(parents=True, exist_ok=True)
+
+                try:
+                    if 'base64_image' in result:
+                        image_bytes = base64.b64decode(result['base64_image'])
+                    elif 'image_data' in result:
+                        image_data = result['image_data']
+                        image_bytes = base64.b64decode(image_data) if isinstance(image_data, str) else image_data
+                    elif 'url' in result:
+                        import aiohttp
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(result['url']) as response:
+                                if response.status != 200:
+                                    raise RuntimeError(f"Failed to download image: HTTP {response.status}")
+                                image_bytes = await response.read()
+                    else:
+                        raise RuntimeError("No image data returned by provider")
+
+                    with open(file_path, 'wb') as output_file:
+                        output_file.write(image_bytes)
+
+                    metadata = {
+                        'chapter_number': chapter.number,
+                        'chapter_title': chapter.title,
+                        'scene_number': scene_number,
+                        'prompt': prompt_text,
+                        'style_modifiers': list(prompt_obj.style_modifiers),
+                        'negative_prompt': prompt_obj.negative_prompt,
+                        'technical_params': dict(prompt_obj.technical_params),
+                        'generated_at': datetime.now().isoformat(),
+                        'provider': self.generator.provider.value,
+                        'file_path': str(file_path)
+                    }
+
+                    metadata_path = self.generator.output_dir / f"chapter_{chapter.number}_scene_{scene_number}_{timestamp}_metadata.json"
+                    try:
+                        with open(metadata_path, 'w', encoding='utf-8') as metadata_file:
+                            json.dump(metadata, metadata_file, indent=2, ensure_ascii=False)
+                    except Exception as metadata_error:
+                        await self.connection_manager.send_personal_message(
+                            json.dumps({
+                                "type": "log",
+                                "level": "warning",
+                                "message": f"⚠️ Failed to write metadata for image {scene_number}: {metadata_error}"
+                            }),
+                            self.session_id
+                        )
+                    else:
+                        metadata['metadata_path'] = str(metadata_path)
+
+                except Exception as write_error:
+                    error_message = f"Failed to persist image data: {write_error}"
+                    success = False
+                    file_path = None
+
+            result_entry['success'] = success
+            if success and file_path:
+                result_entry['file_path'] = str(file_path)
+                if metadata:
+                    result_entry['metadata'] = metadata
+                await self.connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "success",
+                        "message": f"✅ Successfully generated image {scene_number}/{total_prompts}: {Path(file_path).name}"
+                    }),
+                    self.session_id
+                )
+            else:
+                result_entry['file_path'] = None
+                if error_message:
+                    result_entry['error'] = error_message
+                await self.connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "warning",
+                        "message": f"❌ Failed to generate image {scene_number}/{total_prompts}: {error_message or 'Unknown error'}"
+                    }),
+                    self.session_id
+                )
+
+            generated_images.append(result_entry)
+
+        successful = sum(1 for item in generated_images if item.get('success'))
 
         await self.connection_manager.send_personal_message(
             json.dumps({
                 "type": "log",
                 "level": "success",
-                "message": f"🎉 Image generation complete! Generated {len(generated_images)} out of {total_prompts} images."
+                "message": f"🎉 Image generation complete! Generated {successful} out of {total_prompts} images."
             }),
             self.session_id
         )
