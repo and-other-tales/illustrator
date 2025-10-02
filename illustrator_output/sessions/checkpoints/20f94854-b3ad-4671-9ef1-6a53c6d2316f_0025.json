@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "6fdd98fe-8dd1-472e-9549-954dc3afa7f0",
+  "session_id": "20f94854-b3ad-4671-9ef1-6a53c6d2316f",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 7,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 25,
+  "created_at": "2025-10-01T03:02:50",
+  "checkpoint_data": {
+    "chapter_number": 7,
+    "chapter_title": "Court of Revelations",
+    "chapter_word_count": 4442,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 44
+}

@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "8878422b-521b-4b41-bdf5-8d09bd14e370",
+  "session_id": "02f24db0-32ad-435e-8bd1-545320449a34",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 16,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 61,
+  "created_at": "2025-10-01T03:03:22",
+  "checkpoint_data": {
+    "chapter_number": 16,
+    "chapter_title": "The Sun Rises",
+    "chapter_word_count": 5021,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 80
+}

@@ -44,11 +44,13 @@ Here's what I can do:
 Ready to begin? Please share your first chapter with me.
 """)
 
+    has_chapter = state.get("current_chapter") is not None
+    awaiting_input = False if has_chapter else True
+
     return {
         "messages": [init_message],
-        "awaiting_chapter_input": True,
+        "awaiting_chapter_input": awaiting_input,
         "processing_complete": False,
-        "chapters_completed": [],
         "error_message": None,
         "retry_count": 0,
     }
@@ -622,7 +624,12 @@ builder.add_node("handle_error", handle_error)
 
 # Add edges
 builder.add_edge("__start__", "initialize_session")
-builder.add_edge("initialize_session", END)
+
+builder.add_conditional_edges(
+    "initialize_session",
+    route_next_step,
+    ["analyze_chapter", "generate_illustrations", "complete_chapter", "handle_error", END],
+)
 
 # Add conditional routing
 builder.add_conditional_edges(
@@ -640,8 +647,14 @@ builder.add_conditional_edges(
 builder.add_edge("complete_chapter", END)
 builder.add_edge("handle_error", END)
 
-# Compile the graph
-graph = builder.compile()
-graph.name = "ManuscriptIllustrator"
 
-__all__ = ["graph"]
+def create_graph(store: BaseStore | None = None):
+    """Compile the workflow graph with an optional store."""
+    compiled_graph = builder.compile(store=store)
+    compiled_graph.name = "ManuscriptIllustrator"
+    return compiled_graph
+
+
+graph = create_graph()
+
+__all__ = ["graph", "create_graph"]

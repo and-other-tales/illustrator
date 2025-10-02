@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "790e7588-0b09-4f29-bf00-dc9e428f98d5",
+  "session_id": "bdf9465a-6a5d-4db0-9e76-53e37d5a76a2",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 2,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 5,
+  "created_at": "2025-10-01T03:02:56",
+  "checkpoint_data": {
+    "chapter_number": 2,
+    "chapter_title": "The Reading",
+    "chapter_word_count": 4564,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 24
+}

@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "73d24756-47f1-4541-b7ed-34eb2cbf2381",
+  "session_id": "1c6d1114-9689-4863-a458-f3c1a7856520",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 8,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 29,
+  "created_at": "2025-10-01T03:02:45",
+  "checkpoint_data": {
+    "chapter_number": 8,
+    "chapter_title": "The Magician's Trap",
+    "chapter_word_count": 2879,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 41
+}

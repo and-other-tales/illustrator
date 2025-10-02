@@ -21,6 +21,7 @@ from illustrator.web.models.web_models import (
     SuccessResponse,
     ErrorResponse
 )
+from illustrator.web.routes.manuscripts import filesystem_count_generated_images
 from illustrator.services.illustration_service import IllustrationService
 from langchain.chat_models import init_chat_model  # expose for test patching
 try:
@@ -117,34 +118,30 @@ def load_chapter_analysis(chapter_id: str) -> Optional[dict]:
 
 def count_chapter_images(manuscript_id: str, chapter_number: int) -> int:
     """Count generated images for a specific chapter."""
+    illustration_service = None
+    db_count = 0
+
     try:
-        # Try database approach first
         illustration_service = IllustrationService()
-        try:
-            illustrations = illustration_service.get_illustrations_by_manuscript(manuscript_id)
-            count = sum(1 for ill in illustrations if ill.chapter and ill.chapter.number == chapter_number)
-            illustration_service.close()
-            return count
-        finally:
-            illustration_service.close()
-
+        illustrations = illustration_service.get_illustrations_by_manuscript(manuscript_id)
+        db_count = sum(
+            1
+            for ill in illustrations
+            if getattr(ill, "chapter", None) and getattr(ill.chapter, "number", None) == chapter_number
+        )
     except Exception:
-        # Fallback to filesystem counting
-        try:
-            generated_images_dir = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
-            if not generated_images_dir.exists():
-                return 0
+        db_count = 0
+    finally:
+        if illustration_service is not None:
+            try:
+                illustration_service.close()
+            except Exception:
+                pass
 
-            count = 0
-            pattern = f"chapter_{chapter_number}_"
+    if db_count:
+        return db_count
 
-            for image_file in generated_images_dir.iterdir():
-                if image_file.is_file() and pattern in image_file.name:
-                    count += 1
-
-            return count
-        except Exception:
-            return 0
+    return filesystem_count_generated_images(manuscript_id, chapter_number)
 
 
 @router.get("/{manuscript_id}")

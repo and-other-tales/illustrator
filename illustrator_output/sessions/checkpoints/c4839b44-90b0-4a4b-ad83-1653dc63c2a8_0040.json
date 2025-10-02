@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "b520cc6e-6a4e-4a96-a891-3872fc738d4d",
+  "session_id": "c4839b44-90b0-4a4b-ad83-1653dc63c2a8",
+  "checkpoint_type": "images_generating",
+  "chapter_number": 10,
+  "step_name": "generating_images",
+  "sequence_number": 40,
+  "created_at": "2025-10-01T03:02:55",
+  "checkpoint_data": {
+    "chapter_number": 10,
+    "images_to_generate": 0,
+    "current_image_index": 0,
+    "generation_in_progress": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "generate_image_0",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 58
+}

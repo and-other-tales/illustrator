@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "af8e3cc0-e9ef-4423-8d2a-b2c9ec3745db",
+  "session_id": "5f629247-7460-467a-b99d-3d44c627130e",
+  "checkpoint_type": "prompts_generated",
+  "chapter_number": 15,
+  "step_name": "generating_prompts",
+  "sequence_number": 59,
+  "created_at": "2025-10-01T03:03:20",
+  "checkpoint_data": {
+    "chapter_number": 15,
+    "prompts_generated": 0,
+    "prompts_metadata": [],
+    "ready_for_generation": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "generate_images",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 78
+}

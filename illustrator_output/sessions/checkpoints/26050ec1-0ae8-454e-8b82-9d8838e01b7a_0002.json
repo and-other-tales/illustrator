@@ -1,0 +1,155 @@
+{
+  "checkpoint_id": "39a850c7-39b6-445a-b988-39a2edddb0e1",
+  "session_id": "26050ec1-0ae8-454e-8b82-9d8838e01b7a",
+  "checkpoint_type": "manuscript_loaded",
+  "chapter_number": 0,
+  "step_name": "loading_manuscript",
+  "sequence_number": 2,
+  "created_at": "2025-09-30T19:09:48",
+  "checkpoint_data": {
+    "chapters_loaded": 22,
+    "chapters_info": [
+      {
+        "number": 1,
+        "title": "A City Wakes",
+        "word_count": 5312
+      },
+      {
+        "number": 2,
+        "title": "Portobello Road",
+        "word_count": 3461
+      },
+      {
+        "number": 3,
+        "title": "The Reading",
+        "word_count": 4564
+      },
+      {
+        "number": 4,
+        "title": "The Reading",
+        "word_count": 4564
+      },
+      {
+        "number": 5,
+        "title": "A Storm Breaks",
+        "word_count": 4054
+      },
+      {
+        "number": 6,
+        "title": "Familiar Strangers",
+        "word_count": 3917
+      },
+      {
+        "number": 7,
+        "title": "Familiar Strangers",
+        "word_count": 3917
+      },
+      {
+        "number": 8,
+        "title": "The Magician's Trap",
+        "word_count": 2879
+      },
+      {
+        "number": 9,
+        "title": "Court of Revelations",
+        "word_count": 4442
+      },
+      {
+        "number": 10,
+        "title": "Court of Revelations",
+        "word_count": 4442
+      },
+      {
+        "number": 11,
+        "title": "The Hermit's Shadow",
+        "word_count": 3479
+      },
+      {
+        "number": 12,
+        "title": "The Hermit's Shadow",
+        "word_count": 3479
+      },
+      {
+        "number": 13,
+        "title": "Wheel of Fortune",
+        "word_count": 6288
+      },
+      {
+        "number": 14,
+        "title": "Wheel of Fortune",
+        "word_count": 6288
+      },
+      {
+        "number": 15,
+        "title": "The Tower Falls",
+        "word_count": 4706
+      },
+      {
+        "number": 16,
+        "title": "A Star In The Storm",
+        "word_count": 2355
+      },
+      {
+        "number": 17,
+        "title": "A Star In The Storm",
+        "word_count": 2355
+      },
+      {
+        "number": 18,
+        "title": "The Moon's Reflection",
+        "word_count": 3531
+      },
+      {
+        "number": 19,
+        "title": "The Sun Rises",
+        "word_count": 5021
+      },
+      {
+        "number": 20,
+        "title": "The Sun Rises",
+        "word_count": 5021
+      },
+      {
+        "number": 21,
+        "title": "The Sun Rises",
+        "word_count": 5021
+      },
+      {
+        "number": 22,
+        "title": "Fortunes Told",
+        "word_count": 4158
+      }
+    ],
+    "processing_order": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22
+    ]
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_first_chapter",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 10
+}

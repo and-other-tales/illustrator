@@ -109,17 +109,17 @@
 
                     <div class="col-md-4">
                         <!-- Processing Stats -->
-                        <div class="card bg-light">
+                        <div class="card processing-stats-card">
                             <div class="card-body">
                                 <h5 class="card-title fw-bold">Processing Statistics</h5>
-                                <div class="row text-center">
+                                <div class="row text-center g-3">
                                     <div class="col-6">
                                         <div class="fw-bold fs-4 text-primary" id="chaptersProcessed">0</div>
-                                        <small class="text-muted">Chapters</small>
+                                        <small class="text-muted d-block" id="chaptersLabel">Chapters Processed</small>
                                     </div>
                                     <div class="col-6">
                                         <div class="fw-bold fs-4 text-success" id="imagesGenerated">0</div>
-                                        <small class="text-muted">Images</small>
+                                        <small class="text-muted d-block">Images Generated</small>
                                     </div>
                                 </div>
                                 <hr>
@@ -265,15 +265,88 @@ let reconnectAttempts = 0;
 let maxReconnectAttempts = 10;
 let reconnectInterval = null;
 let initialProgressFetched = false;
+let isStartingSession = false;
+let processingStarted = false;
+let processingCompleted = false;
+let processingFailed = false;
+const statsState = {
+    currentChapter: null,
+    chaptersProcessed: 0,
+    totalChapters: null,
+    imagesGenerated: 0
+};
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeProcessing();
 });
 
+function normalizeCount(value) {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (value === null) {
+        return null;
+    }
+
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) {
+        return Math.max(0, Math.floor(numberValue));
+    }
+
+    return null;
+}
+
+function updateProcessingStats(partial = {}) {
+    const currentChapter = partial.currentChapter ?? partial.current_chapter;
+    const chaptersProcessed = partial.chaptersProcessed ?? partial.chapters_processed;
+    const totalChapters = partial.totalChapters ?? partial.total_chapters;
+    const imagesGenerated = partial.imagesGenerated ?? partial.images_generated;
+
+    const updates = {
+        currentChapter: normalizeCount(currentChapter),
+        chaptersProcessed: normalizeCount(chaptersProcessed),
+        totalChapters: normalizeCount(totalChapters),
+        imagesGenerated: normalizeCount(imagesGenerated)
+    };
+
+    Object.entries(updates).forEach(([key, value]) => {
+        if (value !== undefined) {
+            statsState[key] = value;
+        }
+    });
+
+    const processedRaw = statsState.chaptersProcessed ?? statsState.currentChapter ?? 0;
+    const processed = processedRaw ?? 0;
+    const total = statsState.totalChapters;
+
+    const chaptersEl = document.getElementById('chaptersProcessed');
+    if (chaptersEl) {
+        const processedDisplay = Number(processed).toLocaleString();
+        if (total !== null && total > 0) {
+            const totalDisplay = Number(total).toLocaleString();
+            chaptersEl.textContent = `${processedDisplay} / ${totalDisplay}`;
+        } else {
+            chaptersEl.textContent = processedDisplay;
+        }
+    }
+
+    const labelEl = document.getElementById('chaptersLabel');
+    if (labelEl) {
+        labelEl.textContent = 'Chapters Processed';
+    }
+
+    const imagesEl = document.getElementById('imagesGenerated');
+    if (imagesEl) {
+        const imagesDisplay = Number(statsState.imagesGenerated ?? 0).toLocaleString();
+        imagesEl.textContent = imagesDisplay;
+    }
+}
+
 async function initializeProcessing() {
     // Check if session ID is provided in URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const urlSessionId = urlParams.get('session_id');
+    processingCompleted = false;
 
     if (urlSessionId) {
         // Connect directly to the specified session
@@ -306,13 +379,12 @@ async function initializeProcessing() {
                     updateProgress(status.progress, status.message);
                     updateProcessingStatus(status.status, status.message || status.status);
                     
-                    // Update statistics
-                    if (status.current_chapter !== null && status.current_chapter !== undefined) {
-                        document.getElementById('chaptersProcessed').textContent = status.current_chapter;
-                    }
-                    if (status.images_generated !== null && status.images_generated !== undefined) {
-                        document.getElementById('imagesGenerated').textContent = status.images_generated;
-                    }
+                    updateProcessingStats({
+                        current_chapter: status.current_chapter,
+                        chapters_processed: status.chapters_processed,
+                        total_chapters: status.total_chapters,
+                        images_generated: status.images_generated
+                    });
                 }
 
                 // Restore step status
@@ -339,7 +411,7 @@ async function initializeProcessing() {
                     });
 
                     // Set the image count directly
-                    document.getElementById('imagesGenerated').textContent = session.images.length;
+                    updateProcessingStats({ imagesGenerated: session.images.length });
                     addLogMessage('info', `Restored ${session.images.length} generated images`);
                 }                    // Connect WebSocket for real-time updates
                     connectWebSocket();
@@ -352,6 +424,7 @@ async function initializeProcessing() {
                     document.getElementById('cancelBtn').disabled = false;
 
                     addLogMessage('success', 'Successfully connected to existing session');
+                    processingStarted = true;
                     return;
                 } else {
                     addLogMessage('warning', 'Specified session not found, checking for other active sessions...');
@@ -391,13 +464,12 @@ async function initializeProcessing() {
                     updateProgress(status.progress, status.message);
                     updateProcessingStatus(status.status, status.message || status.status);
                     
-                    // Update statistics
-                    if (status.current_chapter !== null && status.current_chapter !== undefined) {
-                        document.getElementById('chaptersProcessed').textContent = status.current_chapter;
-                    }
-                    if (status.images_generated !== null && status.images_generated !== undefined) {
-                        document.getElementById('imagesGenerated').textContent = status.images_generated;
-                    }
+                    updateProcessingStats({
+                        current_chapter: status.current_chapter,
+                        chapters_processed: status.chapters_processed,
+                        total_chapters: status.total_chapters,
+                        images_generated: status.images_generated
+                    });
                 }
 
                 // Restore step status
@@ -427,7 +499,7 @@ async function initializeProcessing() {
                     });
 
                     // Set the image count directly
-                    document.getElementById('imagesGenerated').textContent = session.images.length;
+                    updateProcessingStats({ imagesGenerated: session.images.length });
                     addLogMessage('info', `Restored ${session.images.length} generated images from previous session`);
                 }
 
@@ -442,6 +514,7 @@ async function initializeProcessing() {
                 document.getElementById('cancelBtn').disabled = false;
 
                 addLogMessage('success', 'Successfully reconnected to existing processing session with full state restoration');
+                processingStarted = true;
                 return;
             }
         }
@@ -455,6 +528,11 @@ async function initializeProcessing() {
 }
 
 async function startProcessingRequest() {
+    if (isStartingSession) {
+        return;
+    }
+
+    isStartingSession = true;
     try {
         // First, load the saved style configuration
         const styleResponse = await fetch('/api/manuscripts/{{ manuscript_id }}/style');
@@ -499,6 +577,13 @@ async function startProcessingRequest() {
             document.getElementById('sessionId').textContent = sessionId;
             document.getElementById('startTime').textContent = formatDateTime(startTime);
 
+            updateProcessingStats({
+                currentChapter: 0,
+                chaptersProcessed: 0,
+                totalChapters: null,
+                imagesGenerated: 0
+            });
+
             // Connect WebSocket for real-time updates
             connectWebSocket();
 
@@ -514,6 +599,9 @@ async function startProcessingRequest() {
             } else {
                 addLogMessage('info', 'Processing session started successfully');
             }
+            processingStarted = true;
+            processingCompleted = false;
+            processingFailed = false;
         } else {
             throw new Error(result.message || 'Failed to start processing');
         }
@@ -521,7 +609,10 @@ async function startProcessingRequest() {
         console.error('Error starting processing:', error);
         addLogMessage('error', `Failed to start processing: ${error.message}`);
         updateProcessingStatus('error', 'Failed to Start');
+        processingStarted = false;
+        processingFailed = true;
     }
+    isStartingSession = false;
 }
 
 function connectWebSocket() {
@@ -612,27 +703,105 @@ async function fetchCurrentProgress() {
     try {
         addLogMessage('info', 'Fetching current progress...');
         const response = await fetch(`/api/process/status/{{ manuscript_id }}`);
-        if (response.ok) {
-            const statusData = await response.json();
-            if (statusData.active_session && statusData.active_session.session_id === sessionId) {
-                const session = statusData.active_session;
-                if (session.status) {
-                    updateProgress(session.status.progress || 0, session.status.message || 'Processing...');
-                    addLogMessage('success', `Current progress: ${session.status.progress || 0}%`);
-                    
-                    // Update other metrics if available
-                    if (session.status.current_chapter !== undefined) {
-                        document.getElementById('chaptersProcessed').textContent = session.status.current_chapter;
-                    }
-                    if (session.status.images_generated !== undefined) {
-                        document.getElementById('imagesGenerated').textContent = session.status.images_generated;
-                    }
+        if (!response.ok) {
+            return;
+        }
+
+        const statusData = await response.json();
+        const activeSession = statusData.active_session;
+
+        if (activeSession) {
+            if (!sessionId || sessionId !== activeSession.session_id) {
+                sessionId = activeSession.session_id;
+                const sessionIdEl = document.getElementById('sessionId');
+                if (sessionIdEl) {
+                    sessionIdEl.textContent = sessionId;
+                }
+            }
+
+            if (activeSession.start_time && !startTime) {
+                startTime = new Date(activeSession.start_time);
+                const startTimeEl = document.getElementById('startTime');
+                if (startTimeEl) {
+                    startTimeEl.textContent = formatDateTime(startTime);
+                }
+            }
+
+            if (activeSession.status) {
+                const status = activeSession.status;
+                updateProgress(status.progress || 0, status.message || 'Processing...');
+                addLogMessage('success', `Current progress: ${status.progress || 0}%`);
+                processingStarted = true;
+                processingCompleted = false;
+                processingFailed = false;
+                updateProcessingStats(status);
+                updateProcessingStatus(status.status, status.message || status.status);
+            }
+
+            restoreSessionLogs(activeSession);
+            return;
+        }
+
+        const lastSession = statusData.last_session && (!sessionId || statusData.last_session.session_id === sessionId)
+            ? statusData.last_session
+            : null;
+
+        if (lastSession) {
+            if (!sessionId || sessionId !== lastSession.session_id) {
+                sessionId = lastSession.session_id;
+                const sessionIdEl = document.getElementById('sessionId');
+                if (sessionIdEl) {
+                    sessionIdEl.textContent = sessionId;
+                }
+            }
+
+            if (lastSession.start_time && !startTime) {
+                startTime = new Date(lastSession.start_time);
+                const startTimeEl = document.getElementById('startTime');
+                if (startTimeEl) {
+                    startTimeEl.textContent = formatDateTime(startTime);
+                }
+            }
+
+            const status = lastSession.status || {};
+            const statusLabel = status.message || status.status || 'Processing update';
+
+            updateProgress(status.progress || 0, statusLabel);
+            updateProcessingStatus(status.status || 'completed', statusLabel);
+            updateProcessingStats(status);
+            restoreSessionLogs(lastSession);
+
+            const finalState = status.status || 'completed';
+            const wasFailed = processingFailed;
+
+            if (finalState === 'completed') {
+                if (!processingCompleted) {
+                    addLogMessage('success', statusLabel);
+                }
+                processingCompleted = true;
+                processingFailed = false;
+            } else if (finalState === 'error') {
+                processingCompleted = false;
+                processingFailed = true;
+                if (!wasFailed) {
+                    showError(status.error || status.message || 'Processing failed to start.');
                 }
             } else {
-                // No active session found - this might be a completed/error session
-                addLogMessage('warning', 'No active session found for this manuscript');
-                updateProgress(0, 'No active processing session');
+                processingCompleted = true;
+                processingFailed = false;
             }
+
+            processingStarted = false;
+            return;
+        }
+
+        addLogMessage('warning', 'No active session found for this manuscript');
+        updateProgress(0, 'No active processing session');
+        processingStarted = false;
+
+        if (!processingCompleted && !processingFailed && !isStartingSession) {
+            addLogMessage('info', 'Attempting to start a new processing session...');
+            startProcessingRequest();
         }
     } catch (error) {
         console.error('Error fetching current progress:', error);
@@ -671,15 +840,7 @@ function handleProcessingUpdate(data) {
     if (data.type === 'progress') {
         updateProgress(data.progress, data.message);
         
-        // Update chapter count if available
-        if (data.current_chapter !== undefined && data.current_chapter !== null) {
-            document.getElementById('chaptersProcessed').textContent = data.current_chapter;
-        }
-        
-        // Update image count if available
-        if (data.images_generated !== undefined && data.images_generated !== null) {
-            document.getElementById('imagesGenerated').textContent = data.images_generated;
-        }
+        updateProcessingStats(data);
     } else if (data.type === 'step') {
         updateProcessingStep(data.step, data.status);
     } else if (data.type === 'image') {
@@ -753,8 +914,8 @@ function addGeneratedImage(imageUrl, prompt, skipIncrementCounter = false) {
 
     // Update counter only for new images (not when restoring session)
     if (!skipIncrementCounter) {
-        const counter = document.getElementById('imagesGenerated');
-        counter.textContent = parseInt(counter.textContent) + 1;
+        const nextCount = (statsState.imagesGenerated ?? 0) + 1;
+        updateProcessingStats({ imagesGenerated: nextCount });
     }
 }
 
@@ -777,6 +938,10 @@ function addLogMessage(level, message) {
     `;
 
     log.appendChild(logEntry);
+
+    if (sessionId) {
+        log.dataset.sessionId = sessionId;
+    }
 
     if (autoScroll) {
         log.scrollTop = log.scrollHeight;
@@ -805,6 +970,27 @@ function restoreLogMessage(timestamp, level, message) {
     `;
 
     log.appendChild(logEntry);
+}
+
+function restoreSessionLogs(session) {
+    if (!session || !Array.isArray(session.logs) || session.logs.length === 0) {
+        return;
+    }
+
+    const log = document.getElementById('processingLog');
+    if (!log) {
+        return;
+    }
+
+    if (log.getAttribute('data-session-id') === session.session_id) {
+        return;
+    }
+
+    log.innerHTML = '';
+    session.logs.forEach(logEntry => {
+        restoreLogMessage(logEntry.timestamp, logEntry.level, logEntry.message);
+    });
+    log.setAttribute('data-session-id', session.session_id);
 }
 
 function updateProcessingStatus(status, label) {
@@ -851,7 +1037,9 @@ function toggleAutoScroll() {
 }
 
 function clearLog() {
-    document.getElementById('processingLog').innerHTML = '<div class="text-muted">Log cleared...</div>';
+    const log = document.getElementById('processingLog');
+    log.innerHTML = '<div class="text-muted">Log cleared...</div>';
+    log.removeAttribute('data-session-id');
 }
 
 let logMaximized = false;
@@ -992,7 +1180,20 @@ function handleProcessingComplete(data) {
         clearInterval(processingInterval);
     }
 
+    const totalFromEvent = data.total_chapters ?? data.totalChapters ?? null;
+    const processedFromEvent = data.chapters_processed ?? data.chaptersProcessed ?? null;
+    const finalChapterCount = processedFromEvent ?? statsState.chaptersProcessed ?? statsState.currentChapter ?? 0;
+
+    updateProcessingStats({
+        chaptersProcessed: finalChapterCount,
+        totalChapters: totalFromEvent ?? statsState.totalChapters,
+        imagesGenerated: data.images_count
+    });
+
     addLogMessage('success', `Processing completed! Generated ${data.images_count || 0} images.`);
+    processingStarted = false;
+    processingCompleted = true;
+    processingFailed = false;
 
     // Show completion message
     setTimeout(() => {
@@ -1007,6 +1208,8 @@ function showError(error) {
     new bootstrap.Modal(document.getElementById('errorModal')).show();
     updateProcessingStatus('error', 'Error');
     addLogMessage('error', error);
+    processingFailed = true;
+    processingStarted = false;
 }
 
 function formatDateTime(date) {

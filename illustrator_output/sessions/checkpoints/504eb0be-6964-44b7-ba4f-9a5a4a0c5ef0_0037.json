@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "f3bd6525-3b95-47fb-9091-ee99d9215e58",
+  "session_id": "504eb0be-6964-44b7-ba4f-9a5a4a0c5ef0",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 10,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 37,
+  "created_at": "2025-10-01T03:03:14",
+  "checkpoint_data": {
+    "chapter_number": 10,
+    "chapter_title": "Wheel of Fortune",
+    "chapter_word_count": 6288,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 56
+}

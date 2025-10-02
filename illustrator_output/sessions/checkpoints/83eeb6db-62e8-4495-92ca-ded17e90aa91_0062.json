@@ -1,0 +1,26 @@
+{
+  "checkpoint_id": "83eef921-2cd1-4787-985a-53d4531ab09f",
+  "session_id": "83eeb6db-62e8-4495-92ca-ded17e90aa91",
+  "checkpoint_type": "chapter_analyzed",
+  "chapter_number": 16,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 62,
+  "created_at": "2025-10-01T03:03:08",
+  "checkpoint_data": {
+    "chapter_number": 16,
+    "emotional_moments_found": 0,
+    "analysis_results": {
+      "chapter_analyzed": true,
+      "emotional_moments_found": 0,
+      "analysis_quality": "comprehensive"
+    },
+    "analysis_completed": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "generate_prompts",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 81
+}

@@ -172,6 +172,26 @@ h5, h6 { font: var(--md-type-scale-label); }
     position: relative;
 }
 
+.processing-stats-card {
+    background: rgba(248, 249, 253, 0.9);
+    color: inherit;
+}
+
+[data-bs-theme="dark"] .processing-stats-card {
+    background: var(--dark-bg-elevated);
+    color: var(--dark-text-primary);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+[data-bs-theme="dark"] .processing-stats-card .text-muted {
+    color: var(--dark-text-muted) !important;
+}
+
+[data-bs-theme="dark"] .processing-stats-card hr {
+    border-top-color: rgba(148, 163, 184, 0.2);
+}
+
 .style-action-btn {
     min-height: 3.25rem;
 }

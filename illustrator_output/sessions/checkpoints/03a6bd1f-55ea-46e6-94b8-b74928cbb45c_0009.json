@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "afcf71f2-bf08-44a5-be8d-63caeecc5216",
+  "session_id": "03a6bd1f-55ea-46e6-94b8-b74928cbb45c",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 3,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 9,
+  "created_at": "2025-10-01T03:03:30",
+  "checkpoint_data": {
+    "chapter_number": 3,
+    "chapter_title": "A Storm Breaks",
+    "chapter_word_count": 4054,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 28
+}

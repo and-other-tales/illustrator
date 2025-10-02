@@ -1,0 +1,22 @@
+{
+  "checkpoint_id": "98e0bce4-0aea-4bf0-9cec-cdee233e78bd",
+  "session_id": "0875ec43-5611-4bf8-9dd9-d6ad6bf73881",
+  "checkpoint_type": "chapter_start",
+  "chapter_number": 5,
+  "step_name": "analyzing_chapters",
+  "sequence_number": 17,
+  "created_at": "2025-10-01T03:03:05",
+  "checkpoint_data": {
+    "chapter_number": 5,
+    "chapter_title": "Familiar Strangers",
+    "chapter_word_count": 3917,
+    "analysis_started": true
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_chapter_content",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 36
+}

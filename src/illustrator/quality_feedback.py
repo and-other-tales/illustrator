@@ -2,18 +2,23 @@
 
 import json
 import logging
-from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from illustrator.utils import parse_llm_json
+
 from illustrator.models import EmotionalMoment, IllustrationPrompt, ImageProvider
-from illustrator.quality_models import QualityMetric, IterationReason, QualityAssessment, PromptPerformance, PromptIteration, QualityReport
+from illustrator.quality_models import (
+    IterationReason,
+    PromptIteration,
+    PromptPerformance,
+    QualityAssessment,
+    QualityMetric,
+    QualityReport,
+)
+from illustrator.utils import parse_llm_json
+
 logger = logging.getLogger(__name__)
-    processing_time_seconds: float = 0.0
-    timestamp: Optional[str] = None
-    # modern fields
-    processing_time: float = 0.0
-    success: bool = False
 
 
 class QualityAnalyzer:

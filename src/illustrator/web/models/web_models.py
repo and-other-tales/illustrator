@@ -83,6 +83,8 @@ class ProcessingStatus(BaseModel):
     progress: int  # 0-100
     current_chapter: Optional[int] = None
     total_chapters: int
+    chapters_processed: int = 0
+    images_generated: int = 0
     message: str
     error: Optional[str] = None
 

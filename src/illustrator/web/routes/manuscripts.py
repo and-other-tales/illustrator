@@ -51,6 +51,9 @@ ILLUSTRATOR_OUTPUT_DIR = Path("illustrator_output")
 GENERATED_IMAGES_DIR = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
 PREVIEW_IMAGES_DIR = GENERATED_IMAGES_DIR / "previews"
 
+# Common image extensions we manage on disk
+_IMAGE_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff"}
+
 # Ensure directories exist
 SAVED_MANUSCRIPTS_DIR.mkdir(exist_ok=True)
 ILLUSTRATOR_OUTPUT_DIR.mkdir(exist_ok=True)
@@ -236,6 +239,170 @@ def save_manuscript_to_disk(manuscript: SavedManuscript) -> Path:
     return file_path
 
 
+def _normalized_title(metadata: ManuscriptMetadata) -> str:
+    """Create a filesystem-safe title for locating manuscript assets."""
+    safe_title = "".join(
+        c for c in metadata.title if c.isalnum() or c in (" ", "-", "_")
+    ).strip()
+    return safe_title.replace(" ", "_")
+
+
+def _filesystem_image_dirs_for_manuscript(manuscript_id: str) -> List[Path]:
+    """Determine likely directories that contain generated images for a manuscript."""
+
+    candidate_dirs: List[Path] = []
+
+    # Prefer manuscript-specific directories inside the shared generated_images folder.
+    manuscript_dir = GENERATED_IMAGES_DIR / manuscript_id
+    if manuscript_dir.exists():
+        candidate_dirs.append(manuscript_dir)
+
+    # Check for title-based directories used by CLI flows.
+    try:
+        for manuscript in get_saved_manuscripts():
+            generated_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, manuscript.file_path))
+            if generated_id != manuscript_id:
+                continue
+
+            title_dir = ILLUSTRATOR_OUTPUT_DIR / _normalized_title(manuscript.metadata)
+            if title_dir.exists():
+                candidate_dirs.append(title_dir)
+
+            nested_dir = title_dir / "generated_images"
+            if nested_dir.exists():
+                candidate_dirs.append(nested_dir)
+            break
+    except Exception:
+        # If discovery fails we simply fall back to shared directories below.
+        pass
+
+    # If nothing specific was found, include the shared directory as a fallback.
+    if not candidate_dirs and GENERATED_IMAGES_DIR.exists():
+        candidate_dirs.append(GENERATED_IMAGES_DIR)
+
+    # Deduplicate while keeping order.
+    seen: set[Path] = set()
+    unique_dirs: List[Path] = []
+    for directory in candidate_dirs:
+        try:
+            resolved = directory.resolve()
+        except (OSError, RuntimeError):
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique_dirs.append(directory)
+
+    return unique_dirs
+
+
+def filesystem_count_generated_images(manuscript_id: str, chapter_number: int | None = None) -> int:
+    """Count generated images on disk, optionally filtered by chapter number."""
+
+    directories = _filesystem_image_dirs_for_manuscript(manuscript_id)
+    if not directories:
+        return 0
+
+    seen_files: set[Path] = set()
+    chapter_tokens: tuple[str, ...] | None = None
+    if chapter_number is not None:
+        chapter_tokens = (
+            f"chapter_{chapter_number}_",
+            f"chapter_{chapter_number:02d}_",
+        )
+
+    total = 0
+    for directory in directories:
+        if not directory.exists():
+            continue
+        try:
+            iterator = directory.rglob("*")
+        except (OSError, RuntimeError):
+            continue
+
+        for path in iterator:
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in _IMAGE_FILE_EXTENSIONS:
+                continue
+            if chapter_tokens and not any(token in path.stem for token in chapter_tokens):
+                continue
+
+            try:
+                resolved = path.resolve()
+            except (OSError, RuntimeError):
+                continue
+
+            if resolved in seen_files:
+                continue
+
+            seen_files.add(resolved)
+            total += 1
+
+    return total
+
+
+def filesystem_delete_generated_images(manuscript_id: str) -> int:
+    """Delete generated images for a manuscript from the filesystem."""
+
+    directories = _filesystem_image_dirs_for_manuscript(manuscript_id)
+    if not directories:
+        return 0
+
+    removed = 0
+    for directory in directories:
+        if not directory.exists():
+            continue
+
+        try:
+            iterator = directory.rglob("*")
+        except (OSError, RuntimeError):
+            continue
+
+        for path in iterator:
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in _IMAGE_FILE_EXTENSIONS:
+                continue
+            try:
+                path.unlink()
+                removed += 1
+            except OSError:
+                # Ignore deletion issues so we can report partial cleanup.
+                continue
+
+        # Attempt to prune empty manuscript-specific directories while leaving shared ones intact.
+        if directory not in (GENERATED_IMAGES_DIR, ILLUSTRATOR_OUTPUT_DIR):
+            try:
+                next(directory.iterdir())
+            except StopIteration:
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
+            except (OSError, RuntimeError):
+                pass
+
+    # Additionally clear previews if they exist and we managed to remove anything else.
+    if removed and PREVIEW_IMAGES_DIR.exists():
+        try:
+            for preview_file in PREVIEW_IMAGES_DIR.iterdir():
+                if not preview_file.is_file():
+                    continue
+                if preview_file.suffix.lower() not in _IMAGE_FILE_EXTENSIONS:
+                    continue
+                if not preview_file.name.startswith(manuscript_id):
+                    continue
+                try:
+                    preview_file.unlink()
+                except OSError:
+                    continue
+        except (OSError, RuntimeError):
+            pass
+
+    return removed
+
+
 def count_generated_images(manuscript_id: str) -> int:
     """Count generated images for a manuscript.
 
@@ -243,25 +410,27 @@ def count_generated_images(manuscript_id: str) -> int:
     filesystem count when the database layer isn't configured.
     """
 
+    db_count = 0
+    illustration_service = None
+
     try:
         from illustrator.services.illustration_service import IllustrationService
 
         illustration_service = IllustrationService()
-        try:
-            return len(illustration_service.get_illustrations_by_manuscript(manuscript_id))
-        finally:
-            illustration_service.close()
+        db_count = len(illustration_service.get_illustrations_by_manuscript(manuscript_id))
     except Exception:
-        images_dir = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
-        if not images_dir.exists():
-            return 0
+        db_count = 0
+    finally:
+        if illustration_service is not None:
+            try:
+                illustration_service.close()
+            except Exception:
+                pass
 
-        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'}
-        return sum(
-            1
-            for image_file in images_dir.iterdir()
-            if image_file.is_file() and image_file.suffix.lower() in image_extensions
-        )
+    if db_count:
+        return db_count
+
+    return filesystem_count_generated_images(manuscript_id)
 
 
 @router.get("/stats")
@@ -1164,20 +1333,15 @@ async def delete_manuscript_images(manuscript_id: str) -> SuccessResponse:
         manuscript_id,
     )
 
+    db_removed = 0
     try:
         from illustrator.services.illustration_service import IllustrationService
 
         illustration_service = IllustrationService()
         try:
-            removed = illustration_service.delete_illustrations_for_manuscript(manuscript_id)
-            message = "All images deleted successfully" if removed else "No images found for manuscript"
-            return SuccessResponse(
-                message=message,
-                data={"deleted_count": removed}
-            )
+            db_removed = illustration_service.delete_illustrations_for_manuscript(manuscript_id)
         finally:
             illustration_service.close()
-
     except HTTPException:
         raise
     except Exception as exc:
@@ -1187,29 +1351,23 @@ async def delete_manuscript_images(manuscript_id: str) -> SuccessResponse:
             exc,
         )
 
-        images_dir = ILLUSTRATOR_OUTPUT_DIR / "generated_images"
-        if not images_dir.exists():
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No image storage directory found",
-            )
-
-        removed = 0
-        for image_file in images_dir.iterdir():
-            if image_file.is_file():
-                try:
-                    image_file.unlink()
-                    removed += 1
-                except OSError as delete_error:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail=f"Error deleting image: {delete_error}",
-                    ) from delete_error
-
+    if db_removed:
         return SuccessResponse(
             message="All images deleted successfully",
-            data={"deleted_count": removed, "fallback": True}
+            data={"deleted_count": db_removed}
         )
+
+    filesystem_removed = filesystem_delete_generated_images(manuscript_id)
+    if filesystem_removed:
+        return SuccessResponse(
+            message="All images deleted successfully",
+            data={"deleted_count": filesystem_removed, "source": "filesystem"}
+        )
+
+    return SuccessResponse(
+        message="No images found for manuscript",
+        data={"deleted_count": 0}
+    )
 
 
 @router.delete("/{manuscript_id}")

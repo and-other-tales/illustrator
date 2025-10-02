@@ -367,37 +367,66 @@ async def get_processing_status(manuscript_id: str):
         for sid, sdata in connection_manager.sessions.items():
             logger.debug(f"Session {sid}: manuscript_id={sdata.manuscript_id}, status={sdata.status.status}")
         
-        # Look for active sessions for this manuscript (exclude completed/error sessions)
+        # Look for sessions for this manuscript, keeping track of active and most recent terminal states
         active_session = None
-        for session_id, session_data in connection_manager.sessions.items():
-            if session_data.manuscript_id == manuscript_id:
-                # Only consider sessions that are not completed or errored as active
-                if session_data.status.status not in ['completed', 'error']:
-                    active_session = {
-                        "session_id": session_id,
-                        "status": session_data.status.dict() if hasattr(session_data, 'status') else None,
-                        "is_connected": session_id in connection_manager.active_connections,
-                        "logs": [log.dict() for log in session_data.logs],
-                        "images": [image.dict() for image in session_data.images],
-                        "start_time": session_data.start_time,
-                        "step_status": session_data.step_status
-                    }
-                    logger.debug(f"Found active session {session_id} for manuscript {manuscript_id}")
-                    break
+        last_session = None
+        last_session_started_at = None
 
-        if active_session:
+        def _serialize_session(session_id: str, session_data) -> dict:
             return {
-                "success": True,
-                "active_session": active_session,
-                "message": "Active session found"
+                "session_id": session_id,
+                "status": session_data.status.dict() if hasattr(session_data, 'status') else None,
+                "is_connected": session_id in connection_manager.active_connections,
+                "logs": [log.dict() for log in session_data.logs],
+                "images": [image.dict() for image in session_data.images],
+                "start_time": getattr(session_data, 'start_time', None),
+                "started_at": getattr(session_data, 'started_at', None),
+                "step_status": dict(getattr(session_data, 'step_status', {}))
             }
-        else:
+
+        def _parse_session_time(session_data) -> datetime | None:
+            raw_time = getattr(session_data, 'start_time', None) or getattr(session_data, 'started_at', None)
+            if not raw_time:
+                return None
+            try:
+                return datetime.fromisoformat(raw_time)
+            except ValueError:
+                # Gracefully handle timestamps without timezone info
+                try:
+                    return datetime.fromisoformat(raw_time.replace('Z', '+00:00'))
+                except Exception:
+                    return None
+
+        for session_id, session_data in connection_manager.sessions.items():
+            if session_data.manuscript_id != manuscript_id:
+                continue
+
+            session_status = getattr(session_data.status, 'status', None)
+            if session_status and session_status not in ['completed', 'error']:
+                active_session = _serialize_session(session_id, session_data)
+                logger.debug(f"Found active session {session_id} for manuscript {manuscript_id}")
+                break
+
+            session_started_at = _parse_session_time(session_data)
+            if not last_session_started_at or (
+                session_started_at and last_session_started_at and session_started_at > last_session_started_at
+            ):
+                last_session = _serialize_session(session_id, session_data)
+                last_session_started_at = session_started_at
+
+        response_payload = {
+            "success": True,
+            "active_session": active_session,
+            "message": "Active session found" if active_session else "No active session found"
+        }
+
+        if last_session and not active_session:
+            response_payload["last_session"] = last_session
+
+        if not active_session and not last_session:
             logger.warning(f"No active session found for manuscript {manuscript_id}")
-            return {
-                "success": True,
-                "active_session": None,
-                "message": "No active session found"
-            }
+
+        return response_payload
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -435,6 +464,8 @@ async def start_processing(
             status="initializing",
             progress=0,
             total_chapters=0,
+            chapters_processed=0,
+            images_generated=0,
             message="Initializing processing session...",
             current_chapter=None,
             error=None
@@ -691,7 +722,11 @@ async def resume_processing(session_id: str):
             json.dumps({
                 "type": "progress",
                 "progress": session_data.status.progress,
-                "message": "Processing resumed..."
+                "message": "Processing resumed...",
+                "current_chapter": session_data.status.current_chapter,
+                "chapters_processed": getattr(session_data.status, 'chapters_processed', 0),
+                "images_generated": getattr(session_data.status, 'images_generated', 0),
+                "total_chapters": getattr(session_data.status, 'total_chapters', 0)
             }),
             session_id
         )
@@ -781,6 +816,8 @@ async def run_processing_workflow(
             if resume_info:
                 session_data.status.progress = resume_info["progress_percent"]
                 session_data.status.current_chapter = resume_info.get("current_chapter")
+                session_data.status.chapters_processed = resume_info.get("last_completed_chapter", 0)
+                session_data.status.images_generated = resume_info.get("total_images_generated", 0)
         else:
             # Fallback: create session if it doesn't exist (shouldn't happen with the new flow)
             logger.warning(f"Session {session_id} not found in connection manager, creating new one")
@@ -791,6 +828,8 @@ async def run_processing_workflow(
                     status="resuming",
                     progress=resume_info["progress_percent"],
                     total_chapters=resume_info["total_chapters"],
+                    chapters_processed=resume_info.get("last_completed_chapter", 0),
+                    images_generated=resume_info.get("total_images_generated", 0),
                     message=f"Resuming from {resume_info['latest_checkpoint_type']}...",
                     current_chapter=resume_info.get("current_chapter"),
                     error=None
@@ -802,6 +841,8 @@ async def run_processing_workflow(
                     status="started",
                     progress=0,
                     total_chapters=0,  # Will be updated when we load the manuscript
+                    chapters_processed=0,
+                    images_generated=0,
                     message="Starting manuscript processing...",
                     current_chapter=None,
                     error=None
@@ -818,6 +859,25 @@ async def run_processing_workflow(
             )
 
             connection_manager.sessions[session_id] = session_data
+
+        def progress_payload(progress_value, message, *, current_chapter=None):
+            status = session_data.status
+            status.progress = progress_value
+            status.message = message
+            if current_chapter is not None:
+                status.current_chapter = current_chapter
+            payload = {
+                "type": "progress",
+                "progress": progress_value,
+                "message": message,
+                "total_chapters": getattr(status, "total_chapters", 0),
+                "chapters_processed": getattr(status, "chapters_processed", 0),
+                "images_generated": getattr(status, "images_generated", 0),
+            }
+            chapter_value = status.current_chapter
+            if chapter_value is not None:
+                payload["current_chapter"] = chapter_value
+            return payload
 
         # Send initial status
         initial_message = "Resuming manuscript processing..." if resume_info else "Starting manuscript processing..."
@@ -971,13 +1031,21 @@ async def run_processing_workflow(
 
         generator = WebSocketIllustrationGenerator(connection_manager, session_id, provider, output_dir, style_config)
 
+        total_images = 0
+        progress_per_chapter = 70 // len(chapters) if len(chapters) > 0 else 0
+        start_chapter_index = 0
+        if resume_info and resume_info.get("last_completed_chapter", 0) > 0:
+            start_chapter_index = resume_info["last_completed_chapter"]
+            total_images = resume_info.get("total_images_generated", 0)
+
+        session_data.status.total_chapters = len(chapters)
+        session_data.status.chapters_processed = start_chapter_index
+        session_data.status.images_generated = total_images
+        session_data.status.current_chapter = resume_info.get("current_chapter") if resume_info else None
+
         # Load manuscript chapters
         await connection_manager.send_personal_message(
-            json.dumps({
-                "type": "progress",
-                "progress": 10,
-                "message": "Loading manuscript chapters..."
-            }),
+            json.dumps(progress_payload(10, "Loading manuscript chapters...")),
             session_id
         )
 
@@ -1011,16 +1079,11 @@ async def run_processing_workflow(
             connection_manager.sessions[session_id].step_status[0] = "completed"
 
         # Process each chapter
-        total_images = 0
-        progress_per_chapter = 70 // len(chapters)
-
-        # Determine starting point for resume
-        start_chapter_index = 0
-        if resume_info and resume_info.get("last_completed_chapter", 0) > 0:
-            start_chapter_index = resume_info["last_completed_chapter"]
-            total_images = resume_info.get("total_images_generated", 0)
 
         for i, chapter in enumerate(chapters[start_chapter_index:], start_chapter_index):
+            session_data.status.current_chapter = chapter.number
+            session_data.status.chapters_processed = i
+
             # Check for pause request before processing each chapter
             if connection_manager.sessions[session_id].pause_requested:
                 # Create pause checkpoint
@@ -1045,11 +1108,7 @@ async def run_processing_workflow(
                     session_id
                 )
                 await connection_manager.send_personal_message(
-                    json.dumps({
-                        "type": "progress",
-                        "progress": connection_manager.sessions[session_id].status.progress,
-                        "message": f"Processing paused at Chapter {chapter.number}"
-                    }),
+                    json.dumps(progress_payload(session_data.status.progress, f"Processing paused at Chapter {chapter.number}")),
                     session_id
                 )
                 return  # Exit the processing function
@@ -1067,11 +1126,10 @@ async def run_processing_workflow(
                 )
 
             await connection_manager.send_personal_message(
-                json.dumps({
-                    "type": "progress",
-                    "progress": 20 + (i * progress_per_chapter),
-                    "message": f"Analyzing Chapter {chapter.number}: {chapter.title}"
-                }),
+                json.dumps(progress_payload(
+                    20 + (i * progress_per_chapter),
+                    f"Analyzing Chapter {chapter.number}: {chapter.title}"
+                )),
                 session_id
             )
 
@@ -1114,11 +1172,10 @@ async def run_processing_workflow(
 
             # Generate illustration prompts
             await connection_manager.send_personal_message(
-                json.dumps({
-                    "type": "progress",
-                    "progress": 20 + (i * progress_per_chapter) + (progress_per_chapter // 3),
-                    "message": f"Creating illustration prompts for Chapter {chapter.number}"
-                }),
+                json.dumps(progress_payload(
+                    20 + (i * progress_per_chapter) + (progress_per_chapter // 3),
+                    f"Creating illustration prompts for Chapter {chapter.number}"
+                )),
                 session_id
             )
 
@@ -1201,11 +1258,10 @@ async def run_processing_workflow(
 
             # Generate images
             await connection_manager.send_personal_message(
-                json.dumps({
-                    "type": "progress",
-                    "progress": 20 + (i * progress_per_chapter) + (2 * progress_per_chapter // 3),
-                    "message": f"Generating {len(prompts)} images for Chapter {chapter.number}"
-                }),
+                json.dumps(progress_payload(
+                    20 + (i * progress_per_chapter) + (2 * progress_per_chapter // 3),
+                    f"Generating {len(prompts)} images for Chapter {chapter.number}"
+                )),
                 session_id
             )
 
@@ -1234,6 +1290,7 @@ async def run_processing_workflow(
             results = await generator.generate_images(prompts, chapter)
             chapter_images_generated = len([r for r in results if r.get("success")])
             total_images += chapter_images_generated
+            session_data.status.images_generated = total_images
 
             # Send image updates and add to session tracking
             for result in results:
@@ -1280,6 +1337,8 @@ async def run_processing_workflow(
                     progress_percent=20 + ((i + 1) * progress_per_chapter)
                 )
 
+            session_data.status.chapters_processed = i + 1
+
         await connection_manager.send_personal_message(
             json.dumps({
                 "type": "step",
@@ -1303,12 +1362,12 @@ async def run_processing_workflow(
             connection_manager.sessions[session_id].step_status[3] = "processing"
 
         # Final completion
+        session_data.status.current_chapter = None
+        session_data.status.chapters_processed = len(chapters)
+        session_data.status.images_generated = total_images
+
         await connection_manager.send_personal_message(
-            json.dumps({
-                "type": "progress",
-                "progress": 100,
-                "message": "Processing completed successfully!"
-            }),
+            json.dumps(progress_payload(100, "Processing completed successfully!")),
             session_id
         )
 
@@ -1346,6 +1405,8 @@ async def run_processing_workflow(
             json.dumps({
                 "type": "complete",
                 "images_count": total_images,
+                "chapters_processed": len(chapters),
+                "total_chapters": len(chapters),
                 "message": f"Successfully generated {total_images} illustrations!"
             }),
             session_id

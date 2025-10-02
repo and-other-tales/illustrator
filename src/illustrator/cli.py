@@ -411,7 +411,7 @@ class ManuscriptCLI:
         console.print(f"\n[bold cyan]🔄 Processing {len(self.chapters)} chapters...[/bold cyan]")
 
         # Import necessary components
-        from illustrator.graph import graph
+        from illustrator.graph import create_graph
         from illustrator.state import ManuscriptState
         from illustrator.models import ImageProvider
         from langgraph.store.memory import InMemoryStore
@@ -470,7 +470,7 @@ class ManuscriptCLI:
 
         # Create store and compile graph
         store = InMemoryStore()
-        compiled_graph = graph.compile(store=store)
+        compiled_graph = create_graph(store=store)
 
         with Progress(
             SpinnerColumn(),
