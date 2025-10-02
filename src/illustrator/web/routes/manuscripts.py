@@ -303,6 +303,11 @@ def filesystem_count_generated_images(manuscript_id: str, chapter_number: int | 
     if not directories:
         return 0
 
+    try:
+        previews_dir_resolved = PREVIEW_IMAGES_DIR.resolve()
+    except (OSError, RuntimeError):
+        previews_dir_resolved = None
+
     seen_files: set[Path] = set()
     chapter_tokens: tuple[str, ...] | None = None
     if chapter_number is not None:
@@ -331,6 +336,15 @@ def filesystem_count_generated_images(manuscript_id: str, chapter_number: int | 
             try:
                 resolved = path.resolve()
             except (OSError, RuntimeError):
+                continue
+
+            if (
+                previews_dir_resolved
+                and (
+                    resolved == previews_dir_resolved
+                    or previews_dir_resolved in resolved.parents
+                )
+            ):
                 continue
 
             if resolved in seen_files:

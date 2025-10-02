@@ -536,6 +536,7 @@ class IllustrationGenerator:
             openai_api_key=self.context.openai_api_key,
             google_credentials=self.context.google_credentials,
             google_project_id=self.context.google_project_id,
+            gcp_project_id=getattr(self.context, 'gcp_project_id', None) or self.context.google_project_id,
             huggingface_api_key=self.context.huggingface_api_key,
             anthropic_api_key=self.context.anthropic_api_key,
             llm_provider=self.context.llm_provider,
