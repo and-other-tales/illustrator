@@ -373,7 +373,7 @@ class PromptIterator:
 
     async def improve_prompt(self, original_prompt: IllustrationPrompt, assessment: QualityAssessment, iteration_reasons: List[IterationReason]) -> IllustrationPrompt:
         # Reuse existing generator logic, but provide compatibility wrapper
-        improved = await self._generate_improved_prompt(original_prompt, assessment, EmotionalMoment(text_excerpt="", start_position=0, end_position=0, emotional_tones=[], intensity_score=0.0, context=""))
+        improved = await self._generate_improved_prompt(original_prompt, assessment, EmotionalMoment(text_excerpt="", start_position=0, end_position=0, emotional_tones=[], intensity_score=0.0, context="", characters_present=[], setting_description="", narrative_context=""))
         return improved
 
     async def _generate_improved_prompt(

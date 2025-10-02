@@ -980,6 +980,9 @@ async def preview_style_image(
                         emotional_tones=[EmotionalTone.NEUTRAL],
                         intensity_score=0.5,
                         context=excerpt_text[:240],
+                        characters_present=[],
+                        setting_description="",
+                        narrative_context=""
                     )
                 else:
                     logger.debug("Using emotional moment: %s", preview_moment.text_excerpt[:100] + "..." if len(preview_moment.text_excerpt) > 100 else preview_moment.text_excerpt)
