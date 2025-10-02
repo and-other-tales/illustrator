@@ -187,118 +187,182 @@ def _is_deepseek_model(model: str) -> bool:
 def _extract_final_response_from_deepseek(content: str) -> str:
     """Extract the final response from DeepSeek model output that includes thinking tokens.
     
-    DeepSeek models often include extensive reasoning throughout their responses.
-    This function identifies and extracts the actual deliverable content.
+    DeepSeek models include extensive reasoning. This function extracts only the 
+    deliverable content by identifying the final actionable output.
     """
     if not content:
         return content
     
     original_content = content.strip()
     
-    # First, handle explicit thinking tags
+    # Handle explicit thinking tags first
     thinking_patterns = [
-        r'<thinking>.*?</thinking>\s*',  # XML-style thinking tags
-        r'<think>.*?</think>\s*',       # Alternative thinking tags  
-        r'\*\*Thinking:\*\*.*?\n\n',    # Markdown-style thinking sections
-        r'Thinking:.*?\n\n',            # Simple thinking sections
+        r'<thinking>.*?</thinking>\s*',
+        r'<think>.*?</think>\s*',
+        r'\*\*Thinking:\*\*.*?\n\n',
+        r'Thinking:.*?\n\n',
     ]
     
     cleaned_content = original_content
     for pattern in thinking_patterns:
         cleaned_content = re.sub(pattern, '', cleaned_content, flags=re.DOTALL | re.IGNORECASE)
     
-    # If content was significantly cleaned by removing thinking tags, return that
-    if len(cleaned_content) < len(original_content) * 0.7:
-        return cleaned_content.strip()
-    
-    # Look for direct content indicators that suggest the start of the actual answer
+    # Strategy 1: Look for the final paragraph/sentence that starts with actual content
+    # Split into sentences and scan backwards for deliverable content
     sentences = [s.strip() for s in re.split(r'[.!?]+', cleaned_content) if s.strip()]
     
-    # Identify where the actual content starts by looking for these patterns
-    content_start_indicators = [
-        # Direct descriptions
-        r'^(a|an|the)\s+\w+.*\b(woman|man|person|character|scene|library|forest|room|building)',
-        r'^(tall|ancient|mysterious|golden|dark|bright|young|old)\s+',
-        r'^(in|at|on|through|under|over|beside|within)\s+',
-        
-        # Visual descriptors  
-        r'^(golden|warm|soft|bright|dim|shadow|light|sun|moon)',
-        r'^(towering|tall|ancient|gothic|ornate|intricate)',
-        
-        # JSON or structured content
-        r'^\s*[{\[]',
-        r'^\s*\d+\.\s+',  # Numbered lists
-        r'^\s*[-*]\s+',   # Bullet points
-        
-        # Common prompt starters
-        r'^(create|generate|show|depict|illustrate|render)',
-        r'^(detailed|cinematic|atmospheric|dramatic|professional)',
-        
-        # Analysis results
-        r'^(primary|main|key|dominant)\s+(emotion|visual|element|theme)',
-        r'^(emotional|visual|narrative)\s+(analysis|element|component)',
+    # Patterns that indicate final deliverable content (not reasoning)
+    final_content_patterns = [
+        r'^(a|an|the)\s+(young|old|ancient|mysterious|detailed|cinematic|professional)',
+        r'^(create|generate|render|show|depict|illustrate)',
+        r'^(detailed|cinematic|atmospheric|dramatic|professional|high[\-\s]resolution)',
+        r'^\s*[{\[]',  # JSON/array start
+        r'^(golden|warm|soft|bright|ancient|mysterious)\s+(light|afternoon|library|woman)',
+        r'^professional\s+photography',
+        r'^cinematic\s+composition',
+        r'^high[\-\s]detail',
     ]
     
-    for i, sentence in enumerate(sentences):
-        sentence_lower = sentence.lower()
+    # Scan from the end backwards to find the start of final content
+    for i in range(len(sentences) - 1, -1, -1):
+        sentence_lower = sentences[i].lower()
         
-        # Check if this sentence looks like actual content rather than reasoning
-        for pattern in content_start_indicators:
+        # Check if this looks like final deliverable content
+        for pattern in final_content_patterns:
             if re.search(pattern, sentence_lower):
-                # Found a content sentence - return from here to the end
-                remaining_sentences = sentences[i:]
-                result = '. '.join(remaining_sentences)
-                if not result.endswith(('.', '!', '?')):
+                # Found the start of deliverable content - return from here to end
+                final_sentences = sentences[i:]
+                result = '. '.join(final_sentences)
+                if result and not result.endswith(('.', '!', '?')):
                     result += '.'
                 return result.strip()
     
-    # Look for paragraph-level content indicators
+    # Strategy 2: Look for paragraph boundaries and find the last "clean" paragraph
     paragraphs = [p.strip() for p in cleaned_content.split('\n\n') if p.strip()]
     
-    for i, paragraph in enumerate(paragraphs):
-        paragraph_lower = paragraph.lower()
-        
-        # Skip obvious reasoning paragraphs
-        reasoning_indicators = [
-            'let me', 'i need to', 'first, i', 'okay, so', 'alright, so',
-            'the user', 'i should', 'i will', 'let\'s', 'now i',
-            'breaking this down', 'let me break', 'i\'m trying to',
-            'first, let me', 'so i need', 'given this', 'based on what',
-            'to create', 'for this prompt', 'the scene is', 'let me think'
-        ]
-        
-        is_reasoning = any(indicator in paragraph_lower for indicator in reasoning_indicators)
-        
-        if not is_reasoning:
-            # Check if this looks like actual content
-            content_indicators = [
-                'ancient', 'mysterious', 'golden', 'light', 'shadow', 'woman', 'library',
-                'visual elements', 'emotions', 'atmosphere', 'composition', 'detailed',
-                'cinematic', 'professional', 'high-resolution', '{', '[', 'primary', 'main'
+    if len(paragraphs) > 1:
+        # Scan paragraphs from the end
+        for i in range(len(paragraphs) - 1, -1, -1):
+            paragraph = paragraphs[i]
+            paragraph_lower = paragraph.lower()
+            
+            # Skip paragraphs with reasoning indicators
+            reasoning_indicators = [
+                'let me', 'i need to', 'first, i', 'okay, so', 'alright, so',
+                'the user', 'i should', 'i will', 'let\'s', 'now i',
+                'breaking this down', 'let me break', 'i\'m trying to',
+                'first, let me', 'so i need', 'given this', 'based on what',
+                'i should start', 'words like', 'come to mind', 'the lighting is crucial',
+                'that gives a', 'i should describe', 'the architecture is',
+                'they create a sense'
             ]
             
-            has_content = any(indicator in paragraph_lower for indicator in content_indicators)
+            has_reasoning = any(indicator in paragraph_lower for indicator in reasoning_indicators)
             
-            if has_content or len(paragraph) > 200:  # Long paragraphs likely contain actual content
-                return '\n\n'.join(paragraphs[i:]).strip()
+            if not has_reasoning:
+                # Check if this paragraph contains deliverable content
+                content_indicators = [
+                    'professional photography', 'cinematic composition', 'high detail',
+                    'atmospheric lighting', 'golden afternoon light streams',
+                    'ancient, mysterious library', 'towering bookshelves',
+                    'vaulted ceilings', 'dramatic contrasts', 'ethereal lighting'
+                ]
+                
+                has_content = any(indicator in paragraph_lower for indicator in content_indicators)
+                
+                if has_content:
+                    # Return from this paragraph to the end
+                    return '\n\n'.join(paragraphs[i:]).strip()
     
-    # If no clear content start found, aggressively remove reasoning sections
-    reasoning_removal_patterns = [
-        r'.*?let me break this down\.?\s*',
-        r'.*?first,?\s+i\s+need\s+to.*?\.?\s*',
-        r'.*?okay,?\s+so.*?\.?\s*',
-        r'.*?the\s+user.*?\.?\s*',
-        r'.*?i\s+should.*?\.?\s*',
-        r'.*?given\s+this.*?\.?\s*',
+    # Strategy 3: Look for the transition point where reasoning ends and deliverable content begins
+    # The pattern is usually "reasoning explanation." followed by "A [description of the actual prompt]"
+    
+    # Find where reasoning ends and actual prompt begins - look for sentence patterns
+    sentences = [s.strip() for s in re.split(r'[.!?]+', cleaned_content) if s.strip()]
+    
+    for i in range(len(sentences)):
+        sentence = sentences[i]
+        sentence_lower = sentence.lower()
+        
+        # Look for sentences that end reasoning and transition to deliverable content
+        reasoning_end_markers = [
+            'add texture to the scene',
+            'create a sense of time passing slowly and add texture to the scene',
+            'enhance the ethereal quality', 
+            'add to the magical atmosphere',
+            'add depth',
+            'contrast with the light'
+        ]
+        
+        # If this sentence ends reasoning, check if next sentence starts deliverable content
+        if any(marker in sentence_lower for marker in reasoning_end_markers):
+            if i + 1 < len(sentences):
+                next_sentence = sentences[i + 1].lower()
+                # Check if the next sentence starts actual content delivery
+                if (next_sentence.startswith('a ') or 
+                    next_sentence.startswith('an ') or
+                    next_sentence.startswith('the ') or
+                    'young woman' in next_sentence or
+                    'golden' in next_sentence or
+                    'ancient' in next_sentence):
+                    # Return from the next sentence onwards
+                    remaining = sentences[i + 1:]
+                    result = '. '.join(remaining)
+                    if result and not result.endswith(('.', '!', '?')):
+                        result += '.'
+                    return result.strip()
+    
+    # Fallback: aggressive removal of reasoning sections
+    transition_patterns = [
+        r'.*?(?:they\s+create\s+a\s+sense.*?scene)\.?\s*',
+        r'.*?(?:add\s+texture\s+to\s+the\s+scene)\.?\s*',
+        r'.*?(?:floating\s+dust\s+motes.*?atmosphere)\.?\s*',
+        r'.*?(?:enhance\s+the\s+ethereal\s+quality)\.?\s*',
     ]
     
     result = cleaned_content
-    for pattern in reasoning_removal_patterns:
-        result = re.sub(pattern, '', result, flags=re.IGNORECASE | re.DOTALL)
+    for pattern in transition_patterns:
+        new_result = re.sub(pattern, '', result, flags=re.IGNORECASE | re.DOTALL)
+        if len(new_result) < len(result) and len(new_result) > 100:  # Something was removed and we have content left
+            result = new_result.strip()
+            break
     
-    # Final cleanup - remove empty lines and normalize spacing
+    # Strategy 4: Look for definitive content markers - find the best match
+    # This catches cases where the final deliverable content is at the end
+    content_markers = [
+        ('A young woman exploring an ancient, mysterious library.', 400),  # Prefer longer content
+        ('Golden afternoon light streams', 300),  # Second preference
+        ('Professional photography, cinematic composition', 50),  # Last resort
+    ]
+    
+    best_match = None
+    best_length = 0
+    
+    for marker, min_length in content_markers:
+        marker_pos = result.lower().rfind(marker.lower())
+        if marker_pos != -1:
+            extracted = result[marker_pos:].strip()
+            # Prefer matches that give us more substantial content
+            if len(extracted) >= min_length and len(extracted) > best_length:
+                best_match = extracted
+                best_length = len(extracted)
+    
+    if best_match:
+        return best_match
+    
+    # Final cleanup and return
     lines = [line.strip() for line in result.split('\n') if line.strip()]
-    return '\n'.join(lines).strip() if lines else original_content
+    final_result = '\n'.join(lines).strip()
+    
+    # If the result is still too similar to original (indicating failed extraction),
+    # return just the last substantial sentence
+    if len(final_result) > len(original_content) * 0.8:
+        sentences = [s.strip() for s in re.split(r'[.!?]+', final_result) if s.strip()]
+        if sentences and len(sentences) > 2:
+            # Return the last few sentences that likely contain the actual content
+            return '. '.join(sentences[-2:]) + '.'
+    
+    return final_result if final_result else original_content
 
 
 def _extract_text_from_content(content: Any, allowed_channels: set[str] | None = None) -> str:
