@@ -1025,6 +1025,49 @@ async def run_processing_workflow(
         else:
             provider = ImageProvider.DALLE  # default fallback
 
+        # Validate provider-specific configuration before attempting generation
+        validation_errors: list[str] = []
+        resolved_flux_endpoint: str | None = None
+        if provider == ImageProvider.FLUX_DEV_VERTEX:
+            resolved_flux_endpoint = (
+                style_config.get("flux_dev_vertex_endpoint_url")
+                or os.getenv("FLUX_DEV_VERTEX_ENDPOINT_URL")
+            )
+            resolved_gcp_project = (
+                style_config.get("gcp_project_id")
+                or style_config.get("google_project_id")
+                or os.getenv("GOOGLE_PROJECT_ID")
+                or os.getenv("GCP_PROJECT_ID")
+            )
+
+            if not resolved_flux_endpoint:
+                validation_errors.append("Flux Dev Vertex endpoint URL")
+            if not resolved_gcp_project:
+                validation_errors.append("Google Cloud project ID")
+
+            if validation_errors:
+                missing_items = ", ".join(validation_errors)
+                guidance_message = (
+                    "Flux Dev Vertex provider is missing required configuration: "
+                    f"{missing_items}. Configure these values via the API Settings (gear icon) "
+                    "or include them in your style configuration before retrying."
+                )
+
+                await connection_manager.send_personal_message(
+                    json.dumps({
+                        "type": "log",
+                        "level": "error",
+                        "message": guidance_message
+                    }),
+                    session_id
+                )
+
+                raise RuntimeError(guidance_message)
+
+            # Ensure downstream components receive the resolved endpoint
+            if not style_config.get("flux_dev_vertex_endpoint_url"):
+                style_config["flux_dev_vertex_endpoint_url"] = resolved_flux_endpoint
+
         # Create output directory
         output_dir = Path("illustrator_output") / "generated_images"
         output_dir.mkdir(parents=True, exist_ok=True)
