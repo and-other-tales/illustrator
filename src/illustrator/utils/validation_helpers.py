@@ -107,11 +107,11 @@ def extract_json_from_text(s: str) -> str:
 def parse_llm_json(text: str) -> Any:
     """Parse JSON from LLM output robustly.
 
-    Returns Python object or raises ValueError on failure.
+    Returns Python object or None if parsing fails.
     """
     candidate = extract_json_from_text(text)
     if candidate is None:
-        raise ValueError("No JSON found in LLM output")
+        return None
 
     try:
         return json.loads(candidate)
@@ -139,5 +139,5 @@ def parse_llm_json(text: str) -> Any:
         except json.JSONDecodeError:
             pass
 
-        # If all strategies fail, raise the original error
-        raise ValueError(f"Failed to parse JSON after cleanup attempts: {e}")
+        # If all strategies fail, return None
+        return None

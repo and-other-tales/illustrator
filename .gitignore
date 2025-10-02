@@ -210,3 +210,6 @@ marimo/_lsp/
 __marimo__/
 # Local vertex configuration
 vertex.json
+.vscode/mcp.json
+debug_workflow_issue.py
+WORKFLOW_FIX.md
