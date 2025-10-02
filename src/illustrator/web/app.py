@@ -2759,6 +2759,7 @@ def create_api_only_app() -> FastAPI:
     api_app.get("/api/process/resumable")(get_resumable_sessions)
     api_app.post("/api/process/{session_id}/pause")(pause_processing)
     api_app.post("/api/process/{session_id}/resume")(resume_processing)
+    api_app.post("/api/process/{session_id}/restart")(restart_processing)
 
     # Health check
     @api_app.get("/health")

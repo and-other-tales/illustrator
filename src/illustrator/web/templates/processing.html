@@ -40,11 +40,14 @@
                 <h4 class="card-title mb-0 fw-bold">
                     <i class="bi bi-activity me-2"></i>Processing Status
                 </h4>
-                <div class="d-flex align-items-center">
+                <div class="d-flex align-items-center gap-2">
                     <div class="spinner-border spinner-border-sm text-primary me-2" role="status" id="processingSpinner">
                         <span class="visually-hidden">Processing...</span>
                     </div>
                     <span class="badge bg-primary" id="processingStatus">Initializing</span>
+                    <button type="button" class="btn btn-sm btn-outline-primary d-none" id="restartBtn" onclick="restartProcessing()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Restart
+                    </button>
                 </div>
             </div>
             <div class="card-body">
@@ -996,17 +999,30 @@ function restoreSessionLogs(session) {
 function updateProcessingStatus(status, label) {
     const statusBadge = document.getElementById('processingStatus');
     const spinner = document.getElementById('processingSpinner');
+    const restartBtn = document.getElementById('restartBtn');
 
     statusBadge.textContent = label;
     statusBadge.className = 'badge ' + (
         status === 'completed' ? 'bg-success' :
         status === 'error' ? 'bg-danger' :
         status === 'paused' ? 'bg-warning' :
+        status === 'cancelled' ? 'bg-secondary' :
         'bg-primary'
     );
 
     if (status === 'completed' || status === 'error') {
         spinner.style.display = 'none';
+    } else if (status === 'cancelled') {
+        spinner.style.display = 'none';
+    } else {
+        spinner.style.display = 'inline-block';
+    }
+
+    // Show restart button only for cancelled status
+    if (status === 'cancelled') {
+        restartBtn.classList.remove('d-none');
+    } else {
+        restartBtn.classList.add('d-none');
     }
 }
 
@@ -1170,6 +1186,43 @@ function cancelProcessing() {
 
 function retryProcessing() {
     window.location.reload();
+}
+
+async function restartProcessing() {
+    if (!confirm('Are you sure you want to restart processing? This will reset the current progress and start over.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/process/${sessionId}/restart`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to restart processing');
+        }
+
+        const result = await response.json();
+        
+        if (result.success) {
+            addLogMessage('success', result.message || 'Processing restarted successfully');
+            updateProcessingStatus('started', 'Starting...');
+            
+            // Reconnect WebSocket if needed
+            if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+                connectWebSocket();
+            }
+        } else {
+            throw new Error(result.message || 'Failed to restart processing');
+        }
+    } catch (error) {
+        addLogMessage('error', `Failed to restart processing: ${error.message}`);
+        console.error('Restart error:', error);
+    }
 }
 
 function handleProcessingComplete(data) {
