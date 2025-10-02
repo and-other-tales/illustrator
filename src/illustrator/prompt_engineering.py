@@ -979,8 +979,8 @@ class StyleTranslator:
         """Detect if style config refers to a rich configuration."""
 
         # Check for explicit rich config references
-        art_style = style_config.get("art_style", "").lower()
-        style_name = style_config.get("style_name", "").lower()
+        art_style = (style_config.get("art_style") or "").lower()
+        style_name = (style_config.get("style_name") or "").lower()
 
         # Look for E.H. Shepard references
         if "shepard" in art_style or "shepard" in style_name or "pencil sketch" in art_style:
@@ -1010,8 +1010,8 @@ class StyleTranslator:
             style_modifiers = [style_config.get('style_name', 'illustration')]
         
         # Check if this is E.H. Shepard style
-        style_name = style_config.get('style_name', '').lower()
-        is_shepard = 'shepard' in style_name or 'shepard' in style_config.get('art_style', '').lower()
+        style_name = (style_config.get('style_name') or '').lower()
+        is_shepard = 'shepard' in style_name or 'shepard' in (style_config.get('art_style') or '').lower()
         atmosphere_guidance: List[str] = []
 
         # Add emotional adaptations if available
