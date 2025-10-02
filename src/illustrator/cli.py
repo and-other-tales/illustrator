@@ -1745,9 +1745,19 @@ def validate_api_keys(api_keys: dict) -> bool:
 def setup_client_config(config_data: dict) -> bool:
     """Setup client configuration."""
     try:
-        # Just validate required fields exist
-        required_fields = ['host', 'port']
-        return all(field in config_data for field in required_fields)
+        import os
+        import json
+        
+        # Create config directory if it doesn't exist
+        config_dir = Path.home() / '.illustrator'
+        os.makedirs(config_dir, exist_ok=True)
+        
+        # Write config file
+        config_file = config_dir / 'client_config.json'
+        with open(config_file, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, indent=2)
+        
+        return True
     except Exception:
         return False
 
@@ -1768,6 +1778,19 @@ def get_valid_api_keys() -> dict:
     
     if os.getenv('STABILITY_API_KEY'):
         keys['stability'] = os.getenv('STABILITY_API_KEY')
+    
+    # If no environment keys found, try loading from config file
+    if not keys and os.path.exists('.env'):
+        try:
+            with open('.env', 'r') as f:
+                import json
+                config = json.load(f)
+                if 'anthropic_api_key' in config:
+                    keys['anthropic'] = config['anthropic_api_key']
+                if 'huggingface_api_key' in config:
+                    keys['huggingface'] = config['huggingface_api_key']
+        except Exception:
+            pass
     
     return keys
 
