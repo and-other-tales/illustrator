@@ -1,0 +1,107 @@
+{
+  "checkpoint_id": "3ed8e380-4de7-47f1-8706-c9b58367f63e",
+  "session_id": "7df2401e-3cbe-4eeb-b679-90daac010e71",
+  "checkpoint_type": "manuscript_loaded",
+  "chapter_number": 0,
+  "step_name": "loading_manuscript",
+  "sequence_number": 2,
+  "created_at": "2025-10-02T13:17:37.324298",
+  "checkpoint_data": {
+    "chapters_loaded": 14,
+    "chapters_info": [
+      {
+        "number": 1,
+        "title": "A City Wakes",
+        "word_count": 5312
+      },
+      {
+        "number": 2,
+        "title": "Portobello Road",
+        "word_count": 3461
+      },
+      {
+        "number": 3,
+        "title": "The Reading",
+        "word_count": 4564
+      },
+      {
+        "number": 4,
+        "title": "A Storm Breaks",
+        "word_count": 4054
+      },
+      {
+        "number": 5,
+        "title": "Familiar Strangers",
+        "word_count": 3917
+      },
+      {
+        "number": 6,
+        "title": "The Magician's Trap",
+        "word_count": 2879
+      },
+      {
+        "number": 7,
+        "title": "Court of Revelations",
+        "word_count": 4442
+      },
+      {
+        "number": 8,
+        "title": "The Hermit's Shadow",
+        "word_count": 3479
+      },
+      {
+        "number": 9,
+        "title": "Wheel of Fortune",
+        "word_count": 6288
+      },
+      {
+        "number": 10,
+        "title": "The Tower Falls",
+        "word_count": 4706
+      },
+      {
+        "number": 11,
+        "title": "A Star In The Storm",
+        "word_count": 2355
+      },
+      {
+        "number": 12,
+        "title": "The Moon's Reflection",
+        "word_count": 3531
+      },
+      {
+        "number": 13,
+        "title": "The Sun Rises",
+        "word_count": 5021
+      },
+      {
+        "number": 14,
+        "title": "Fortunes Told",
+        "word_count": 4158
+      }
+    ],
+    "processing_order": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ]
+  },
+  "processing_state": {},
+  "generated_prompts": [],
+  "emotional_moments_data": [],
+  "next_action": "analyze_first_chapter",
+  "images_generated_count": 0,
+  "total_images_at_checkpoint": 0,
+  "progress_percent": 10
+}

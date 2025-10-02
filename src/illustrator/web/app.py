@@ -929,10 +929,10 @@ async def run_processing_workflow(
         # Ensure the manuscript and chapters exist in the database before creating a session
         # This prevents FK violations when inserting into processing_sessions.
         try:
-            from illustrator.db_config import get_db
+            from illustrator.db_config import get_mongo_database
             from illustrator.db_models import CHAPTERS_COLLECTION, MANUSCRIPTS_COLLECTION
 
-            db = get_db()
+            db = get_mongo_database()
             manuscripts_col = db[MANUSCRIPTS_COLLECTION]
             chapters_col = db[CHAPTERS_COLLECTION]
 

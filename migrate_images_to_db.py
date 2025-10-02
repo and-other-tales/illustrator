@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from illustrator.db_config import create_tables, get_db
+from illustrator.db_config import create_tables, get_mongo_database
 from illustrator.db_models import CHAPTERS_COLLECTION, MANUSCRIPTS_COLLECTION
 from illustrator.models import ImageProvider
 from illustrator.services.illustration_service import IllustrationService
@@ -105,7 +105,7 @@ def migrate_images() -> None:
     print("📋 Ensuring database indexes are present...")
     create_tables()
 
-    db = get_db()
+    db = get_mongo_database()
     manuscripts_col = db[MANUSCRIPTS_COLLECTION]
     chapters_col = db[CHAPTERS_COLLECTION]
 

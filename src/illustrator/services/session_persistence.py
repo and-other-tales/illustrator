@@ -16,7 +16,7 @@ from pymongo import DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from ..db_config import get_db
+from ..db_config import get_mongo_database
 from ..db_models import (
     PROCESSING_CHECKPOINTS_COLLECTION,
     PROCESSING_LOGS_COLLECTION,
@@ -57,7 +57,7 @@ class SessionPersistenceService:
     """Comprehensive session persistence and recovery service."""
 
     def __init__(self, db: Optional[Database] = None, data_dir: str = "illustrator_output/sessions"):
-        self.db: Database = db or get_db()
+        self.db: Database = db or get_mongo_database()
 
         self.sessions: Collection = self.db[PROCESSING_SESSIONS_COLLECTION]
         self.checkpoints: Collection = self.db[PROCESSING_CHECKPOINTS_COLLECTION]

@@ -12,7 +12,7 @@ from pymongo import ASCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from ..db_config import get_db
+from ..db_config import get_mongo_database
 from ..db_models import CHAPTERS_COLLECTION, ILLUSTRATIONS_COLLECTION
 from ..models import EmotionalMoment, ImageProvider
 
@@ -25,7 +25,7 @@ class IllustrationService:
     def __init__(self, db: Optional[Database] = None):
         """Initialise the service with an optional Mongo database instance."""
 
-        self.db: Database = db or get_db()
+        self.db: Database = db or get_mongo_database()
         self.illustrations: Collection = self.db[ILLUSTRATIONS_COLLECTION]
         self.chapters: Collection = self.db[CHAPTERS_COLLECTION]
 
