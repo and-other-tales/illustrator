@@ -84,6 +84,28 @@
     animation: slideInUp 0.4s ease;
 }
 
+/* Icon-only buttons for the status actions */
+.btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 6px;
+    border-radius: 50%;
+    margin: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon .material-icons-outlined {
+    font-size: 18px;
+    margin: 0;
+}
+
+/* Status actions container */
+.status-actions .d-flex {
+    gap: 8px;
+}
+
 /* Enhanced dark mode for floating status */
 [data-bs-theme="dark"] .floating-status-window {
     background: linear-gradient(135deg, rgba(139, 92, 246, 0.95) 0%, rgba(59, 130, 246, 0.95) 100%);
@@ -660,6 +682,7 @@ class FloatingStatusManager {
         
         try {
             this.restartBtn.disabled = true;
+            this.addLogEntry('info', 'Requesting restart...');
             
             const response = await fetch(`/api/process/${this.currentSessionId}/restart`, {
                 method: 'POST',
@@ -668,13 +691,27 @@ class FloatingStatusManager {
                 }
             });
             
-            const result = await response.json();
-            
-            if (result.success || response.ok) {
-                this.addLogEntry('success', 'Processing restarted successfully');
+            if (response.ok) {
+                try {
+                    const result = await response.json();
+                    this.addLogEntry('success', 'Processing restarted successfully');
+                } catch (jsonError) {
+                    // Even if JSON parsing fails, consider it a success if the response was ok
+                    this.addLogEntry('success', 'Processing restarted successfully');
+                }
+                
+                // Reset the UI state
+                this.updateProgress(0, 'Processing restarted...');
                 this.updateStatus('processing');
             } else {
-                this.addLogEntry('error', result.detail || 'Failed to restart processing');
+                let errorMsg = 'Failed to restart processing';
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.detail || errorMsg;
+                } catch (jsonError) {
+                    // If we can't parse the JSON, use the default error message
+                }
+                this.addLogEntry('error', errorMsg);
             }
         } catch (error) {
             console.error('Error restarting processing:', error);
