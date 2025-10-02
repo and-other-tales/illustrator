@@ -459,11 +459,24 @@ function displayChapters() {
     const noChaptersMessage = document.getElementById('noChaptersMessage');
 
     // Clear loading
-    loadingMessage.style.display = 'none';
+    if (!container || !template) {
+        console.error('displayChapters: required elements are missing', { hasContainer: !!container, hasTemplate: !!template });
+        return;
+    }
+
+    if (loadingMessage) {
+        loadingMessage.style.display = 'none';
+    }
 
     if (chapters.length === 0) {
-        noChaptersMessage.style.display = 'block';
+        if (noChaptersMessage) {
+            noChaptersMessage.style.display = 'block';
+        }
         return;
+    }
+
+    if (noChaptersMessage) {
+        noChaptersMessage.style.display = 'none';
     }
 
     container.innerHTML = '';
