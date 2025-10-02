@@ -722,8 +722,18 @@ class FloatingStatusManager {
     }
     
     openFullSession() {
-        if (this.currentManuscriptId) {
-            window.location.href = `/processing/${this.currentManuscriptId}?session_id=${this.currentSessionId}`;
+        console.log('Opening full session...');
+        console.log('Current manuscript ID:', this.currentManuscriptId);
+        console.log('Current session ID:', this.currentSessionId);
+        
+        if (this.currentManuscriptId && this.currentSessionId) {
+            // Use the correct URL pattern: /manuscript/{manuscript_id}/process
+            const url = `/manuscript/${this.currentManuscriptId}/process?session_id=${this.currentSessionId}`;
+            console.log('Redirecting to:', url);
+            window.location.href = url;
+        } else {
+            console.error('Cannot open full session: Missing manuscript ID or session ID');
+            this.addLogEntry('error', 'Cannot open full session: Missing manuscript or session information');
         }
     }
     
