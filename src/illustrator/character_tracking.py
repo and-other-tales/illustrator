@@ -622,6 +622,29 @@ class CharacterTracker:
 
         return None
 
+    def _get_valid_emotional_tones(self, tones_list):
+        """Convert a list of strings to valid EmotionalTone objects with error handling."""
+        if not tones_list:
+            return [EmotionalTone.NEUTRAL]
+            
+        valid_tones = []
+        for tone in tones_list:
+            try:
+                valid_tones.append(EmotionalTone(tone))
+            except ValueError:
+                try:
+                    # Try uppercase version (enum name)
+                    valid_tones.append(EmotionalTone(tone.upper()))
+                except ValueError:
+                    logger.debug(f"Invalid emotional tone '{tone}' detected - skipping")
+                    continue
+        
+        # If no valid tones were found, use a default
+        if not valid_tones:
+            return [EmotionalTone.NEUTRAL]
+        
+        return valid_tones
+
     async def _create_character_profile(self, name: str, chapter: Chapter) -> CharacterProfile:
         """Create a new character profile."""
 
