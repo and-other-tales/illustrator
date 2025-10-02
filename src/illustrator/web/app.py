@@ -552,6 +552,9 @@ async def start_processing(
         logger.info(f"start_processing: enhanced_style_config keys = {list(enhanced_style_config.keys())}")
         logger.info(f"start_processing: About to launch background task for session {session_id}")
 
+        # Add force_new_session to the style_config
+        enhanced_style_config['force_new_session'] = getattr(request, 'force_new_session', False)
+        
         # Start the actual processing in the background
         background_tasks.add_task(
             run_processing_workflow,
