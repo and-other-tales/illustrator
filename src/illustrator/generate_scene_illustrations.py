@@ -416,7 +416,17 @@ Respond in JSON format:
             response = await self.llm.ainvoke(messages)
             analysis = json.loads(response.content.strip())
 
-            emotional_tones = [EmotionalTone(tone) for tone in analysis.get('emotional_tones', ['anticipation'])]
+            # More robust handling of emotional tones with validation
+            valid_tones = []
+            for tone in analysis.get('emotional_tones', ['anticipation']):
+                try:
+                    valid_tones.append(EmotionalTone(tone.lower()))
+                except ValueError:
+                    logger.warning(f"Invalid emotional tone '{tone}' detected - using default")
+                    # Don't add invalid tones, we'll use a default if none are valid
+            
+            # Use a default if no valid tones were found
+            emotional_tones = valid_tones if valid_tones else [EmotionalTone.ANTICIPATION]
             context = analysis.get('context', 'Significant narrative moment with visual potential')
             
             # Extract additional information
