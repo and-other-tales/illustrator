@@ -1255,8 +1255,20 @@ async def run_processing_workflow(
             connection_manager.sessions[session_id].step_status[0] = "completed"
 
         # Process each chapter
+        remaining_chapters = chapters[start_chapter_index:]
+        if not remaining_chapters:
+            error_message = "No chapters to process. All chapters may have been processed already or start_chapter_index is invalid."
+            logger.error(f"Processing error: {error_message}")
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "error",
+                    "error": error_message
+                }),
+                session_id
+            )
+            return
 
-        for i, chapter in enumerate(chapters[start_chapter_index:], start_chapter_index):
+        for i, chapter in enumerate(remaining_chapters, start_chapter_index):
             session_data.status.current_chapter = chapter.number
             session_data.status.chapters_processed = i
 
@@ -1541,6 +1553,18 @@ async def run_processing_workflow(
         session_data.status.current_chapter = None
         # Keep the actual chapters processed count, don't overwrite it
         session_data.status.images_generated = total_images
+        
+        # Only mark as completed if we actually processed chapters and generated images
+        if session_data.status.chapters_processed == 0 or total_images == 0:
+            error_message = "No illustrations were generated. There may be an issue with the processing configuration."
+            await connection_manager.send_personal_message(
+                json.dumps({
+                    "type": "error",
+                    "error": error_message
+                }),
+                session_id
+            )
+            return
 
         await connection_manager.send_personal_message(
             json.dumps(progress_payload(100, "Processing completed successfully!")),
@@ -1577,13 +1601,18 @@ async def run_processing_workflow(
                 current_task="Session completed successfully"
             )
 
+        # Only send completion message if we actually generated images
+        completion_message = f"Successfully generated {total_images} illustrations!"
+        if total_images == 0:
+            completion_message = "Processing completed but no illustrations were generated."
+            
         await connection_manager.send_personal_message(
             json.dumps({
                 "type": "complete",
                 "images_count": total_images,
                 "chapters_processed": session_data.status.chapters_processed,
                 "total_chapters": len(chapters),
-                "message": f"Successfully generated {total_images} illustrations!"
+                "message": completion_message
             }),
             session_id
         )
