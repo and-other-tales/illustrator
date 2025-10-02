@@ -911,13 +911,29 @@ async def restart_processing(session_id: str, background_tasks: BackgroundTasks)
             session_id
         )
 
-        # Start the processing workflow in the background
+        # Start the processing workflow in the background with default values
+        # We don't need chapter_ids for restart, and we'll use default style_config
+        default_style_config = {}
+        
+        # Set LLM provider from environment if available
+        llm_provider = os.getenv('LLM_PROVIDER', '').lower()
+        llm_model = os.getenv('DEFAULT_LLM_MODEL', '').strip()
+        
+        if llm_provider:
+            default_style_config['llm_provider'] = llm_provider
+        if llm_model:
+            default_style_config['llm_model'] = llm_model
+            
+        logger.info(f"Restarting with default style config: {default_style_config}")
+            
         background_tasks.add_task(
             run_processing_workflow,
-            session_id,
-            session_data.manuscript_id,
-            session_data.chapter_ids,
-            session_data.style_config
+            session_id=session_id,
+            manuscript_id=session_data.manuscript_id,
+            style_config=default_style_config,
+            max_emotional_moments=10,  # Use default value
+            resume_from_checkpoint=False,
+            start_from_chapter=0  # Start from the beginning
         )
         
         return {
