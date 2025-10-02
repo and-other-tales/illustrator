@@ -1974,6 +1974,18 @@ class WebSocketComprehensiveSceneAnalyzer:
 
         for i, segment in enumerate(segments):
             try:
+                # Validate segment structure before processing
+                if not isinstance(segment, dict) or 'text' not in segment:
+                    await self.connection_manager.send_personal_message(
+                        json.dumps({
+                            "type": "log",
+                            "level": "error",
+                            "message": f"      ❌ Invalid segment {i+1} structure: missing 'text' field"
+                        }),
+                        self.session_id
+                    )
+                    continue
+                
                 # Send progress update every few segments with details about high-scoring segments
                 if i % max(1, total_segments // 20) == 0:
                     progress = int((i / total_segments) * 100)
@@ -2076,6 +2088,14 @@ class WebSocketComprehensiveSceneAnalyzer:
                         )
 
             except Exception as e:
+                # Get exception details for better debugging
+                import traceback
+                error_details = traceback.format_exc()
+                
+                # Log the full error for server-side debugging
+                logger.error(f"Error processing segment {i+1}: {error_details}")
+                
+                # Send a simplified error message to the client
                 await self.connection_manager.send_personal_message(
                     json.dumps({
                         "type": "log",
