@@ -599,6 +599,9 @@ async function startProcessingRequest() {
             // Enable control buttons
             document.getElementById('pauseBtn').disabled = false;
             document.getElementById('cancelBtn').disabled = false;
+            
+            // Enable background processing by default
+            enableBackgroundProcessing();
 
             if (result.is_existing) {
                 addLogMessage('info', 'Reconnected to existing processing session');
