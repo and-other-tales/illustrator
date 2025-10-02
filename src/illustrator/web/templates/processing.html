@@ -350,6 +350,9 @@ async function initializeProcessing() {
     const urlParams = new URLSearchParams(window.location.search);
     const urlSessionId = urlParams.get('session_id');
     processingCompleted = false;
+    
+    // Enable background processing by default - this is a new feature
+    // This means processing will continue even if the user navigates away from this page
 
     if (urlSessionId) {
         // Connect directly to the specified session
