@@ -644,17 +644,11 @@ class CharacterTracker:
 
         # Create emotional profile
         emotional_profile = EmotionalProfile(
-            dominant_emotions=[
-                EmotionalTone(e) for e in character_info.get('emotional', {}).get('dominant_emotions', ['neutral'])
-                if e in [tone.value for tone in EmotionalTone]
-            ],
+            dominant_emotions=self._get_valid_emotional_tones(character_info.get('emotional', {}).get('dominant_emotions', ['neutral'])),
             emotional_range=float(character_info.get('emotional', {}).get('range', 0.5)),
             emotional_stability=float(character_info.get('emotional', {}).get('stability', 0.5)),
             stress_responses=character_info.get('emotional', {}).get('stress_responses', []),
-            comfort_emotions=[
-                EmotionalTone(e) for e in character_info.get('emotional', {}).get('comfort_emotions', ['peace'])
-                if e in [tone.value for tone in EmotionalTone]
-            ],
+            comfort_emotions=self._get_valid_emotional_tones(character_info.get('emotional', {}).get('comfort_emotions', ['peace'])),
             emotional_triggers=character_info.get('emotional', {}).get('triggers', []),
             expression_style=character_info.get('emotional', {}).get('expression_style', 'moderate'),
         )
