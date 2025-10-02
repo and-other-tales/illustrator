@@ -533,11 +533,12 @@ class FluxProvider(ImageGenerationProvider):
             gcp_project_id=gcp_project_id,
         )
         self.api_key = api_key
+        
+        # Prioritize Flux-specific endpoint over general HuggingFace endpoint
         if flux_endpoint_url:
             self.base_url = _normalise_flux_endpoint(flux_endpoint_url)
-        elif huggingface_config and huggingface_config.endpoint_url:
-            self.base_url = _normalise_flux_endpoint(huggingface_config.endpoint_url)
         else:
+            # Default to the standard Flux endpoint, NOT the general HuggingFace endpoint
             self.base_url = DEFAULT_FLUX_ENDPOINT_URL
 
         self._request_timeout = (
@@ -642,6 +643,22 @@ class FluxProvider(ImageGenerationProvider):
 
                     if "application/json" in content_type:
                         json_payload = await response.json()
+                        
+                        # Handle case where API returns a list instead of dict
+                        if isinstance(json_payload, list):
+                            if json_payload and isinstance(json_payload[0], dict):
+                                # This might be a text generation response instead of image
+                                if 'generated_text' in json_payload[0]:
+                                    raise ValueError("Flux endpoint returned text generation response instead of image - check endpoint configuration")
+                                # Try to get image data from first item
+                                json_payload = json_payload[0]
+                            else:
+                                raise ValueError("Flux endpoint returned an empty or invalid list response")
+                        
+                        # Ensure we have a dictionary to work with
+                        if not isinstance(json_payload, dict):
+                            raise ValueError(f"Flux endpoint returned unexpected response type: {type(json_payload)}")
+                        
                         image_field = (
                             json_payload.get("generated_image_base64")
                             or json_payload.get("image_base64")
@@ -672,15 +689,22 @@ class FluxProvider(ImageGenerationProvider):
                 else:
                     try:
                         error_data = await response.json()
-                        error_message = error_data.get('error', 'Unknown error')
+                        # Handle case where error response is also a list
+                        if isinstance(error_data, list) and error_data:
+                            error_data = error_data[0]
+                        
+                        if isinstance(error_data, dict):
+                            error_message = error_data.get('error', 'Unknown error')
+                        else:
+                            error_message = f"HTTP {response.status}: Unexpected error format"
                     except Exception:
                         error_message = f"HTTP {response.status}: {await response.text()}"
 
-        return {
-            'success': False,
-            'error': error_message,
-            'status_code': response.status
-        }
+                    return {
+                        'success': False,
+                        'error': error_message,
+                        'status_code': response.status
+                    }
 
 
 class FluxLocalPipelineProvider(ImageGenerationProvider):
