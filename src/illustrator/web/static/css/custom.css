@@ -96,9 +96,9 @@ body {
     min-height: 100vh;
 }
 
-/* Ensure all paragraph text uses Mundial Light */
+/* Ensure all paragraph text uses Inter */
 p, div, span, li, td, th, button, a, small, label, input, textarea, select {
-    font-family: 'Mundial', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-weight: 300;
 }
 
