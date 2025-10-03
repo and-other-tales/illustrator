@@ -39,30 +39,54 @@ def _clear_stub_langchain_core() -> None:
 _clear_stub_langchain_core()
 
 
-from langchain.chat_models import init_chat_model as _init_chat_model
+_clear_stub_langchain_core()
+
+# Try to import LangChain message classes at runtime so isinstance checks in tests
+# succeed when langchain_core is available. Fall back to minimal local classes
+# when it's not available.
 try:
-    from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-except ModuleNotFoundError:
-    _clear_stub_langchain_core()
-    from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+    from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage  # type: ignore
+except Exception:
+    class BaseMessage:  # minimal runtime fallback used during tests
+        def __init__(self, content: str = ""):
+            self.content = content
 
-# Maintain backwards compatibility for existing call sites/tests that patch init_chat_model directly
-init_chat_model = _init_chat_model
+    class HumanMessage(BaseMessage):
+        pass
 
-# Ensure any previously-installed test stubs now point to the real message classes
-_messages_module = sys.modules.get("langchain_core.messages")
-if _messages_module is not None:
-    setattr(_messages_module, "AIMessage", AIMessage)
-    setattr(_messages_module, "HumanMessage", HumanMessage)
-    setattr(_messages_module, "SystemMessage", SystemMessage)
-    if hasattr(_messages_module, "BaseMessage"):
-        setattr(_messages_module, "BaseMessage", BaseMessage)
+    class SystemMessage(BaseMessage):
+        pass
+
+    class AIMessage(BaseMessage):
+        pass
+
+# init_chat_model: try to bind to real function if available, otherwise use lazy loader
+try:
+    from langchain.chat_models import init_chat_model as _init_chat_model  # type: ignore
+    init_chat_model = _init_chat_model
+except Exception:
+    def _lazy_init_chat_model(*args, **kwargs):
+        """Lazy loader for langchain.chat_models.init_chat_model.
+
+        On first call this imports the real function and replaces the module
+        symbol so subsequent calls use the real implementation.
+        """
+        try:
+            from langchain.chat_models import init_chat_model as _real_init  # type: ignore
+        except Exception:
+            raise
+
+        globals()['init_chat_model'] = _real_init
+        return _real_init(*args, **kwargs)
+
+    init_chat_model = _lazy_init_chat_model
+
 from huggingface_hub import InferenceClient
 try:
     from huggingface_hub.errors import HfHubHTTPError
 except ImportError:  # pragma: no cover - backwards compatibility for older hub versions
     from huggingface_hub.utils import HfHubHTTPError
-from transformers import pipeline as hf_pipeline
+hf_pipeline = None
 try:
     from requests.exceptions import ChunkedEncodingError
 except ImportError:
@@ -1231,9 +1255,23 @@ def create_chat_model(
         init_kwargs, generation_kwargs = _partition_pipeline_kwargs(config, huggingface_api_key)
 
         try:
+            # Use a module-level hf_pipeline if tests have patched it; otherwise
+            # import transformers.pipeline lazily to avoid importing torch during
+            # module import/test collection on systems without native libs.
+            global hf_pipeline
+            hf_pipeline_local = hf_pipeline
+            if hf_pipeline_local is None:
+                try:
+                    from transformers import pipeline as hf_pipeline_local
+                except Exception:
+                    hf_pipeline_local = None
+
+            if hf_pipeline_local is None:
+                raise RuntimeError("transformers.pipeline is unavailable")
+
             pipeline_task = config.pipeline_task or "text-generation"
             pipeline_model = model or init_kwargs.get("model")
-            pipeline_instance = hf_pipeline(
+            pipeline_instance = hf_pipeline_local(
                 task=pipeline_task,
                 model=pipeline_model,
                 **{k: v for k, v in init_kwargs.items() if k != "model"},

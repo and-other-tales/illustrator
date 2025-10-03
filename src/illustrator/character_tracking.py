@@ -7,8 +7,36 @@ from typing import Any, Dict, List, Set, Optional, Tuple
 from enum import Enum
 from datetime import datetime
 
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from typing import TYPE_CHECKING, Any
+
+# Avoid importing langchain_core at module import time because importing
+# langchain_core can pull in heavy dependencies (transformers -> torch)
+# which may fail during test collection on machines without native libs.
+if TYPE_CHECKING:  # pragma: no cover - only used for type checkers
+    from langchain_core.language_models import BaseChatModel  # type: ignore
+else:
+    BaseChatModel = Any  # runtime fallback
+
+
+def _get_message_classes():
+    """Lazily import LangChain message classes, with lightweight fallbacks.
+
+    Returns (HumanMessage, SystemMessage).
+    """
+    try:
+        from langchain_core.messages import HumanMessage, SystemMessage  # type: ignore
+        return HumanMessage, SystemMessage
+    except Exception:
+        # Minimal fallback classes used when langchain_core isn't importable.
+        class HumanMessage:  # simple container with .content
+            def __init__(self, content: str):
+                self.content = content
+
+        class SystemMessage:
+            def __init__(self, content: str):
+                self.content = content
+
+        return HumanMessage, SystemMessage
 
 from illustrator.models import EmotionalMoment, EmotionalTone, Chapter
 
@@ -231,6 +259,7 @@ class CharacterTracker:
             
         character_prompt = ", ".join(character_names)
         
+        HumanMessage, SystemMessage = _get_message_classes()
         messages = [
             SystemMessage(content=
                 "You are a literary analysis expert. Analyze the text and extract details about the characters mentioned."
@@ -533,6 +562,7 @@ class CharacterTracker:
         Focus on characters who actively participate in the scene, not just mentioned in passing."""
 
         try:
+            HumanMessage, SystemMessage = _get_message_classes()
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"Chapter {chapter_number} text:\n\n{text[:2000]}...")
@@ -753,6 +783,7 @@ class CharacterTracker:
         }}"""
 
         try:
+            HumanMessage, SystemMessage = _get_message_classes()
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"Analyze character '{character_name}' in this text:\n\n{text[:1500]}")
@@ -955,6 +986,7 @@ class CharacterTracker:
         }}"""
 
         try:
+            HumanMessage, SystemMessage = _get_message_classes()
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=f"Context: {context}")
